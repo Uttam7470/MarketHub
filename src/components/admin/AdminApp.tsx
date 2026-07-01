@@ -91,7 +91,7 @@ function AdminSidebar() {
 }
 
 function AdminMobileHeader() {
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { adminView, setAdminView, setAppView } = useNavigationStore();
   const [open, setOpen] = useState(false);
 

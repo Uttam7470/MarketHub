@@ -94,7 +94,7 @@ function VendorSidebar() {
 }
 
 function VendorMobileHeader() {
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { vendorView, setVendorView, setAppView } = useNavigationStore();
   const [open, setOpen] = useState(false);
 
