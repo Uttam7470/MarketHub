@@ -133,8 +133,10 @@ function CustomerHeader() {
   const { setTheme, theme } = useTheme();
   const itemCount = getItemCount();
   const [searchInput, setSearchInput] = useState(searchQuery);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setSearchInput(searchQuery); }, [searchQuery]);
+  useEffect(() => { setMounted(true); }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,7 +171,7 @@ function CustomerHeader() {
           <div className="flex items-center gap-1">
             <TooltipProvider><Tooltip><TooltipTrigger asChild>
               <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-                {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+                {!mounted ? <div className="w-5 h-5" /> : theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
               </Button>
             </TooltipTrigger><TooltipContent>Toggle theme</TooltipContent></Tooltip></TooltipProvider>
 
