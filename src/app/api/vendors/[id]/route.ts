@@ -22,12 +22,82 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
-// PUT /api/vendors/[id] - Update vendor (approve, suspend, etc.)
+// PUT /api/vendors/[id] - Update vendor (approve, suspend, reject, etc.)
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const body = await req.json();
-    const vendor = await db.vendor.update({ where: { id }, data: body });
+
+    const existingVendor = await db.vendor.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+
+    if (!existingVendor) {
+      return NextResponse.json({ success: false, error: 'Vendor not found' }, { status: 404 });
+    }
+
+    const oldStatus = existingVendor.status;
+    const newStatus = body.status;
+
+    // Update vendor
+    const vendor = await db.vendor.update({
+      where: { id },
+      data: body,
+    });
+
+    // Create notifications when status changes
+    if (oldStatus !== newStatus) {
+      if (newStatus === 'APPROVED') {
+        await db.notification.create({
+          data: {
+            userId: existingVendor.userId,
+            title: 'Vendor Account Approved!',
+            message: `Congratulations! Your vendor account "${existingVendor.businessName}" has been approved. You can now start selling products.`,
+            type: 'SUCCESS',
+          },
+        });
+        // Mark user as verified on approval
+        await db.user.update({
+          where: { id: existingVendor.userId },
+          data: { isVerified: true },
+        });
+        await db.activityLog.create({
+          data: {
+            userId: existingVendor.userId,
+            action: 'VENDOR_APPROVED',
+            details: `Vendor ${existingVendor.businessName} approved`,
+          },
+        });
+      } else if (newStatus === 'REJECTED') {
+        const reason = body.rejectionReason ? ` Reason: ${body.rejectionReason}` : '';
+        await db.notification.create({
+          data: {
+            userId: existingVendor.userId,
+            title: 'Vendor Application Rejected',
+            message: `Your vendor application for "${existingVendor.businessName}" has been rejected.${reason} Please contact support if you believe this is an error.`,
+            type: 'WARNING',
+          },
+        });
+        await db.activityLog.create({
+          data: {
+            userId: existingVendor.userId,
+            action: 'VENDOR_REJECTED',
+            details: `Vendor ${existingVendor.businessName} rejected. ${body.rejectionReason || ''}`,
+          },
+        });
+      } else if (newStatus === 'SUSPENDED') {
+        await db.notification.create({
+          data: {
+            userId: existingVendor.userId,
+            title: 'Vendor Account Suspended',
+            message: `Your vendor account "${existingVendor.businessName}" has been suspended. Please contact support for more information.`,
+            type: 'ERROR',
+          },
+        });
+      }
+    }
+
     return NextResponse.json({ success: true, data: vendor });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to update vendor';

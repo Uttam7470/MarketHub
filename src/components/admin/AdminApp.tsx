@@ -8,7 +8,7 @@ import {
   BarChart3, Users, Package, ShoppingCart, Store, DollarSign, TrendingUp,
   Settings, LogOut, Menu, X, ChevronLeft, ChevronRight, Search, Eye,
   Plus, Pencil, Trash2, CheckCircle, XCircle, AlertTriangle, Shield,
-  Tag, Image, Bell, FileText, UserCog, CreditCard, PieChart, LineChart
+  Tag, Image, Bell, FileText, UserCog, CreditCard, PieChart, LineChart, Clock
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -217,11 +217,13 @@ function AdminDashboard() {
 
 function AdminVendors() {
   const [statusFilter, setStatusFilter] = useState('all');
-  const [search, setSearch] = useState('');
   const qc = useQueryClient();
   const [detailVendor, setDetailVendor] = useState<Vendor | null>(null);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectVendorId, setRejectVendorId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
-  const params = new URLSearchParams({ limit: '20' });
+  const params = new URLSearchParams({ limit: '50' });
   if (statusFilter !== 'all') params.set('status', statusFilter);
 
   const { data, isLoading } = useQuery({
@@ -230,95 +232,270 @@ function AdminVendors() {
   });
 
   const updateVendor = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => fetch(`/api/vendors/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-vendors'] }); toast.success('Vendor updated'); },
+    mutationFn: ({ id, status, rejectionReason: reason }: { id: string; status: string; rejectionReason?: string }) =>
+      fetch(`/api/vendors/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, ...(reason ? { rejectionReason: reason } : {}) }),
+      }).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-vendors'] });
+      qc.invalidateQueries({ queryKey: ['admin-dashboard'] });
+      toast.success('Vendor updated');
+    },
     onError: () => toast.error('Failed to update vendor'),
   });
 
-  const statusColor: Record<string, string> = { PENDING: 'bg-amber-100 text-amber-700', APPROVED: 'bg-green-100 text-green-700', SUSPENDED: 'bg-red-100 text-red-700', REJECTED: 'bg-gray-100 text-gray-700' };
+  const handleReject = () => {
+    if (!rejectVendorId) return;
+    updateVendor.mutate({ id: rejectVendorId, status: 'REJECTED', rejectionReason: rejectionReason || 'Application does not meet our requirements.' });
+    setRejectDialogOpen(false);
+    setRejectVendorId(null);
+    setRejectionReason('');
+    setDetailVendor(null);
+  };
+
+  const openRejectDialog = (vendorId: string) => {
+    setRejectVendorId(vendorId);
+    setRejectionReason('');
+    setRejectDialogOpen(true);
+  };
+
+  const statusColor: Record<string, string> = {
+    PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    APPROVED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    SUSPENDED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    REJECTED: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+  };
+
+  const pendingCount = data?.data?.filter((v: Vendor) => v.status === 'PENDING').length || 0;
 
   return (
     <div className="p-6 space-y-6">
-      <div><h1 className="text-2xl font-bold">Vendor Management</h1><p className="text-muted-foreground text-sm">Manage vendor accounts and applications</p></div>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Vendor Management</h1>
+          <p className="text-muted-foreground text-sm">Manage vendor accounts and applications</p>
+        </div>
+        {pendingCount > 0 && (
+          <Badge className="bg-amber-500 text-white px-3 py-1 text-sm cursor-pointer" onClick={() => setStatusFilter('PENDING')}>
+            <Clock size={14} className="mr-1.5" />{pendingCount} Pending Review
+          </Badge>
+        )}
+      </div>
 
       <div className="flex gap-2 flex-wrap">
         {['all', 'PENDING', 'APPROVED', 'SUSPENDED', 'REJECTED'].map(s => (
           <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-amber-600' : ''} onClick={() => setStatusFilter(s)}>
-            {s === 'all' ? 'All' : s} {s !== 'all' && data?.data?.filter((v: Vendor) => v.status === s).length ? `(${data.data.filter((v: Vendor) => v.status === s).length})` : ''}
+            {s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}
+            {s === 'PENDING' && pendingCount > 0 ? ` (${pendingCount})` : ''}
           </Button>
         ))}
       </div>
 
-      {isLoading ? <div className="space-y-3">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
-      <Card>
-        <Table>
-          <TableHeader><TableRow><TableHead>Vendor</TableHead><TableHead className="hidden md:table-cell">Email</TableHead><TableHead>Products</TableHead><TableHead>Revenue</TableHead><TableHead>Rating</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {!data?.data?.length && <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No vendors found</TableCell></TableRow>}
-            {data?.data?.map((vendor: Vendor) => (
-              <TableRow key={vendor.id}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 font-bold text-sm shrink-0">{vendor.businessName[0]}</div>
-                    <div><p className="font-medium text-sm">{vendor.businessName}</p><p className="text-xs text-muted-foreground">Since {new Date(vendor.createdAt).toLocaleDateString()}</p></div>
-                  </div>
-                </TableCell>
-                <TableCell className="hidden md:table-cell text-sm">{vendor.user?.email}</TableCell>
-                <TableCell className="font-medium">{vendor._count?.products || 0}</TableCell>
-                <TableCell className="font-medium">{formatCurrency(vendor.totalRevenue)}</TableCell>
-                <TableCell>{vendor.rating?.toFixed(1) || 'N/A'}</TableCell>
-                <TableCell><Badge className={statusColor[vendor.status] || ''}>{vendor.status}</Badge></TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailVendor(vendor)}><Eye size={14} /></Button>
-                    {vendor.status === 'PENDING' && <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600" onClick={() => updateVendor.mutate({ id: vendor.id, status: 'APPROVED' })}><CheckCircle size={14} /></Button>}
-                    {vendor.status === 'PENDING' && <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => updateVendor.mutate({ id: vendor.id, status: 'REJECTED' })}><XCircle size={14} /></Button>}
-                    {vendor.status === 'APPROVED' && <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600" onClick={() => updateVendor.mutate({ id: vendor.id, status: 'SUSPENDED' })}><XCircle size={14} /></Button>}
-                    {vendor.status === 'SUSPENDED' && <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600" onClick={() => updateVendor.mutate({ id: vendor.id, status: 'APPROVED' })}><CheckCircle size={14} /></Button>}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>}
+      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+        <Card>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Vendor</TableHead>
+                  <TableHead className="hidden md:table-cell">Email</TableHead>
+                  <TableHead className="hidden lg:table-cell">GST/PAN</TableHead>
+                  <TableHead>Products</TableHead>
+                  <TableHead className="hidden sm:table-cell">Revenue</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {!data?.data?.length && <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No vendors found</TableCell></TableRow>}
+                {data?.data?.map((vendor: Vendor) => (
+                  <TableRow key={vendor.id} className={vendor.status === 'PENDING' ? 'bg-amber-50/50 dark:bg-amber-900/5' : ''}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 font-bold text-sm shrink-0">{vendor.businessName[0]}</div>
+                        <div>
+                          <p className="font-medium text-sm">{vendor.businessName}</p>
+                          <p className="text-xs text-muted-foreground">Joined {new Date(vendor.createdAt).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell text-sm">{vendor.user?.email}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                      {vendor.gstNumber || vendor.panNumber || '—'}
+                    </TableCell>
+                    <TableCell className="font-medium">{vendor._count?.products || 0}</TableCell>
+                    <TableCell className="hidden sm:table-cell font-medium">{formatCurrency(vendor.totalRevenue)}</TableCell>
+                    <TableCell>
+                      <Badge className={statusColor[vendor.status] || ''}>
+                        {vendor.status === 'PENDING' && <Clock size={12} className="mr-1" />}
+                        {vendor.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailVendor(vendor)}><Eye size={14} /></Button>
+                        {vendor.status === 'PENDING' && (
+                          <>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20" onClick={() => { updateVendor.mutate({ id: vendor.id, status: 'APPROVED' }); toast.success(`${vendor.businessName} approved!`); }}><CheckCircle size={16} /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => openRejectDialog(vendor.id)}><XCircle size={16} /></Button>
+                          </>
+                        )}
+                        {vendor.status === 'APPROVED' && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600" onClick={() => updateVendor.mutate({ id: vendor.id, status: 'SUSPENDED' })}><XCircle size={14} /></Button>
+                        )}
+                        {vendor.status === 'SUSPENDED' && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600" onClick={() => updateVendor.mutate({ id: vendor.id, status: 'APPROVED' })}><CheckCircle size={14} /></Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>}
 
       {/* Vendor Detail Modal */}
       <Dialog open={!!detailVendor} onOpenChange={() => setDetailVendor(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Vendor Details</DialogTitle></DialogHeader>
           {detailVendor && (
             <div className="space-y-4">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 text-2xl font-bold">{detailVendor.businessName[0]}</div>
-                <div>
+                <div className="w-16 h-16 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 text-2xl font-bold shrink-0">{detailVendor.businessName[0]}</div>
+                <div className="min-w-0">
                   <h3 className="text-xl font-bold">{detailVendor.businessName}</h3>
-                  <Badge className={statusColor[detailVendor.status] || ''}>{detailVendor.status}</Badge>
-                  <p className="text-sm text-muted-foreground mt-1">{detailVendor.description}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge className={statusColor[detailVendor.status] || ''}>
+                      {detailVendor.status === 'PENDING' && <Clock size={12} className="mr-1" />}
+                      {detailVendor.status}
+                    </Badge>
+                    {detailVendor._count && <span className="text-sm text-muted-foreground">{detailVendor._count.products} products</span>}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">{detailVendor.description || 'No description provided'}</p>
                 </div>
               </div>
               <Separator />
-              <div className="grid sm:grid-cols-2 gap-3 text-sm">
-                <div><span className="text-muted-foreground">Email:</span> <span className="ml-2">{detailVendor.user?.email}</span></div>
-                <div><span className="text-muted-foreground">Phone:</span> <span className="ml-2">{detailVendor.user?.phone || 'N/A'}</span></div>
-                <div><span className="text-muted-foreground">Products:</span> <span className="ml-2 font-medium">{detailVendor._count?.products || 0}</span></div>
-                <div><span className="text-muted-foreground">Commission:</span> <span className="ml-2 font-medium">{detailVendor.commissionRate}%</span></div>
-                <div><span className="text-muted-foreground">Total Sales:</span> <span className="ml-2 font-medium text-green-600">{formatCurrency(detailVendor.totalSales)}</span></div>
-                <div><span className="text-muted-foreground">Revenue:</span> <span className="ml-2 font-medium">{formatCurrency(detailVendor.totalRevenue)}</span></div>
-                <div><span className="text-muted-foreground">GST:</span> <span className="ml-2">{detailVendor.gstNumber || 'N/A'}</span></div>
-                <div><span className="text-muted-foreground">PAN:</span> <span className="ml-2">{detailVendor.panNumber || 'N/A'}</span></div>
+
+              {/* Business Details */}
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Business Information</h4>
+                <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-muted-foreground">Contact Email:</span> <span className="ml-2">{detailVendor.user?.email}</span></div>
+                  <div><span className="text-muted-foreground">Phone:</span> <span className="ml-2">{detailVendor.user?.phone || 'N/A'}</span></div>
+                  <div><span className="text-muted-foreground">Business Email:</span> <span className="ml-2">{detailVendor.businessEmail || 'N/A'}</span></div>
+                  <div><span className="text-muted-foreground">Business Phone:</span> <span className="ml-2">{detailVendor.businessPhone || 'N/A'}</span></div>
+                  <div className="sm:col-span-2"><span className="text-muted-foreground">Business Address:</span> <span className="ml-2">{detailVendor.businessAddress || 'N/A'}</span></div>
+                </div>
               </div>
+
               <Separator />
-              <div className="flex gap-2">
-                {detailVendor.status === 'PENDING' && <>
-                  <Button className="bg-green-600 hover:bg-green-700" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); }}><CheckCircle size={16} className="mr-1.5" />Approve</Button>
-                  <Button variant="destructive" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'REJECTED' }); setDetailVendor(null); }}><XCircle size={16} className="mr-1.5" />Reject</Button>
-                </>}
-                {detailVendor.status === 'APPROVED' && <Button variant="destructive" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'SUSPENDED' }); setDetailVendor(null); }}><XCircle size={16} className="mr-1.5" />Suspend</Button>}
-                {detailVendor.status === 'SUSPENDED' && <Button className="bg-green-600 hover:bg-green-700" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); }}><CheckCircle size={16} className="mr-1.5" />Re-activate</Button>}
+
+              {/* Tax & Bank Details */}
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Tax & Bank Details</h4>
+                <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-muted-foreground">GST Number:</span> <span className="ml-2">{detailVendor.gstNumber || 'N/A'}</span></div>
+                  <div><span className="text-muted-foreground">PAN Number:</span> <span className="ml-2">{detailVendor.panNumber || 'N/A'}</span></div>
+                  <div><span className="text-muted-foreground">Bank Name:</span> <span className="ml-2">{detailVendor.bankName || 'N/A'}</span></div>
+                  <div><span className="text-muted-foreground">Bank Account:</span> <span className="ml-2">{detailVendor.bankAccount ? '••••' + detailVendor.bankAccount.slice(-4) : 'N/A'}</span></div>
+                  <div><span className="text-muted-foreground">IFSC:</span> <span className="ml-2">{detailVendor.bankIfsc || 'N/A'}</span></div>
+                  <div><span className="text-muted-foreground">Commission:</span> <span className="ml-2 font-medium">{detailVendor.commissionRate}%</span></div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Stats */}
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Performance</h4>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center p-3 rounded-lg bg-muted/50">
+                    <p className="text-lg font-bold text-green-600">{formatCurrency(detailVendor.totalSales)}</p>
+                    <p className="text-xs text-muted-foreground">Total Sales</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-muted/50">
+                    <p className="text-lg font-bold">{formatCurrency(detailVendor.totalRevenue)}</p>
+                    <p className="text-xs text-muted-foreground">Revenue</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-muted/50">
+                    <p className="text-lg font-bold">{detailVendor.rating?.toFixed(1) || 'N/A'}</p>
+                    <p className="text-xs text-muted-foreground">Rating</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rejection reason if previously rejected */}
+              {detailVendor.rejectionReason && (
+                <>
+                  <Separator />
+                  <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
+                    <p className="text-sm font-medium text-red-700 dark:text-red-400">Previous Rejection Reason:</p>
+                    <p className="text-sm text-red-600 dark:text-red-300 mt-1">{detailVendor.rejectionReason}</p>
+                  </div>
+                </>
+              )}
+
+              <Separator />
+              <div className="flex gap-2 flex-wrap">
+                {detailVendor.status === 'PENDING' && (
+                  <>
+                    <Button className="bg-green-600 hover:bg-green-700" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); toast.success(`${detailVendor.businessName} has been approved!`); }}>
+                      <CheckCircle size={16} className="mr-1.5" />Approve Vendor
+                    </Button>
+                    <Button variant="destructive" onClick={() => { openRejectDialog(detailVendor.id); }}>
+                      <XCircle size={16} className="mr-1.5" />Reject Application
+                    </Button>
+                  </>
+                )}
+                {detailVendor.status === 'APPROVED' && (
+                  <Button variant="destructive" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'SUSPENDED' }); setDetailVendor(null); }}>
+                    <XCircle size={16} className="mr-1.5" />Suspend Vendor
+                  </Button>
+                )}
+                {detailVendor.status === 'SUSPENDED' && (
+                  <Button className="bg-green-600 hover:bg-green-700" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); }}>
+                    <CheckCircle size={16} className="mr-1.5" />Re-activate Vendor
+                  </Button>
+                )}
+                {detailVendor.status === 'REJECTED' && (
+                  <Button className="bg-green-600 hover:bg-green-700" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); toast.success(`${detailVendor.businessName} has been approved!`); }}>
+                    <CheckCircle size={16} className="mr-1.5" />Approve Now
+                  </Button>
+                )}
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Rejection Reason Dialog */}
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject Vendor Application</DialogTitle>
+            <DialogDescription>Please provide a reason for rejecting this application. This will be shown to the vendor.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Rejection Reason *</Label>
+              <Textarea
+                className="mt-1"
+                rows={4}
+                placeholder="e.g., Incomplete business information, invalid GST number, etc."
+                value={rejectionReason}
+                onChange={e => setRejectionReason(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
+              <Button variant="destructive" onClick={handleReject} disabled={!rejectionReason.trim()}>
+                <XCircle size={16} className="mr-1.5" />Confirm Rejection
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -28,13 +28,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Account is deactivated' }, { status: 403 });
     }
 
-    if (user.role === 'VENDOR' && user.vendor?.status === 'PENDING') {
-      return NextResponse.json({ success: false, error: 'Vendor account pending approval' }, { status: 403 });
-    }
-
     if (user.role === 'VENDOR' && user.vendor?.status === 'SUSPENDED') {
       return NextResponse.json({ success: false, error: 'Vendor account is suspended' }, { status: 403 });
     }
+
+    // PENDING and REJECTED vendors can log in to see their status page
+    // Only SUSPENDED vendors are blocked from logging in
 
     // Log activity
     await db.activityLog.create({
@@ -51,6 +50,7 @@ export async function POST(req: NextRequest) {
         user: { id: safeUser.id, email: safeUser.email, name: safeUser.name, role: safeUser.role, avatar: safeUser.avatar, phone: safeUser.phone, isVerified: safeUser.isVerified },
         token,
         vendorId: user.vendor?.id,
+        vendorStatus: user.vendor?.status || null,
       },
     });
   } catch (error: unknown) {

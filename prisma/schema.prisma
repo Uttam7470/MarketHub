@@ -85,6 +85,7 @@ model Vendor {
   bankIfsc        String?
   commissionRate  Float    @default(10.0)
   status          String   @default("PENDING") // PENDING, APPROVED, SUSPENDED, REJECTED
+  rejectionReason String?
   totalSales      Float    @default(0)
   totalRevenue    Float    @default(0)
   rating          Float    @default(0)

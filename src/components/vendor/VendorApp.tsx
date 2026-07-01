@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
   Package, ShoppingCart, DollarSign, Star, TrendingUp, BarChart3, Plus, Pencil, Trash2,
   Search, Filter, Eye, ChevronLeft, ChevronRight, Upload, Settings, Bell, LogOut,
-  Store, Menu, X, User, AlertTriangle, CheckCircle, Clock, Truck, BoxIcon
+  Store, Menu, X, User, AlertTriangle, CheckCircle, Clock, Truck, BoxIcon, XCircle, ShieldCheck
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -644,10 +644,191 @@ function VendorSettings() {
   );
 }
 
+// ============ VENDOR PENDING / REJECTED PAGE ============
+
+function VendorPendingPage() {
+  const { user, logout, vendorId, vendorStatus } = useAuthStore();
+  const { setAppView } = useNavigationStore();
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+  const { data: vendor, isLoading } = useQuery({
+    queryKey: ['vendor-status', vendorId],
+    queryFn: () => fetch(`/api/vendors/${vendorId}`).then(r => r.json()).then((r: any) => r.data),
+    enabled: !!vendorId,
+  });
+
+  // Sync vendor status from server
+  React.useEffect(() => {
+    if (vendor?.status) {
+      useAuthStore.getState().login(
+        useAuthStore.getState().user!,
+        useAuthStore.getState().token!,
+        vendorId,
+        vendor.status
+      );
+      if (vendor.rejectionReason) {
+        setRejectionReason(vendor.rejectionReason);
+      }
+      // If approved, let the app refresh naturally
+      if (vendor.status === 'APPROVED') {
+        // Small delay to let the store update before re-rendering
+        const timer = setTimeout(() => setVendorView('vendor-dashboard'), 100);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [vendor?.status, vendorId, setVendorView]);
+
+  const isRejected = vendorStatus === 'REJECTED' || vendor?.status === 'REJECTED';
+  const isPending = vendorStatus === 'PENDING' || vendor?.status === 'PENDING';
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Skeleton className="h-64 w-full max-w-md rounded-xl" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-lg text-center space-y-6"
+      >
+        <div className={`mx-auto w-24 h-24 rounded-full flex items-center justify-center ${isRejected ? 'bg-red-100 dark:bg-red-900/20' : 'bg-amber-100 dark:bg-amber-900/20'}`}>
+          {isRejected ? (
+            <XCircle size={48} className="text-red-500" />
+          ) : (
+            <Clock size={48} className="text-amber-500" />
+          )}
+        </div>
+
+        <div>
+          <h1 className="text-2xl font-bold">
+            {isRejected ? 'Application Rejected' : 'Application Pending'}
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            {isRejected
+              ? 'Your vendor application has been rejected by the admin.'
+              : 'Your vendor account is currently under review by our admin team.'}
+          </p>
+        </div>
+
+        <Card className="p-6 text-left">
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Business Name</span>
+              <span className="font-medium">{user?.name}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Email</span>
+              <span className="font-medium">{user?.email}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Status</span>
+              <Badge variant={isRejected ? 'destructive' : 'secondary'} className={isPending ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30' : ''}>
+                {vendorStatus || vendor?.status || 'PENDING'}
+              </Badge>
+            </div>
+          </div>
+        </Card>
+
+        {rejectionReason && (
+          <Card className="p-4 border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/10">
+            <p className="text-sm font-medium text-red-700 dark:text-red-400 mb-1">Rejection Reason:</p>
+            <p className="text-sm text-red-600 dark:text-red-300">{rejectionReason}</p>
+          </Card>
+        )}
+
+        {isPending && (
+          <Card className="p-4 border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={20} />
+              <div className="text-sm">
+                <p className="font-medium text-amber-700 dark:text-amber-400">What happens next?</p>
+                <ul className="mt-1 space-y-1 text-amber-600 dark:text-amber-300">
+                  <li>• Our team will review your business details</li>
+                  <li>• You&apos;ll receive a notification once approved</li>
+                  <li>• This usually takes 24-48 hours</li>
+                </ul>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button
+            variant="outline"
+            onClick={() => {
+              logout();
+              setAppView('customer');
+              toast.success('Logged out');
+            }}
+          >
+            Back to Store
+          </Button>
+          {isRejected && (
+            <Button
+              className="bg-orange-500 hover:bg-orange-600"
+              onClick={() => {
+                logout();
+                setAppView('customer');
+                toast.info('Please contact admin to re-apply');
+              }}
+            >
+              Contact Support
+            </Button>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Need help? Contact us at support@markethub.com
+        </p>
+      </motion.div>
+    </div>
+  );
+}
+
 // ============ MAIN VENDOR APP ============
 
 export default function VendorApp() {
   const { vendorView, setVendorView } = useNavigationStore();
+  const { user, vendorStatus, isAuthenticated } = useAuthStore();
+
+  // Gate: If vendor is not APPROVED, show pending/rejected page
+  if (!isAuthenticated || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="p-8 max-w-md w-full text-center space-y-4">
+          <Store size={48} className="mx-auto text-muted-foreground" />
+          <h2 className="text-xl font-bold">Vendor Access Required</h2>
+          <p className="text-sm text-muted-foreground">Please log in to access the vendor panel.</p>
+          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => useNavigationStore.getState().setAppView('customer')}>
+            Go to Login
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  if (vendorStatus === 'PENDING' || vendorStatus === 'REJECTED') {
+    return <VendorPendingPage />;
+  }
+
+  if (vendorStatus === 'SUSPENDED') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="p-8 max-w-md w-full text-center space-y-4">
+          <XCircle size={48} className="mx-auto text-red-500" />
+          <h2 className="text-xl font-bold">Account Suspended</h2>
+          <p className="text-sm text-muted-foreground">Your vendor account has been suspended. Please contact the admin for more information.</p>
+          <Button variant="outline" onClick={() => { useAuthStore.getState().logout(); useNavigationStore.getState().setAppView('customer'); }}>
+            Back to Store
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   const renderView = () => {
     switch (vendorView) {

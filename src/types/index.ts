@@ -148,6 +148,7 @@ export interface Vendor {
   bankIfsc?: string | null;
   commissionRate: number;
   status: 'PENDING' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
+  rejectionReason?: string | null;
   totalSales: number;
   totalRevenue: number;
   rating: number;

@@ -6,9 +6,10 @@ interface AuthState {
   user: AuthUser | null;
   token: string | null;
   vendorId: string | null;
+  vendorStatus: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (user: AuthUser, token: string, vendorId?: string) => void;
+  login: (user: AuthUser, token: string, vendorId?: string, vendorStatus?: string | null) => void;
   logout: () => void;
   setLoading: (loading: boolean) => void;
 }
@@ -19,12 +20,13 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       vendorId: null,
+      vendorStatus: null,
       isAuthenticated: false,
       isLoading: false,
-      login: (user, token, vendorId) =>
-        set({ user, token, vendorId: vendorId || null, isAuthenticated: true, isLoading: false }),
+      login: (user, token, vendorId, vendorStatus) =>
+        set({ user, token, vendorId: vendorId || null, vendorStatus: vendorStatus || null, isAuthenticated: true, isLoading: false }),
       logout: () =>
-        set({ user: null, token: null, vendorId: null, isAuthenticated: false, isLoading: false }),
+        set({ user: null, token: null, vendorId: null, vendorStatus: null, isAuthenticated: false, isLoading: false }),
       setLoading: (isLoading) => set({ isLoading }),
     }),
     { name: 'marketplace-auth' }
