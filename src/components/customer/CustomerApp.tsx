@@ -887,8 +887,10 @@ function CheckoutPage() {
   const [placing, setPlacing] = useState(false);
   const qc = useQueryClient();
 
-  if (!isAuthenticated) { navigateTo('login'); return null; }
-  if (items.length === 0) { navigateTo('cart'); return null; }
+  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  useEffect(() => { if (isAuthenticated && items.length === 0) navigateTo('cart'); }, [isAuthenticated, items.length, navigateTo]);
+  if (!isAuthenticated) return null;
+  if (items.length === 0) return null;
 
   const handlePlaceOrder = async () => {
     if (!address.fullName || !address.phone || !address.addressLine1 || !address.city || !address.pincode) {
@@ -988,7 +990,8 @@ function OrdersPage() {
     enabled: !!user?.id,
   });
 
-  if (!isAuthenticated) { navigateTo('login'); return null; }
+  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  if (!isAuthenticated) return null;
 
   const statusColor: Record<string, string> = {
     NEW: 'bg-blue-100 text-blue-700', PROCESSING: 'bg-amber-100 text-amber-700', PACKED: 'bg-purple-100 text-purple-700',
@@ -1027,7 +1030,8 @@ function OrderDetailPage() {
     enabled: !!selectedOrderId,
   });
 
-  if (!isAuthenticated) { navigateTo('login'); return null; }
+  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  if (!isAuthenticated) return null;
   if (isLoading) return <div className="container mx-auto px-4 py-8"><Skeleton className="h-64 rounded-xl" /></div>;
   if (!order) return <div className="container mx-auto px-4 py-16 text-center"><p>Order not found</p></div>;
 
@@ -1170,7 +1174,8 @@ function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '' });
 
-  if (!isAuthenticated) { navigateTo('login'); return null; }
+  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  if (!isAuthenticated) return null;
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-2xl">
@@ -1211,7 +1216,8 @@ function WishlistPage() {
     enabled: isAuthenticated && items.length > 0,
   });
 
-  if (!isAuthenticated) { navigateTo('login'); return null; }
+  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  if (!isAuthenticated) return null;
 
   return (
     <div className="container mx-auto px-4 py-6">
@@ -1229,7 +1235,8 @@ function AddressesPage() {
   const { navigateTo } = useNavigationStore();
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
 
-  if (!isAuthenticated) { navigateTo('login'); return null; }
+  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  if (!isAuthenticated) return null;
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-2xl">
