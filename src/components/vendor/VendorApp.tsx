@@ -7,7 +7,8 @@ import { toast } from 'sonner';
 import {
   Package, ShoppingCart, DollarSign, Star, TrendingUp, BarChart3, Plus, Pencil, Trash2,
   Search, Filter, Eye, ChevronLeft, ChevronRight, Upload, Settings, Bell, LogOut,
-  Store, Menu, X, User, AlertTriangle, CheckCircle, Clock, Truck, BoxIcon, XCircle, ShieldCheck
+  Store, Menu, X, User, AlertTriangle, CheckCircle, Clock, Truck, BoxIcon, XCircle, ShieldCheck,
+  Wallet, Copy, Printer, ArrowDownUp, FileText, RotateCcw, Ban
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuthStore, useNavigationStore } from '@/stores';
-import type { Product, Order, ApiResponse, VendorDashboardStats } from '@/types';
+import type { Product, Order, ApiResponse, VendorDashboardStats, VendorWallet, WalletTransaction } from '@/types';
 
 const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -49,6 +50,7 @@ const VENDOR_NAV = [
   { key: 'vendor-add-product', label: 'Add Product', icon: Plus },
   { key: 'vendor-orders', label: 'Orders', icon: ShoppingCart },
   { key: 'vendor-reports', label: 'Reports', icon: TrendingUp },
+  { key: 'vendor-wallet', label: 'Wallet', icon: Wallet },
   { key: 'vendor-profile', label: 'Profile', icon: User },
   { key: 'vendor-settings', label: 'Settings', icon: Settings },
 ];
@@ -240,11 +242,16 @@ function VendorProducts() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['vendor-products', vendorId, page, search],
-    queryFn: () => fetch(`/api/products?vendorId=${vendorId}&page=${page}&limit=12&search=${search}`).then(r => r.json()).then((r: ApiResponse<Product[]>) => r),
+    queryKey: ['vendor-products', vendorId, page, search, statusFilter],
+    queryFn: () => {
+      const params = new URLSearchParams({ vendorId: vendorId || '', page: String(page), limit: '12', search });
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      return fetch(`/api/products?${params}`).then(r => r.json()).then((r: ApiResponse<Product[]>) => r);
+    },
     enabled: !!vendorId,
   });
 
@@ -254,6 +261,23 @@ function VendorProducts() {
     onError: () => toast.error('Failed to delete product'),
   });
 
+  const duplicateMutation = useMutation({
+    mutationFn: (id: string) => fetch(`/api/vendor/products/${id}/duplicate`, { method: 'POST' }).then(r => r.json()),
+    onSuccess: (data) => {
+      if (data.success) { toast.success('Product duplicated successfully'); qc.invalidateQueries({ queryKey: ['vendor-products'] }); }
+      else toast.error(data.error || 'Failed to duplicate');
+    },
+    onError: () => toast.error('Failed to duplicate product'),
+  });
+
+  const statusColor: Record<string, string> = {
+    PUBLISHED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    DRAFT: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+    ARCHIVED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  };
+
+  const statusFilters = ['all', 'PUBLISHED', 'DRAFT', 'ARCHIVED'];
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -261,16 +285,23 @@ function VendorProducts() {
         <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setVendorView('vendor-add-product')}><Plus size={16} className="mr-1.5" />Add Product</Button>
       </div>
 
-      <div className="flex gap-3 max-w-md">
-        <div className="relative flex-1"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search products..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" /></div>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 max-w-md"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search products..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" /></div>
+        <div className="flex gap-2 flex-wrap">
+          {statusFilters.map(s => (
+            <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-orange-500 hover:bg-orange-600' : ''} onClick={() => { setStatusFilter(s); setPage(1); }}>
+              {s === 'all' ? 'All' : s}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {isLoading ? <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{Array.from({length: 6}).map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}</div> :
       <Card>
         <Table>
-          <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="hidden md:table-cell">Category</TableHead><TableHead>Price</TableHead><TableHead>Stock</TableHead><TableHead className="hidden sm:table-cell">Rating</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="hidden md:table-cell">Category</TableHead><TableHead>Price</TableHead><TableHead>Stock</TableHead><TableHead className="hidden sm:table-cell">Status</TableHead><TableHead className="hidden sm:table-cell">Rating</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
           <TableBody>
-            {!data?.data?.length && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No products found</TableCell></TableRow>}
+            {!data?.data?.length && <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No products found</TableCell></TableRow>}
             {data?.data?.map(product => (
               <TableRow key={product.id}>
                 <TableCell>
@@ -289,11 +320,15 @@ function VendorProducts() {
                 <TableCell>
                   <span className={`font-medium ${product.stock < 5 ? 'text-red-600' : product.stock < 20 ? 'text-amber-600' : 'text-green-600'}`}>{product.stock}</span>
                 </TableCell>
+                <TableCell className="hidden sm:table-cell">
+                  <Badge variant="secondary" className={statusColor[product.productStatus] || ''}>{product.productStatus}</Badge>
+                </TableCell>
                 <TableCell className="hidden sm:table-cell"><div className="flex items-center gap-1"><StarRating rating={product.rating} size={12} /><span className="text-sm">{product.rating}</span></div></TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectedProductId(product.id); setVendorView('vendor-add-product'); }}><Pencil size={14} /></Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(product.id)}><Trash2 size={14} /></Button>
+                    <TooltipProvider delayDuration={0}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateMutation.mutate(product.id)} disabled={duplicateMutation.isPending}><Copy size={14} /></Button></TooltipTrigger><TooltipContent>Duplicate</TooltipContent></Tooltip></TooltipProvider>
+                    <TooltipProvider delayDuration={0}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectedProductId(product.id); setVendorView('vendor-add-product'); }}><Pencil size={14} /></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip></TooltipProvider>
+                    <TooltipProvider delayDuration={0}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(product.id)}><Trash2 size={14} /></Button></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip></TooltipProvider>
                   </div>
                 </TableCell>
               </TableRow>
@@ -341,6 +376,7 @@ function VendorAddProduct() {
     name: '', slug: '', description: '', shortDescription: '', sku: '', barcode: '',
     price: '', compareAtPrice: '', costPrice: '', stock: '10', weight: '', warranty: '', returnPolicy: '',
     categoryId: '', brandId: '', isFeatured: false, seoTitle: '', seoDescription: '', seoKeywords: '',
+    productStatus: 'DRAFT', badge: 'NONE', estimatedDeliveryDays: '7',
   });
 
   React.useEffect(() => {
@@ -351,6 +387,7 @@ function VendorAddProduct() {
         costPrice: String(product.costPrice || ''), stock: String(product.stock || '10'), weight: String(product.weight || ''), warranty: product.warranty || '',
         returnPolicy: product.returnPolicy || '', categoryId: product.categoryId || '', brandId: product.brandId || '',
         isFeatured: product.isFeatured || false, seoTitle: product.seoTitle || '', seoDescription: product.seoDescription || '', seoKeywords: product.seoKeywords || '',
+        productStatus: product.productStatus || 'DRAFT', badge: product.badge || 'NONE', estimatedDeliveryDays: String(product.estimatedDeliveryDays || 7),
       });
     }
   }, [product]);
@@ -365,6 +402,8 @@ function VendorAddProduct() {
         costPrice: parseFloat(form.costPrice) || null,
         stock: parseInt(form.stock) || 0,
         weight: parseFloat(form.weight) || null,
+        estimatedDeliveryDays: parseInt(form.estimatedDeliveryDays) || 7,
+        badge: form.badge === 'NONE' ? null : form.badge,
         images: [{ url: `https://placehold.co/600x600/f97316/ffffff?text=${encodeURIComponent(form.name.substring(0, 15))}`, alt: form.name, sortOrder: 0 }],
         specs: [{ key: 'Warranty', value: form.warranty || 'Standard' }],
       };
@@ -431,6 +470,14 @@ function VendorAddProduct() {
             </div>
           </Card>
 
+          <Card className="p-6"><h3 className="font-semibold mb-4">Publishing</h3>
+            <div className="space-y-4">
+              <div><Label>Status</Label><Select value={form.productStatus} onValueChange={v => update('productStatus', v)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="DRAFT">Draft</SelectItem><SelectItem value="PUBLISHED">Published</SelectItem><SelectItem value="ARCHIVED">Archived</SelectItem></SelectContent></Select></div>
+              <div><Label>Badge</Label><Select value={form.badge} onValueChange={v => update('badge', v)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="NONE">None</SelectItem><SelectItem value="BEST_SELLER">Best Seller</SelectItem><SelectItem value="NEW_ARRIVAL">New Arrival</SelectItem><SelectItem value="LIMITED_TIME">Limited Time</SelectItem><SelectItem value="FESTIVAL_OFFER">Festival Offer</SelectItem></SelectContent></Select></div>
+              <div><Label>Est. Delivery (days)</Label><Input type="number" min={1} max={30} value={form.estimatedDeliveryDays} onChange={e => update('estimatedDeliveryDays', e.target.value)} className="mt-1" /></div>
+            </div>
+          </Card>
+
           <Card className="p-6"><h3 className="font-semibold mb-4">Policies</h3>
             <div className="space-y-4">
               <div><Label>Warranty</Label><Input value={form.warranty} onChange={e => update('warranty', e.target.value)} className="mt-1" placeholder="e.g., 1 year manufacturer warranty" /></div>
@@ -457,6 +504,7 @@ function VendorOrders() {
   const { setSelectedOrderId, setVendorView } = useNavigationStore();
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
+  const [printDialog, setPrintDialog] = useState<{ open: boolean; order: Order | null; mode: 'invoice' | 'packing' }>({ open: false, order: null, mode: 'invoice' });
 
   const params = new URLSearchParams({ vendorId: vendorId || '', page: String(page), limit: '15' });
   if (statusFilter !== 'all') params.set('status', statusFilter);
@@ -464,6 +512,12 @@ function VendorOrders() {
   const { data, isLoading } = useQuery({
     queryKey: ['vendor-orders', params.toString()],
     queryFn: () => fetch(`/api/orders?${params}`).then(r => r.json()).then((r: ApiResponse<Order[]>) => r),
+    enabled: !!vendorId,
+  });
+
+  const { data: statsData } = useQuery({
+    queryKey: ['vendor-dashboard', vendorId],
+    queryFn: () => fetch(`/api/vendor/dashboard?vendorId=${vendorId}`).then(r => r.json()).then((r: ApiResponse<VendorDashboardStats>) => r.data),
     enabled: !!vendorId,
   });
 
@@ -479,9 +533,26 @@ function VendorOrders() {
     SHIPPED: 'bg-orange-100 text-orange-700', DELIVERED: 'bg-green-100 text-green-700', CANCELLED: 'bg-red-100 text-red-700',
   };
 
+  const vendorItems = (order: Order) => order.items?.filter(i => i.vendorId === vendorId) || [];
+  const vendorTotal = (order: Order) => vendorItems(order).reduce((sum, i) => sum + i.total, 0);
+
+  const openPrint = (order: Order, mode: 'invoice' | 'packing') => {
+    setPrintDialog({ open: true, order, mode });
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div><h1 className="text-2xl font-bold">Orders</h1><p className="text-muted-foreground text-sm">Manage and fulfill customer orders</p></div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <Card className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center"><Ban size={20} className="text-red-600" /></div><div><p className="text-xs text-muted-foreground">Cancelled Orders</p><p className="text-xl font-bold">{statsData?.cancelledOrders || 0}</p></div></div></Card>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }}>
+          <Card className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><RotateCcw size={20} className="text-amber-600" /></div><div><p className="text-xs text-muted-foreground">Refund Rate</p><p className="text-xl font-bold">{(statsData?.refundRate || 0).toFixed(1)}%</p></div></div></Card>
+        </motion.div>
+      </div>
 
       <div className="flex gap-2 flex-wrap">
         {['all', 'NEW', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map(s => (
@@ -503,11 +574,11 @@ function VendorOrders() {
               </div>
               <div className="flex items-center gap-2">
                 <Badge className={statusColor[order.status] || ''}>{order.status}</Badge>
-                <span className="font-bold text-lg">{formatCurrency(order.total)}</span>
+                <span className="font-bold text-lg">{formatCurrency(vendorTotal(order))}</span>
               </div>
             </div>
             <div className="space-y-2 mb-3">
-              {order.items?.filter(i => i.vendorId === vendorId).map(item => (
+              {vendorItems(order).map(item => (
                 <div key={item.id} className="flex items-center gap-3 text-sm">
                   <div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">{item.productImage && <img src={item.productImage} alt="" className="w-full h-full object-cover" />}</div>
                   <div className="flex-1 min-w-0"><p className="truncate">{item.productName}</p><p className="text-muted-foreground">Qty: {item.quantity} × {formatCurrency(item.price)}</p></div>
@@ -519,10 +590,61 @@ function VendorOrders() {
               {order.status === 'NEW' && <Button size="sm" variant="outline" onClick={() => updateMutation.mutate({ orderId: order.id, status: 'PROCESSING' })}><Clock size={14} className="mr-1" />Accept & Process</Button>}
               {order.status === 'PROCESSING' && <Button size="sm" variant="outline" onClick={() => updateMutation.mutate({ orderId: order.id, status: 'PACKED' })}><BoxIcon size={14} className="mr-1" />Mark Packed</Button>}
               {order.status === 'PACKED' && <Button size="sm" variant="outline" onClick={() => updateMutation.mutate({ orderId: order.id, status: 'SHIPPED' })}><Truck size={14} className="mr-1" />Mark Shipped</Button>}
+              <Button size="sm" variant="outline" onClick={() => openPrint(order, 'invoice')}><FileText size={14} className="mr-1" />Invoice</Button>
+              <Button size="sm" variant="outline" onClick={() => openPrint(order, 'packing')}><Printer size={14} className="mr-1" />Packing Slip</Button>
             </div>
           </Card>
         ))}
       </div>}
+
+      {/* Print Dialog */}
+      <Dialog open={printDialog.open} onOpenChange={(open) => { if (!open) window.close(); setPrintDialog({ open, order: null, mode: 'invoice' }); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{printDialog.mode === 'invoice' ? 'Invoice' : 'Packing Slip'} - #{printDialog.order?.orderNumber}</DialogTitle>
+          </DialogHeader>
+          <div id="print-content" className="space-y-4 text-sm">
+            {printDialog.mode === 'invoice' ? (
+              <div className="space-y-4">
+                <div className="flex justify-between items-start border-b pb-4">
+                  <div><h3 className="text-lg font-bold text-orange-600">INVOICE</h3><p className="text-muted-foreground">Order #{printDialog.order?.orderNumber}</p><p className="text-muted-foreground">{new Date(printDialog.order?.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
+                  <div className="text-right"><p className="font-medium">{printDialog.order?.user?.name}</p><p className="text-muted-foreground text-xs">{printDialog.order?.shippingAddress}</p></div>
+                </div>
+                <Table>
+                  <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty</TableHead><TableHead>Price</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {vendorItems(printDialog.order!).map(item => (
+                      <TableRow key={item.id}><TableCell>{item.productName}</TableCell><TableCell>{item.quantity}</TableCell><TableCell>{formatCurrency(item.price)}</TableCell><TableCell className="text-right">{formatCurrency(item.total)}</TableCell></TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="flex justify-end"><Card className="p-4 w-64 space-y-1"><div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(vendorTotal(printDialog.order!))}</span></div><div className="flex justify-between font-bold text-lg border-t pt-2 mt-2"><span>Total</span><span className="text-orange-600">{formatCurrency(vendorTotal(printDialog.order!))}</span></div></Card></div>
+                <p className="text-xs text-muted-foreground text-center">Payment: {printDialog.order?.paymentMethod} • Status: {printDialog.order?.paymentStatus}</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex justify-between items-start border-b pb-4">
+                  <div><h3 className="text-lg font-bold text-orange-600">PACKING SLIP</h3><p className="text-muted-foreground">Order #{printDialog.order?.orderNumber}</p></div>
+                  <div className="text-right"><p className="font-medium">{printDialog.order?.user?.name}</p><p className="text-muted-foreground text-xs">{printDialog.order?.shippingAddress}</p></div>
+                </div>
+                <div className="space-y-2">
+                  {vendorItems(printDialog.order!).map(item => (
+                    <div key={item.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                      <div className="flex items-center gap-3"><div className="w-8 h-8 rounded bg-muted overflow-hidden shrink-0">{item.productImage && <img src={item.productImage} alt="" className="w-full h-full object-cover" />}</div><span>{item.productName}</span></div>
+                      <Badge variant="secondary">Qty: {item.quantity}</Badge>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground text-center">Date: {new Date(printDialog.order?.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrintDialog({ open: false, order: null, mode: 'invoice' })}>Close</Button>
+            <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => window.print()}>Print</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -537,15 +659,53 @@ function VendorReports() {
     enabled: !!vendorId,
   });
 
+  const latestComparison = data?.monthlyComparison?.[data.monthlyComparison.length - 1];
+  const comparisonChange = latestComparison ? ((latestComparison.thisMonth - latestComparison.lastMonth) / Math.max(latestComparison.lastMonth, 1)) * 100 : 0;
+
   return (
     <div className="p-6 space-y-6">
       <div><h1 className="text-2xl font-bold">Reports</h1><p className="text-muted-foreground text-sm">Business performance and analytics</p></div>
 
-      <div className="grid sm:grid-cols-3 gap-4">
-        <Card className="p-4"><p className="text-sm text-muted-foreground">Total Revenue</p><p className="text-2xl font-bold text-green-600">{formatCurrency(data?.totalRevenue || 0)}</p></Card>
-        <Card className="p-4"><p className="text-sm text-muted-foreground">Total Orders</p><p className="text-2xl font-bold">{data?.totalOrders || 0}</p></Card>
-        <Card className="p-4"><p className="text-sm text-muted-foreground">Average Rating</p><p className="text-2xl font-bold flex items-center gap-1"><StarRating rating={data?.avgRating || 0} size={20} />{data?.avgRating?.toFixed(1)}</p></Card>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <Card className="p-4"><p className="text-sm text-muted-foreground">Total Revenue</p><p className="text-2xl font-bold text-green-600">{formatCurrency(data?.totalRevenue || 0)}</p></Card>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }}>
+          <Card className="p-4"><p className="text-sm text-muted-foreground">Total Orders</p><p className="text-2xl font-bold">{data?.totalOrders || 0}</p></Card>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+          <Card className="p-4"><p className="text-sm text-muted-foreground">Average Rating</p><p className="text-2xl font-bold flex items-center gap-1"><StarRating rating={data?.avgRating || 0} size={20} />{data?.avgRating?.toFixed(1)}</p></Card>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+          <Card className="p-4"><div className="flex items-center gap-2"><Ban size={16} className="text-red-500" /><p className="text-sm text-muted-foreground">Cancelled</p></div><p className="text-2xl font-bold text-red-600">{data?.cancelledOrders || 0}</p></Card>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
+          <Card className="p-4"><div className="flex items-center gap-2"><RotateCcw size={16} className="text-amber-500" /><p className="text-sm text-muted-foreground">Refund Rate</p></div><p className="text-2xl font-bold text-amber-600">{(data?.refundRate || 0).toFixed(1)}%</p></Card>
+        </motion.div>
       </div>
+
+      {/* Monthly Comparison */}
+      {latestComparison && (
+        <Card className="p-6">
+          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg flex items-center gap-2"><ArrowDownUp size={18} />Monthly Comparison</CardTitle></CardHeader>
+          <div className="grid sm:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div><p className="text-sm text-muted-foreground">This Month</p><p className="text-2xl font-bold text-green-600">{formatCurrency(latestComparison.thisMonth)}</p></div>
+                <div className={`text-sm font-medium px-2 py-1 rounded ${comparisonChange >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {comparisonChange >= 0 ? '+' : ''}{comparisonChange.toFixed(1)}%
+                </div>
+              </div>
+              <div className="w-full bg-muted rounded-full h-3"><div className="h-3 rounded-full bg-orange-500 transition-all" style={{ width: `${Math.min((latestComparison.thisMonth / Math.max(latestComparison.lastMonth, 1)) * 100, 100)}%` }} /></div>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Last Month</p>
+              <p className="text-2xl font-bold">{formatCurrency(latestComparison.lastMonth)}</p>
+              <p className="text-xs text-muted-foreground mt-1">{latestComparison.month}</p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {data?.monthlySales && (
         <Card className="p-6">
@@ -562,6 +722,25 @@ function VendorReports() {
               );
             })}
           </div>
+        </Card>
+      )}
+
+      {/* Top Categories */}
+      {data?.topCategories && data.topCategories.length > 0 && (
+        <Card className="p-6">
+          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Top Categories</CardTitle></CardHeader>
+          <Table>
+            <TableHeader><TableRow><TableHead>Category</TableHead><TableHead>Orders</TableHead><TableHead>Revenue</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {data.topCategories.map((cat, i) => (
+                <TableRow key={i}>
+                  <TableCell><div className="flex items-center gap-2"><span className="text-lg font-bold text-muted-foreground w-6">#{i + 1}</span><span className="text-sm font-medium">{cat.name}</span></div></TableCell>
+                  <TableCell className="font-medium">{cat.count}</TableCell>
+                  <TableCell className="font-medium text-green-600">{formatCurrency(cat.revenue)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </Card>
       )}
 
@@ -788,6 +967,156 @@ function VendorPendingPage() {
   );
 }
 
+// ============ VENDOR WALLET ============
+
+function VendorWalletPage() {
+  const { vendorId } = useAuthStore();
+  const qc = useQueryClient();
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [page, setPage] = useState(1);
+
+  const { data: wallet, isLoading: walletLoading } = useQuery({
+    queryKey: ['vendor-wallet', vendorId],
+    queryFn: () => fetch(`/api/vendor/wallet?vendorId=${vendorId}`).then(r => r.json()).then((r: ApiResponse<VendorWallet>) => r.data),
+    enabled: !!vendorId,
+  });
+
+  const { data: txData, isLoading: txLoading } = useQuery({
+    queryKey: ['vendor-wallet-tx', vendorId, page],
+    queryFn: () => fetch(`/api/vendor/wallet?vendorId=${vendorId}&page=${page}&limit=20`).then(r => r.json()).then((r: ApiResponse<{ wallet: VendorWallet; transactions: WalletTransaction[] }>) => r.data),
+    enabled: !!vendorId,
+  });
+
+  const vendorData = txData || (wallet ? { wallet, transactions: [] as WalletTransaction[] } : null);
+
+  const { data: vendorInfo } = useQuery({
+    queryKey: ['vendor', vendorId],
+    queryFn: () => fetch(`/api/vendors/${vendorId}`).then(r => r.json()).then((r: any) => r.data),
+    enabled: !!vendorId,
+  });
+
+  const maskBankAccount = (acc?: string | null) => {
+    if (!acc) return 'Not set';
+    return 'XXXX XXXX ' + acc.slice(-4);
+  };
+  const maskIfsc = (ifsc?: string | null) => {
+    if (!ifsc) return 'N/A';
+    return 'XXXX0' + ifsc.slice(-3);
+  };
+
+  const withdrawMutation = useMutation({
+    mutationFn: () => fetch('/api/vendor/wallet/withdraw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vendorId, amount: parseFloat(withdrawAmount) }) }).then(r => r.json()),
+    onSuccess: (data) => {
+      if (data.success) { toast.success('Withdrawal request submitted!'); setWithdrawOpen(false); setWithdrawAmount(''); qc.invalidateQueries({ queryKey: ['vendor-wallet'] }); qc.invalidateQueries({ queryKey: ['vendor-wallet-tx'] }); }
+      else toast.error(data.error || 'Withdrawal failed');
+    },
+    onError: () => toast.error('Failed to request withdrawal'),
+  });
+
+  const txTypeColor: Record<string, string> = {
+    EARNING: 'text-green-600',
+    WITHDRAWAL: 'text-red-600',
+    ADJUSTMENT: 'text-amber-600',
+    COMMISSION_DEDUCTION: 'text-orange-600',
+  };
+
+  if (walletLoading) return <div className="p-6 space-y-4">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>;
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div><h1 className="text-2xl font-bold">Wallet</h1><p className="text-muted-foreground text-sm">Manage your earnings and withdrawals</p></div>
+        <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setWithdrawOpen(true)}><DollarSign size={16} className="mr-1.5" />Request Withdrawal</Button>
+      </div>
+
+      {/* Balance Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <Card className="p-6 border-green-200 dark:border-green-900/50 bg-gradient-to-br from-green-50 to-white dark:from-green-900/10 dark:to-background">
+            <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center"><DollarSign size={20} className="text-green-600" /></div><p className="text-sm text-muted-foreground">Available Balance</p></div>
+            <p className="text-3xl font-bold text-green-600">{formatCurrency(vendorData?.wallet?.availableBalance || 0)}</p>
+          </Card>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+          <Card className="p-6 border-amber-200 dark:border-amber-900/50 bg-gradient-to-br from-amber-50 to-white dark:from-amber-900/10 dark:to-background">
+            <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><Clock size={20} className="text-amber-600" /></div><p className="text-sm text-muted-foreground">Pending Balance</p></div>
+            <p className="text-3xl font-bold text-amber-600">{formatCurrency(vendorData?.wallet?.pendingBalance || 0)}</p>
+          </Card>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
+          <Card className="p-6 border-orange-200 dark:border-orange-900/50 bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/10 dark:to-background">
+            <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center"><TrendingUp size={20} className="text-orange-600" /></div><p className="text-sm text-muted-foreground">Total Earned</p></div>
+            <p className="text-3xl font-bold text-orange-600">{formatCurrency(vendorData?.wallet?.totalEarned || 0)}</p>
+          </Card>
+        </motion.div>
+      </div>
+
+      {/* Transaction History */}
+      <Card className="p-6">
+        <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Transaction History</CardTitle></CardHeader>
+        {txLoading ? <div className="space-y-3">{Array.from({length: 5}).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div> : (
+          <>
+            <div className="max-h-96 overflow-y-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right hidden sm:table-cell">Balance After</TableHead><TableHead className="hidden md:table-cell">Date</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {(!vendorData?.transactions?.length) && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No transactions yet</TableCell></TableRow>}
+                  {vendorData?.transactions?.map(tx => (
+                    <TableRow key={tx.id}>
+                      <TableCell><Badge variant="secondary" className={txTypeColor[tx.type] || ''}>{tx.type.replace(/_/g, ' ')}</Badge></TableCell>
+                      <TableCell className="text-sm max-w-48 truncate">{tx.description || '-'}</TableCell>
+                      <TableCell className={`text-right font-medium ${tx.type === 'EARNING' ? 'text-green-600' : 'text-red-600'}`}>{tx.type === 'EARNING' ? '+' : '-'}{formatCurrency(tx.amount)}</TableCell>
+                      <TableCell className="text-right hidden sm:table-cell">{formatCurrency(tx.balance)}</TableCell>
+                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{new Date(tx.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+      </Card>
+
+      {/* Withdrawal Dialog */}
+      <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Withdrawal</DialogTitle>
+            <DialogDescription>Enter the amount you want to withdraw to your bank account.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Available Balance</Label>
+              <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(vendorData?.wallet?.availableBalance || 0)}</p>
+            </div>
+            <div>
+              <Label>Amount (₹)</Label>
+              <Input type="number" min={1} max={vendorData?.wallet?.availableBalance || 0} value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="mt-1" placeholder="Enter withdrawal amount" />
+              <p className="text-xs text-muted-foreground mt-1">Minimum withdrawal: ₹500</p>
+            </div>
+            <Separator />
+            <div className="text-sm space-y-2">
+              <p className="font-medium">Bank Account Details</p>
+              <div className="grid grid-cols-2 gap-2 text-muted-foreground">
+                <span>Bank:</span><span className="text-foreground">{vendorInfo?.bankName || 'Not set'}</span>
+                <span>Account:</span><span className="text-foreground font-mono">{maskBankAccount(vendorInfo?.bankAccount)}</span>
+                <span>IFSC:</span><span className="text-foreground font-mono">{maskIfsc(vendorInfo?.bankIfsc)}</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setWithdrawOpen(false); setWithdrawAmount(''); }}>Cancel</Button>
+            <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => withdrawMutation.mutate()} disabled={withdrawMutation.isPending || !withdrawAmount || parseFloat(withdrawAmount) < 500 || parseFloat(withdrawAmount) > (vendorData?.wallet?.availableBalance || 0)}>
+              {withdrawMutation.isPending ? 'Submitting...' : 'Confirm Withdrawal'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 // ============ MAIN VENDOR APP ============
 
 export default function VendorApp() {
@@ -836,6 +1165,7 @@ export default function VendorApp() {
       case 'vendor-add-product': return <VendorAddProduct />;
       case 'vendor-orders': return <VendorOrders />;
       case 'vendor-reports': return <VendorReports />;
+      case 'vendor-wallet': return <VendorWalletPage />;
       case 'vendor-profile': return <VendorProfile />;
       case 'vendor-settings': return <VendorSettings />;
       case 'vendor-notifications': return <div className="p-6"><h1 className="text-2xl font-bold mb-4">Notifications</h1><p className="text-muted-foreground">No new notifications</p></div>;

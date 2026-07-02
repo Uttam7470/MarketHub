@@ -1,0 +1,502 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useState, useEffect, useMemo, useCallback } from 'react';
+     4→     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→     5→import { motion, AnimatePresence } from 'framer-motion';
+     6→     6→import { toast } from 'sonner';
+     7→     7→import {
+     8→     8→  Search, ShoppingCart, Heart, User, Menu, X, ChevronDown, Star, StarHalf,
+     9→     9→  Minus, Plus, Trash2, ChevronRight, ChevronLeft, MapPin, Phone, Mail,
+    10→    10→  Package, Truck, CheckCircle, Clock, Shield, Gift, TrendingUp,
+    11→    11→  BarChart3, Users, ArrowRight, Eye, Share2, GitCompare, Tag,
+    12→    12→  Store, CreditCard, Banknote, Smartphone, Building2, Home,
+    13→    13→  Settings, LogOut, Bell, Sun, Moon, Monitor, Filter, SlidersHorizontal,
+    14→    14→  Bookmark, Send, Printer, RotateCcw, XCircle,
+    15→    15→  MessageCircle, Facebook, Twitter, Link as LinkIcon, HelpCircle
+    16→    16→} from 'lucide-react';
+    17→    17→
+    18→    18→import { Button } from '@/components/ui/button';
+    19→    19→import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+    20→    20→import { Input } from '@/components/ui/input';
+    21→    21→import { Label } from '@/components/ui/label';
+    22→    22→import { Badge } from '@/components/ui/badge';
+    23→    23→import { Separator } from '@/components/ui/separator';
+    24→    24→import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+    25→    25→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+    26→    26→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    27→    27→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    28→    28→import { Checkbox } from '@/components/ui/checkbox';
+    29→    29→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    30→    30→import { Slider } from '@/components/ui/slider';
+    31→    31→import { Textarea } from '@/components/ui/textarea';
+    32→    32→import { Skeleton } from '@/components/ui/skeleton';
+    33→    33→import { ScrollArea } from '@/components/ui/scroll-area';
+    34→    34→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    35→    35→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+    36→    36→import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+    37→    37→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    38→    38→import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
+    39→    39→import { useTheme } from 'next-themes';
+    40→    40→import { useAuthStore, useNavigationStore, useCartStore, useWishlistStore, useCompareStore } from '@/stores';
+    41→    41→import type { Product, Category, Brand, Order, Banner, CustomerAddress, ApiResponse } from '@/types';
+    42→    42→
+    43→    43→// ============ HELPERS ============
+    44→    44→
+    45→    45→const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    46→    46→const discountPercent = (price: number, compare?: number | null) => compare ? Math.round(((compare - price) / compare) * 100) : 0;
+    47→    47→const badgeColors: Record<string, string> = { BEST_SELLER: 'bg-emerald-500 text-white', NEW_ARRIVAL: 'bg-blue-500 text-white', LIMITED_TIME: 'bg-red-500 text-white', FESTIVAL_OFFER: 'bg-amber-500 text-white' };
+    48→    48→const badgeLabels: Record<string, string> = { BEST_SELLER: 'Best Seller', NEW_ARRIVAL: 'New', LIMITED_TIME: 'Limited', FESTIVAL_OFFER: 'Festival' };
+    49→    49→
+    50→    50→function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
+    51→    51→  const stars = [];
+    52→    52→  for (let i = 1; i <= 5; i++) {
+    53→    53→    if (i <= Math.floor(rating)) {
+    54→    54→      stars.push(<Star key={i} className="fill-amber-400 text-amber-400" size={size} />);
+    55→    55→    } else if (i - 0.5 <= rating) {
+    56→    56→      stars.push(<StarHalf key={i} className="fill-amber-400 text-amber-400" size={size} />);
+    57→    57→    } else {
+    58→    58→      stars.push(<Star key={i} className="text-muted-foreground/30" size={size} />);
+    59→    59→    }
+    60→    60→  }
+    61→    61→  return <span className="inline-flex items-center gap-0.5">{stars}</span>;
+    62→    62→}
+    63→    63→
+    64→    64→function ProductCard({ product }: { product: Product }) {
+    65→    65→  const { navigateTo, setSelectedProductId } = useNavigationStore();
+    66→    66→  const { addItem } = useCartStore();
+    67→    67→  const { toggleItem, hasItem } = useWishlistStore();
+    68→    68→  const { toggleItem: toggleCompare, hasItem: hasCompare } = useCompareStore();
+    69→    69→  const isWishlisted = hasItem(product.id);
+    70→    70→  const isCompared = hasCompare(product.id);
+    71→    71→  const discount = discountPercent(product.price, product.compareAtPrice);
+    72→    72→  const mainImage = product.images?.[0]?.url;
+    73→    73→
+    74→    74→  return (
+    75→    75→    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} whileHover={{ y: -4 }}>
+    76→    76→      <Card className="group overflow-hidden border-border/50 hover:shadow-lg transition-all duration-300 cursor-pointer h-full flex flex-col">
+    77→    77→        <div className="relative aspect-square overflow-hidden bg-muted/30">
+    78→    78→          {mainImage ? (
+    79→    79→            <img src={mainImage} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+    80→    80→          ) : (
+    81→    81→            <div className="w-full h-full flex items-center justify-center text-muted-foreground"><Package size={48} /></div>
+    82→    82→          )}
+    83→    83→          <div className="absolute top-2 left-2 flex flex-col gap-1">
+    84→    84→            {discount > 0 && <Badge className="bg-red-500 text-white text-xs">{discount}% OFF</Badge>}
+    85→    85→            {product.badge && (
+    86→    86→              <Badge className={badgeColors[product.badge] || 'bg-gray-500 text-white'}>{badgeLabels[product.badge]}</Badge>
+    87→    87→            )}
+    88→    88→          </div>
+    89→    89→          {product.stock < 5 && product.stock > 0 && <Badge variant="secondary" className="absolute top-2 right-10 text-xs">Low Stock</Badge>}
+    90→    90→          {product.stock === 0 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Badge variant="destructive">Out of Stock</Badge></div>}
+    91→    91→          <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+    92→    92→            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" onClick={(e) => { e.stopPropagation(); toggleItem(product.id); toast.success(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist'); }}>
+    93→    93→              <Heart size={14} className={isWishlisted ? 'fill-red-500 text-red-500' : ''} />
+    94→    94→            </Button>
+    95→    95→            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" onClick={(e) => { e.stopPropagation(); toggleCompare(product.id); toast.success(isCompared ? 'Removed from compare' : 'Added to compare'); }}>
+    96→    96→              <GitCompare size={14} className={isCompared ? 'text-orange-500' : ''} />
+    97→    97→            </Button>
+    98→    98→          </div>
+    99→    99→        </div>
+   100→   100→        <CardContent className="p-3 flex-1 flex flex-col gap-1.5" onClick={() => { setSelectedProductId(product.id); navigateTo('product-detail'); }}>
+   101→   101→          <p className="text-xs text-muted-foreground truncate">{product.vendor?.businessName}</p>
+   102→   102→          <h3 className="text-sm font-medium line-clamp-2 leading-tight min-h-[2.5rem]">{product.name}</h3>
+   103→   103→          <div className="flex items-center gap-1">
+   104→   104→            <StarRating rating={product.rating} size={12} />
+   105→   105→            <span className="text-xs text-muted-foreground">({product.reviewCount})</span>
+   106→   106→          </div>
+   107→   107→          <div className="flex items-baseline gap-2 mt-auto">
+   108→   108→            <span className="text-lg font-bold text-foreground">{formatCurrency(product.price)}</span>
+   109→   109→            {product.compareAtPrice && product.compareAtPrice > product.price && (
+   110→   110→              <span className="text-sm text-muted-foreground line-through">{formatCurrency(product.compareAtPrice)}</span>
+   111→   111→            )}
+   112→   112→          </div>
+   113→   113→        </CardContent>
+   114→   114→        <CardFooter className="p-3 pt-0">
+   115→   115→          <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={product.stock === 0} onClick={(e) => { e.stopPropagation(); addItem({ productId: product.id, name: product.name, price: product.price, image: mainImage || '', vendorName: product.vendor?.businessName || '', vendorId: product.vendorId, stock: product.stock }); toast.success('Added to cart!'); }}>
+   116→   116→            <ShoppingCart size={14} className="mr-1.5" /> Add to Cart
+   117→   117→          </Button>
+   118→   118→        </CardFooter>
+   119→   119→      </Card>
+   120→   120→    </motion.div>
+   121→   121→  );
+   122→   122→}
+   123→   123→
+   124→   124→function ProductGrid({ products, loading }: { products: Product[]; loading?: boolean }) {
+   125→   125→  if (loading) {
+   126→   126→    return <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+   127→   127→      {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="aspect-square rounded-xl" />)}
+   128→   128→    </div>;
+   129→   129→  }
+   130→   130→  if (!products.length) {
+   131→   131→    return <div className="text-center py-16"><Package size={64} className="mx-auto text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium text-muted-foreground">No products found</h3><p className="text-sm text-muted-foreground mt-1">Try adjusting your filters or search</p></div>;
+   132→   132→  }
+   133→   133→  return <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">{products.map(p => <ProductCard key={p.id} product={p} />)}</div>;
+   134→   134→}
+   135→   135→
+   136→   136→// ============ HEADER ============
+   137→   137→
+   138→   138→function CustomerHeader() {
+   139→   139→  const { user, isAuthenticated, logout } = useAuthStore();
+   140→   140→  const { customerView, searchQuery, setSearchQuery, setCustomerView, setMobileMenuOpen, isMobileMenuOpen, isCartOpen, setCartOpen, setAppView, navigateTo, setSelectedProductId } = useNavigationStore();
+   141→   141→  const { getItemCount } = useCartStore();
+   142→   142→  const { setTheme, theme } = useTheme();
+   143→   143→  const itemCount = getItemCount();
+   144→   144→  const [searchInput, setSearchInput] = useState(searchQuery);
+   145→   145→  const [mounted, setMounted] = useState(false);
+   146→   146→  const [suggestions, setSuggestions] = useState<any[]>([]);
+   147→   147→  const [showSuggestions, setShowSuggestions] = useState(false);
+   148→   148→
+   149→   149→  useEffect(() => { setSearchInput(searchQuery); }, [searchQuery]);
+   150→   150→  useEffect(() => { setMounted(true); }, []);
+   151→   151→
+   152→   152→  useEffect(() => {
+   153→   153→    if (!searchInput.trim()) { setSuggestions([]); return; }
+   154→   154→    const timer = setTimeout(async () => {
+   155→   155→      try {
+   156→   156→        const res = await fetch(`/api/search/suggestions?q=${encodeURIComponent(searchInput)}`);
+   157→   157→        const data = await res.json();
+   158→   158→        setSuggestions(data.data || []);
+   159→   159→      } catch { setSuggestions([]); }
+   160→   160→    }, 300);
+   161→   161→    return () => clearTimeout(timer);
+   162→   162→  }, [searchInput]);
+   163→   163→
+   164→   164→  const handleSearch = (e: React.FormEvent) => {
+   165→   165→    e.preventDefault();
+   166→   166→    setSearchQuery(searchInput);
+   167→   167→    setCustomerView(searchInput ? 'search' : 'home');
+   168→   168→  };
+   169→   169→
+   170→   170→  return (
+   171→   171→    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+   172→   172→      {/* Top bar */}
+   173→   173→      <div className="bg-orange-500 text-white text-xs py-1.5 text-center hidden md:block">
+   174→   174→        Free shipping on orders above ₹500 | Use code WELCOME10 for 10% off on first order!
+   175→   175→      </div>
+   176→   176→      {/* Main nav */}
+   177→   177→      <div className="container mx-auto px-4">
+   178→   178→        <div className="flex items-center h-16 gap-4">
+   179→   179→          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(!isMobileMenuOpen)}>
+   180→   180→            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+   181→   181→          </Button>
+   182→   182→          <div className="flex items-center gap-2 cursor-pointer shrink-0" onClick={() => { setAppView('customer'); setCustomerView('home'); }}>
+   183→   183→            <Store size={28} className="text-orange-500" />
+   184→   184→            <span className="text-xl font-bold hidden sm:block">MarketHub</span>
+   185→   185→          </div>
+   186→   186→
+   187→   187→          <form onSubmit={handleSearch} className="flex-1 max-w-2xl mx-4 relative" onFocus={() => setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}>
+   188→   188→            <div className="relative">
+   189→   189→              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+   190→   190→              <Input placeholder="Search products, brands, categories..." value={searchInput} onChange={e => setSearchInput(e.target.value)} className="pl-10 pr-4 h-10 bg-muted/50" />
+   191→   191→            </div>
+   192→   192→            {showSuggestions && suggestions.length > 0 && (
+   193→   193→              <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+   194→   194→                {suggestions.map((p: any) => (
+   195→   195→                  <div key={p.id} className="flex items-center gap-3 p-2 hover:bg-muted cursor-pointer" onClick={() => { setSearchQuery(p.name); setSearchInput(p.name); setShowSuggestions(false); setSelectedProductId(p.id); navigateTo('product-detail'); }}>
+   196→   196→                    <img src={p.images?.[0]?.url || ''} className="w-8 h-8 object-cover rounded" alt="" />
+   197→   197→                    <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{p.name}</p><p className="text-xs text-muted-foreground">₹{p.price.toLocaleString('en-IN')}</p></div>
+   198→   198→                  </div>
+   199→   199→                ))}
+   200→   200→              </div>
+   201→   201→            )}
+   202→   202→          </form>
+   203→   203→
+   204→   204→          <div className="flex items-center gap-1">
+   205→   205→            <TooltipProvider><Tooltip><TooltipTrigger asChild>
+   206→   206→              <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} suppressHydrationWarning>
+   207→   207→                {!mounted ? <div className="w-5 h-5" /> : theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+   208→   208→              </Button>
+   209→   209→            </TooltipTrigger><TooltipContent>Toggle theme</TooltipContent></Tooltip></TooltipProvider>
+   210→   210→
+   211→   211→            <Button variant="ghost" size="icon" className="relative" onClick={() => setCartOpen(true)}>
+   212→   212→              <ShoppingCart size={20} />
+   213→   213→              {mounted && itemCount > 0 && <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] bg-orange-500 text-white border-2 border-background">{itemCount}</Badge>}
+   214→   214→            </Button>
+   215→   215→
+   216→   216→            {isAuthenticated ? (
+   217→   217→              <DropdownMenu>
+   218→   218→                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><User size={20} /></Button></DropdownMenuTrigger>
+   219→   219→                <DropdownMenuContent align="end" className="w-56">
+   220→   220→                  <div className="px-3 py-2"><p className="text-sm font-medium">{user?.name}</p><p className="text-xs text-muted-foreground">{user?.email}</p></div>
+   221→   221→                  <DropdownMenuSeparator />
+   222→   222→                  <DropdownMenuItem onClick={() => navigateTo('profile')}><User size={16} className="mr-2" />My Profile</DropdownMenuItem>
+   223→   223→                  <DropdownMenuItem onClick={() => navigateTo('orders')}><Package size={16} className="mr-2" />My Orders</DropdownMenuItem>
+   224→   224→                  <DropdownMenuItem onClick={() => navigateTo('wishlist')}><Heart size={16} className="mr-2" />Wishlist</DropdownMenuItem>
+   225→   225→                  <DropdownMenuItem onClick={() => navigateTo('addresses')}><MapPin size={16} className="mr-2" />Addresses</DropdownMenuItem>
+   226→   226→                  <DropdownMenuSeparator />
+   227→   227→                  <DropdownMenuItem onClick={() => { logout(); setCustomerView('home'); toast.success('Logged out'); }} className="text-destructive"><LogOut size={16} className="mr-2" />Logout</DropdownMenuItem>
+   228→   228→                </DropdownMenuContent>
+   229→   229→              </DropdownMenu>
+   230→   230→            ) : (
+   231→   231→              <Button variant="ghost" size="sm" onClick={() => navigateTo('login')} className="hidden sm:flex gap-1.5"><User size={16} />Login</Button>
+   232→   232→            )}
+   233→   233→          </div>
+   234→   234→        </div>
+   235→   235→      </div>
+   236→   236→      {/* Category nav */}
+   237→   237→      <div className="hidden md:block border-t bg-muted/30">
+   238→   238→        <div className="container mx-auto px-4">
+   239→   239→          <nav className="flex items-center gap-6 h-10 text-sm overflow-x-auto">
+   240→   240→            <CategoriesNav />
+   241→   241→          </nav>
+   242→   242→        </div>
+   243→   243→      </div>
+   244→   244→      {/* Mobile menu */}
+   245→   245→      <Sheet open={isMobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+   246→   246→        <SheetContent side="left" className="w-80 p-0">
+   247→   247→          <SheetHeader className="p-4 border-b"><SheetTitle className="flex items-center gap-2"><Store size={20} className="text-orange-500" />MarketHub</SheetTitle></SheetHeader>
+   248→   248→          <ScrollArea className="h-[calc(100vh-80px)]">
+   249→   249→            <div className="p-4 space-y-2">
+   250→   250→              <CategoriesNav mobile />
+   251→   251→              <Separator className="my-3" />
+   252→   252→              {isAuthenticated ? (
+   253→   253→                <>
+   254→   254→                  <p className="text-sm font-medium px-2">{user?.name}</p>
+   255→   255→                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('profile'); setMobileMenuOpen(false); }}><User size={16} className="mr-2" />Profile</Button>
+   256→   256→                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('orders'); setMobileMenuOpen(false); }}><Package size={16} className="mr-2" />Orders</Button>
+   257→   257→                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('wishlist'); setMobileMenuOpen(false); }}><Heart size={16} className="mr-2" />Wishlist</Button>
+   258→   258→                  <Button variant="ghost" className="w-full justify-start text-destructive" onClick={() => { logout(); setMobileMenuOpen(false); toast.success('Logged out'); }}><LogOut size={16} className="mr-2" />Logout</Button>
+   259→   259→                </>
+   260→   260→              ) : (
+   261→   261→                <Button className="w-full bg-orange-500 hover:bg-orange-600" onClick={() => { navigateTo('login'); setMobileMenuOpen(false); }}>Login / Register</Button>
+   262→   262→              )}
+   263→   263→            </div>
+   264→   264→          </ScrollArea>
+   265→   265→        </SheetContent>
+   266→   266→      </Sheet>
+   267→   267→      {/* Cart Sheet */}
+   268→   268→      <CartSheet />
+   269→   269→    </header>
+   270→   270→  );
+   271→   271→}
+   272→   272→
+   273→   273→function CategoriesNav({ mobile }: { mobile?: boolean }) {
+   274→   274→  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: ApiResponse<Category[]>) => r.data || []) });
+   275→   275→  const { setSelectedCategory, setCustomerView, setMobileMenuOpen } = useNavigationStore();
+   276→   276→
+   277→   277→  const handleCategoryClick = (slug: string) => {
+   278→   278→    setSelectedCategory(slug);
+   279→   279→    setCustomerView('products');
+   280→   280→    if (mobile) setMobileMenuOpen(false);
+   281→   281→  };
+   282→   282→
+   283→   283→  if (mobile) {
+   284→   284→    return categories?.map(cat => (
+   285→   285→      <div key={cat.id} className="space-y-1">
+   286→   286→        <Button variant="ghost" className="w-full justify-start font-medium" onClick={() => handleCategoryClick(cat.slug)}>{cat.name}</Button>
+   287→   287→        {cat.children?.map(child => (
+   288→   288→          <Button key={child.id} variant="ghost" className="w-full justify-start pl-8 text-sm text-muted-foreground" onClick={() => handleCategoryClick(child.slug)}>{child.name}</Button>
+   289→   289→        ))}
+   290→   290→      </div>
+   291→   291→    ));
+   292→   292→  }
+   293→   293→
+   294→   294→  return <>
+   295→   295→    <Button variant="ghost" size="sm" className="h-10 text-sm font-medium" onClick={() => { setCustomerView('products'); setSelectedCategory(null); }}>All Products</Button>
+   296→   296→    {categories?.map(cat => (
+   297→   297→      <DropdownMenu key={cat.id}>
+   298→   298→        <DropdownMenuTrigger asChild>
+   299→   299→          <Button variant="ghost" size="sm" className="h-10 text-sm font-medium hover:text-orange-500">{cat.name}{cat.children?.length ? <ChevronDown size={14} className="ml-1" /> : null}</Button>
+   300→   300→        </DropdownMenuTrigger>
+   301→   301→        {cat.children?.length ? (
+   302→   302→          <DropdownMenuContent>
+   303→   303→            {cat.children.map(child => (
+   304→   304→              <DropdownMenuItem key={child.id} onClick={() => handleCategoryClick(child.slug)}>{child.name} <Badge variant="secondary" className="ml-auto text-xs">{child._count?.products || 0}</Badge></DropdownMenuItem>
+   305→   305→            ))}
+   306→   306→          </DropdownMenuContent>
+   307→   307→        ) : null}
+   308→   308→      </DropdownMenu>
+   309→   309→    ))}
+   310→   310→  </>;
+   311→   311→}
+   312→   312→
+   313→   313→function CartSheet() {
+   314→   314→  const { items, removeItem, updateQuantity, getSubtotal, getShipping } = useCartStore();
+   315→   315→  const { isCartOpen, setCartOpen, navigateTo } = useNavigationStore();
+   316→   316→
+   317→   317→  return (
+   318→   318→    <Sheet open={isCartOpen} onOpenChange={setCartOpen}>
+   319→   319→      <SheetContent className="w-full sm:max-w-md flex flex-col">
+   320→   320→        <SheetHeader><SheetTitle className="flex items-center gap-2"><ShoppingCart size={20} />Cart ({items.length})</SheetTitle></SheetHeader>
+   321→   321→        {items.length === 0 ? (
+   322→   322→          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3">
+   323→   323→            <ShoppingCart size={48} className="text-muted-foreground/30" /><p>Your cart is empty</p>
+   324→   324→            <Button variant="outline" onClick={() => setCartOpen(false)}>Continue Shopping</Button>
+   325→   325→          </div>
+   326→   326→        ) : (
+   327→   327→          <>
+   328→   328→            <ScrollArea className="flex-1 -mx-6 px-6">
+   329→   329→              <div className="space-y-4 py-4">{items.map(item => (
+   330→   330→                <div key={item.productId} className="flex gap-3 p-3 bg-muted/30 rounded-lg">
+   331→   331→                  <div className="w-16 h-16 rounded-md overflow-hidden bg-muted shrink-0">
+   332→   332→                    {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={20} /></div>}
+   333→   333→                  </div>
+   334→   334→                  <div className="flex-1 min-w-0">
+   335→   335→                    <p className="text-sm font-medium truncate">{item.name}</p>
+   336→   336→                    <p className="text-xs text-muted-foreground">{item.vendorName}</p>
+   337→   337→                    <p className="text-sm font-bold mt-1">{formatCurrency(item.price)}</p>
+   338→   338→                    <div className="flex items-center gap-2 mt-1">
+   339→   339→                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateQuantity(item.productId, item.quantity - 1)}><Minus size={12} /></Button>
+   340→   340→                      <span className="text-sm w-6 text-center">{item.quantity}</span>
+   341→   341→                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateQuantity(item.productId, item.quantity + 1)}><Plus size={12} /></Button>
+   342→   342→                      <Button size="icon" variant="ghost" className="h-6 w-6 ml-auto text-destructive" onClick={() => { removeItem(item.productId); toast.success('Removed from cart'); }}><Trash2 size={12} /></Button>
+   343→   343→                    </div>
+   344→   344→                  </div>
+   345→   345→                </div>
+   346→   346→              ))}</div>
+   347→   347→            </ScrollArea>
+   348→   348→            <div className="border-t pt-4 space-y-3">
+   349→   349→              <div className="flex justify-between text-sm"><span>Subtotal</span><span>{formatCurrency(getSubtotal())}</span></div>
+   350→   350→              <div className="flex justify-between text-sm"><span>Shipping</span><span>{getShipping() === 0 ? <span className="text-green-600">Free</span> : formatCurrency(getShipping())}</span></div>
+   351→   351→              <Separator />
+   352→   352→              <div className="flex justify-between font-bold"><span>Total</span><span>{formatCurrency(getSubtotal() + getShipping())}</span></div>
+   353→   353→              <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white" onClick={() => { setCartOpen(false); navigateTo('checkout'); }}>
+   354→   354→                Checkout ({formatCurrency(getSubtotal() + getShipping())})
+   355→   355→              </Button>
+   356→   356→            </div>
+   357→   357→          </>
+   358→   358→        )}
+   359→   359→      </SheetContent>
+   360→   360→    </Sheet>
+   361→   361→  );
+   362→   362→}
+   363→   363→
+   364→   364→// ============ HOME PAGE ============
+   365→   365→
+   366→   366→function HomePage() {
+   367→   367→  const { data: banners } = useQuery({ queryKey: ['banners'], queryFn: () => fetch('/api/banners?position=HOME').then(r => r.json()).then((r: ApiResponse<Banner[]>) => r.data || []) });
+   368→   368→  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: ApiResponse<Category[]>) => r.data || []) });
+   369→   369→  const { data: featuredData } = useQuery({ queryKey: ['products', 'featured'], queryFn: () => fetch('/api/products?featured=true&limit=8').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
+   370→   370→  const { data: newArrivals } = useQuery({ queryKey: ['products', 'new'], queryFn: () => fetch('/api/products?limit=8&sort=newest').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
+   371→   371→  const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: ApiResponse<Brand[]>) => r.data || []) });
+   372→   372→  const { data: popularSearches } = useQuery({ queryKey: ['popular-searches'], queryFn: () => fetch('/api/search/popular').then(r => r.json()).then((r: any) => r.data || []) });
+   373→   373→  const { setSelectedCategory, setCustomerView, setSearchQuery } = useNavigationStore();
+   374→   374→  const [bannerIdx, setBannerIdx] = useState(0);
+   375→   375→
+   376→   376→  // Recently Viewed
+   377→   377→  const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(() => {
+   378→   378→    if (typeof window === 'undefined') return [];
+   379→   379→    try {
+   380→   380→      const stored = localStorage.getItem('marketplace-recently-viewed');
+   381→   381→      return stored ? JSON.parse(stored).slice(0, 6) : [];
+   382→   382→    } catch { return []; }
+   383→   383→  });
+   384→   384→
+   385→   385→  const { data: recentlyViewedProducts } = useQuery({
+   386→   386→    queryKey: ['recently-viewed', recentlyViewedIds],
+   387→   387→    queryFn: async () => {
+   388→   388→      if (!recentlyViewedIds.length) return [];
+   389→   389→      const res = await fetch('/api/products?limit=50');
+   390→   390→      const data = await res.json();
+   391→   391→      return (data.data || []).filter((p: Product) => recentlyViewedIds.includes(p.id));
+   392→   392→    },
+   393→   393→    enabled: recentlyViewedIds.length > 0,
+   394→   394→  });
+   395→   395→
+   396→   396→  useEffect(() => {
+   397→   397→    if ((banners?.length || 0) > 1) {
+   398→   398→      const timer = setInterval(() => setBannerIdx(i => (i + 1) % (banners?.length || 1)), 5000);
+   399→   399→      return () => clearInterval(timer);
+   400→   400→    }
+   401→   401→  }, [banners?.length]);
+   402→   402→
+   403→   403→  return (
+   404→   404→    <div className="space-y-10 pb-10">
+   405→   405→      {/* Hero Banner */}
+   406→   406→      {banners && banners.length > 0 && (
+   407→   407→        <div className="relative overflow-hidden rounded-xl mx-4 mt-4 md:mx-0">
+   408→   408→          <AnimatePresence mode="wait">
+   409→   409→            <motion.img key={bannerIdx} src={banners[bannerIdx]?.image} alt={banners[bannerIdx]?.title} className="w-full h-48 md:h-80 object-cover" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+   410→   410→          </AnimatePresence>
+   411→   411→          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
+   412→   412→            {banners.map((_, i) => <button key={i} className={`w-2.5 h-2.5 rounded-full transition-all ${i === bannerIdx ? 'bg-orange-500 w-6' : 'bg-white/70'}`} onClick={() => setBannerIdx(i)} />)}
+   413→   413→          </div>
+   414→   414→        </div>
+   415→   415→      )}
+   416→   416→
+   417→   417→      {/* Categories */}
+   418→   418→      {categories && categories.length > 0 && (
+   419→   419→        <section className="container mx-auto px-4">
+   420→   420→          <div className="flex items-center justify-between mb-4">
+   421→   421→            <h2 className="text-xl font-bold">Shop by Category</h2>
+   422→   422→            <Button variant="ghost" size="sm" className="text-orange-500" onClick={() => { setSelectedCategory(null); setCustomerView('products'); }}>View All <ArrowRight size={14} /></Button>
+   423→   423→          </div>
+   424→   424→          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-3">
+   425→   425→            {categories.slice(0, 7).map(cat => {
+   426→   426→              const allCats = [cat, ...(cat.children || [])];
+   427→   427→              return allCats.slice(0, 1).map(c => (
+   428→   428→                <motion.div key={c.id} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+   429→   429→                  <Card className="cursor-pointer hover:border-orange-300 transition-colors text-center p-4" onClick={() => { setSelectedCategory(c.slug); setCustomerView('products'); }}>
+   430→   430→                    <div className="w-12 h-12 mx-auto rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-2 text-orange-500 font-bold text-lg">{c.name[0]}</div>
+   431→   431→                    <p className="text-xs font-medium truncate">{c.name}</p>
+   432→   432→                    <p className="text-[10px] text-muted-foreground">{c._count?.products || 0} items</p>
+   433→   433→                  </Card>
+   434→   434→                </motion.div>
+   435→   435→              ));
+   436→   436→            })}
+   437→   437→          </div>
+   438→   438→        </section>
+   439→   439→      )}
+   440→   440→
+   441→   441→      {/* Featured Products */}
+   442→   442→      {featuredData && featuredData.length > 0 && (
+   443→   443→        <section className="container mx-auto px-4">
+   444→   444→          <div className="flex items-center justify-between mb-4">
+   445→   445→            <h2 className="text-xl font-bold">Featured Products</h2>
+   446→   446→            <Button variant="ghost" size="sm" className="text-orange-500" onClick={() => { setSelectedCategory(null); setCustomerView('products'); }}>View All <ArrowRight size={14} /></Button>
+   447→   447→          </div>
+   448→   448→          <ProductGrid products={featuredData} />
+   449→   449→        </section>
+   450→   450→      )}
+   451→   451→
+   452→   452→      {/* Brands */}
+   453→   453→      {brands && brands.length > 0 && (
+   454→   454→        <section className="container mx-auto px-4">
+   455→   455→          <h2 className="text-xl font-bold mb-4">Top Brands</h2>
+   456→   456→          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
+   457→   457→            {brands.map(brand => (
+   458→   458→              <Card key={brand.id} className="flex items-center justify-center p-4 hover:border-orange-300 transition-colors cursor-pointer h-20">
+   459→   459→                <span className="font-bold text-sm text-center">{brand.name}</span>
+   460→   460→              </Card>
+   461→   461→            ))}
+   462→   462→          </div>
+   463→   463→        </section>
+   464→   464→      )}
+   465→   465→
+   466→   466→      {/* New Arrivals */}
+   467→   467→      {newArrivals && newArrivals.length > 0 && (
+   468→   468→        <section className="container mx-auto px-4">
+   469→   469→          <div className="flex items-center justify-between mb-4">
+   470→   470→            <h2 className="text-xl font-bold">New Arrivals</h2>
+   471→   471→          </div>
+   472→   472→          <ProductGrid products={newArrivals} />
+   473→   473→        </section>
+   474→   474→      )}
+   475→   475→
+   476→   476→      {/* Features */}
+   477→   477→      <section className="container mx-auto px-4">
+   478→   478→        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   479→   479→          {[
+   480→   480→            { icon: <Truck size={24} />, title: 'Free Shipping', desc: 'On orders above ₹500' },
+   481→   481→            { icon: <Shield size={24} />, title: 'Secure Payment', desc: '100% secure payments' },
+   482→   482→            { icon: <RefreshCw size={24} />, title: 'Easy Returns', desc: '7-day return policy' },
+   483→   483→            { icon: <Gift size={24} />, title: 'Best Deals', desc: 'Unbeatable prices' },
+   484→   484→          ].map((f, i) => (
+   485→   485→            <Card key={i} className="p-4 text-center"><div className="mx-auto text-orange-500 mb-2">{f.icon}</div><h3 className="font-medium text-sm">{f.title}</h3><p className="text-xs text-muted-foreground">{f.desc}</p></Card>
+   486→   486→          ))}
+   487→   487→        </div>
+   488→   488→      </section>
+   489→   489→
+   490→   490→      {/* Popular Searches */}
+   491→   491→      {popularSearches && (popularSearches as any[]).length > 0 && (
+   492→   492→        <section className="container mx-auto px-4">
+   493→   493→          <h2 className="text-xl font-bold mb-4">Popular Searches</h2>
+   494→   494→          <div className="flex flex-wrap gap-2">
+   495→   495→            {(popularSearches as any[]).map((s: any, i: number) => (
+   496→   496→              <Button key={i} variant="outline" size="sm" className="rounded-full" onClick={() => { setSearchQuery(s.query || s); setCustomerView('products'); }}>
+   497→   497→                <Search size={14} className="mr-1.5" />{s.query || s}
+   498→   498→              </Button>
+   499→   499→            ))}
+   500→   500→          </div>
+
+[showing lines 1-500 of 1930; use offset=501 with limit to continue reading]

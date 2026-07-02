@@ -1,0 +1,502 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useState, useEffect, useMemo, useCallback } from 'react';
+     4→     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→     5→import { motion, AnimatePresence } from 'framer-motion';
+     6→     6→import { toast } from 'sonner';
+     7→     7→import {
+     8→     8→  Search, ShoppingCart, Heart, User, Menu, X, ChevronDown, Star, StarHalf,
+     9→     9→  Minus, Plus, Trash2, ChevronRight, ChevronLeft, MapPin, Phone, Mail,
+    10→    10→  Package, Truck, CheckCircle, Clock, Shield, Gift, TrendingUp,
+    11→    11→  BarChart3, Users, ArrowRight, Eye, Share2, GitCompare, Tag,
+    12→    12→  Store, CreditCard, Banknote, Smartphone, Building2, Home,
+    13→    13→  Settings, LogOut, Bell, Sun, Moon, Monitor, Filter, SlidersHorizontal
+    14→    14→} from 'lucide-react';
+    15→    15→
+    16→    16→import { Button } from '@/components/ui/button';
+    17→    17→import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+    18→    18→import { Input } from '@/components/ui/input';
+    19→    19→import { Label } from '@/components/ui/label';
+    20→    20→import { Badge } from '@/components/ui/badge';
+    21→    21→import { Separator } from '@/components/ui/separator';
+    22→    22→import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+    23→    23→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+    24→    24→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    25→    25→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    26→    26→import { Checkbox } from '@/components/ui/checkbox';
+    27→    27→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    28→    28→import { Slider } from '@/components/ui/slider';
+    29→    29→import { Textarea } from '@/components/ui/textarea';
+    30→    30→import { Skeleton } from '@/components/ui/skeleton';
+    31→    31→import { ScrollArea } from '@/components/ui/scroll-area';
+    32→    32→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    33→    33→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+    34→    34→import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+    35→    35→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    36→    36→import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
+    37→    37→import { useTheme } from 'next-themes';
+    38→    38→import { useAuthStore, useNavigationStore, useCartStore, useWishlistStore, useCompareStore } from '@/stores';
+    39→    39→import type { Product, Category, Brand, Order, Banner, CustomerAddress, ApiResponse } from '@/types';
+    40→    40→
+    41→    41→// ============ HELPERS ============
+    42→    42→
+    43→    43→const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    44→    44→const discountPercent = (price: number, compare?: number | null) => compare ? Math.round(((compare - price) / compare) * 100) : 0;
+    45→    45→
+    46→    46→function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
+    47→    47→  const stars = [];
+    48→    48→  for (let i = 1; i <= 5; i++) {
+    49→    49→    if (i <= Math.floor(rating)) {
+    50→    50→      stars.push(<Star key={i} className="fill-amber-400 text-amber-400" size={size} />);
+    51→    51→    } else if (i - 0.5 <= rating) {
+    52→    52→      stars.push(<StarHalf key={i} className="fill-amber-400 text-amber-400" size={size} />);
+    53→    53→    } else {
+    54→    54→      stars.push(<Star key={i} className="text-muted-foreground/30" size={size} />);
+    55→    55→    }
+    56→    56→  }
+    57→    57→  return <span className="inline-flex items-center gap-0.5">{stars}</span>;
+    58→    58→}
+    59→    59→
+    60→    60→function ProductCard({ product }: { product: Product }) {
+    61→    61→  const { navigateTo, setSelectedProductId } = useNavigationStore();
+    62→    62→  const { addItem } = useCartStore();
+    63→    63→  const { toggleItem, hasItem } = useWishlistStore();
+    64→    64→  const { toggleItem: toggleCompare, hasItem: hasCompare } = useCompareStore();
+    65→    65→  const isWishlisted = hasItem(product.id);
+    66→    66→  const isCompared = hasCompare(product.id);
+    67→    67→  const discount = discountPercent(product.price, product.compareAtPrice);
+    68→    68→  const mainImage = product.images?.[0]?.url;
+    69→    69→
+    70→    70→  return (
+    71→    71→    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} whileHover={{ y: -4 }}>
+    72→    72→      <Card className="group overflow-hidden border-border/50 hover:shadow-lg transition-all duration-300 cursor-pointer h-full flex flex-col">
+    73→    73→        <div className="relative aspect-square overflow-hidden bg-muted/30">
+    74→    74→          {mainImage ? (
+    75→    75→            <img src={mainImage} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+    76→    76→          ) : (
+    77→    77→            <div className="w-full h-full flex items-center justify-center text-muted-foreground"><Package size={48} /></div>
+    78→    78→          )}
+    79→    79→          {discount > 0 && <Badge className="absolute top-2 left-2 bg-red-500 text-white text-xs">{discount}% OFF</Badge>}
+    80→    80→          {product.stock < 5 && product.stock > 0 && <Badge variant="secondary" className="absolute top-2 right-10 text-xs">Low Stock</Badge>}
+    81→    81→          {product.stock === 0 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Badge variant="destructive">Out of Stock</Badge></div>}
+    82→    82→          <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+    83→    83→            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" onClick={(e) => { e.stopPropagation(); toggleItem(product.id); toast.success(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist'); }}>
+    84→    84→              <Heart size={14} className={isWishlisted ? 'fill-red-500 text-red-500' : ''} />
+    85→    85→            </Button>
+    86→    86→            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" onClick={(e) => { e.stopPropagation(); toggleCompare(product.id); toast.success(isCompared ? 'Removed from compare' : 'Added to compare'); }}>
+    87→    87→              <GitCompare size={14} className={isCompared ? 'text-orange-500' : ''} />
+    88→    88→            </Button>
+    89→    89→          </div>
+    90→    90→        </div>
+    91→    91→        <CardContent className="p-3 flex-1 flex flex-col gap-1.5" onClick={() => { setSelectedProductId(product.id); navigateTo('product-detail'); }}>
+    92→    92→          <p className="text-xs text-muted-foreground truncate">{product.vendor?.businessName}</p>
+    93→    93→          <h3 className="text-sm font-medium line-clamp-2 leading-tight min-h-[2.5rem]">{product.name}</h3>
+    94→    94→          <div className="flex items-center gap-1">
+    95→    95→            <StarRating rating={product.rating} size={12} />
+    96→    96→            <span className="text-xs text-muted-foreground">({product.reviewCount})</span>
+    97→    97→          </div>
+    98→    98→          <div className="flex items-baseline gap-2 mt-auto">
+    99→    99→            <span className="text-lg font-bold text-foreground">{formatCurrency(product.price)}</span>
+   100→   100→            {product.compareAtPrice && product.compareAtPrice > product.price && (
+   101→   101→              <span className="text-sm text-muted-foreground line-through">{formatCurrency(product.compareAtPrice)}</span>
+   102→   102→            )}
+   103→   103→          </div>
+   104→   104→        </CardContent>
+   105→   105→        <CardFooter className="p-3 pt-0">
+   106→   106→          <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={product.stock === 0} onClick={(e) => { e.stopPropagation(); addItem({ productId: product.id, name: product.name, price: product.price, image: mainImage || '', vendorName: product.vendor?.businessName || '', vendorId: product.vendorId, stock: product.stock }); toast.success('Added to cart!'); }}>
+   107→   107→            <ShoppingCart size={14} className="mr-1.5" /> Add to Cart
+   108→   108→          </Button>
+   109→   109→        </CardFooter>
+   110→   110→      </Card>
+   111→   111→    </motion.div>
+   112→   112→  );
+   113→   113→}
+   114→   114→
+   115→   115→function ProductGrid({ products, loading }: { products: Product[]; loading?: boolean }) {
+   116→   116→  if (loading) {
+   117→   117→    return <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+   118→   118→      {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="aspect-square rounded-xl" />)}
+   119→   119→    </div>;
+   120→   120→  }
+   121→   121→  if (!products.length) {
+   122→   122→    return <div className="text-center py-16"><Package size={64} className="mx-auto text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium text-muted-foreground">No products found</h3><p className="text-sm text-muted-foreground mt-1">Try adjusting your filters or search</p></div>;
+   123→   123→  }
+   124→   124→  return <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">{products.map(p => <ProductCard key={p.id} product={p} />)}</div>;
+   125→   125→}
+   126→   126→
+   127→   127→// ============ HEADER ============
+   128→   128→
+   129→   129→function CustomerHeader() {
+   130→   130→  const { user, isAuthenticated, logout } = useAuthStore();
+   131→   131→  const { customerView, searchQuery, setSearchQuery, setCustomerView, setMobileMenuOpen, isMobileMenuOpen, isCartOpen, setCartOpen, setAppView, navigateTo } = useNavigationStore();
+   132→   132→  const { getItemCount } = useCartStore();
+   133→   133→  const { setTheme, theme } = useTheme();
+   134→   134→  const itemCount = getItemCount();
+   135→   135→  const [searchInput, setSearchInput] = useState(searchQuery);
+   136→   136→  const [mounted, setMounted] = useState(false);
+   137→   137→
+   138→   138→  useEffect(() => { setSearchInput(searchQuery); }, [searchQuery]);
+   139→   139→  useEffect(() => { setMounted(true); }, []);
+   140→   140→
+   141→   141→  const handleSearch = (e: React.FormEvent) => {
+   142→   142→    e.preventDefault();
+   143→   143→    setSearchQuery(searchInput);
+   144→   144→    setCustomerView(searchInput ? 'search' : 'home');
+   145→   145→  };
+   146→   146→
+   147→   147→  return (
+   148→   148→    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+   149→   149→      {/* Top bar */}
+   150→   150→      <div className="bg-orange-500 text-white text-xs py-1.5 text-center hidden md:block">
+   151→   151→        Free shipping on orders above ₹500 | Use code WELCOME10 for 10% off on first order!
+   152→   152→      </div>
+   153→   153→      {/* Main nav */}
+   154→   154→      <div className="container mx-auto px-4">
+   155→   155→        <div className="flex items-center h-16 gap-4">
+   156→   156→          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(!isMobileMenuOpen)}>
+   157→   157→            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+   158→   158→          </Button>
+   159→   159→          <div className="flex items-center gap-2 cursor-pointer shrink-0" onClick={() => { setAppView('customer'); setCustomerView('home'); }}>
+   160→   160→            <Store size={28} className="text-orange-500" />
+   161→   161→            <span className="text-xl font-bold hidden sm:block">MarketHub</span>
+   162→   162→          </div>
+   163→   163→
+   164→   164→          <form onSubmit={handleSearch} className="flex-1 max-w-2xl mx-4">
+   165→   165→            <div className="relative">
+   166→   166→              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+   167→   167→              <Input placeholder="Search products, brands, categories..." value={searchInput} onChange={e => setSearchInput(e.target.value)} className="pl-10 pr-4 h-10 bg-muted/50" />
+   168→   168→            </div>
+   169→   169→          </form>
+   170→   170→
+   171→   171→          <div className="flex items-center gap-1">
+   172→   172→            <TooltipProvider><Tooltip><TooltipTrigger asChild>
+   173→   173→              <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} suppressHydrationWarning>
+   174→   174→                {!mounted ? <div className="w-5 h-5" /> : theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+   175→   175→              </Button>
+   176→   176→            </TooltipTrigger><TooltipContent>Toggle theme</TooltipContent></Tooltip></TooltipProvider>
+   177→   177→
+   178→   178→            <Button variant="ghost" size="icon" className="relative" onClick={() => setCartOpen(true)}>
+   179→   179→              <ShoppingCart size={20} />
+   180→   180→              {mounted && itemCount > 0 && <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] bg-orange-500 text-white border-2 border-background">{itemCount}</Badge>}
+   181→   181→            </Button>
+   182→   182→
+   183→   183→            {isAuthenticated ? (
+   184→   184→              <DropdownMenu>
+   185→   185→                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><User size={20} /></Button></DropdownMenuTrigger>
+   186→   186→                <DropdownMenuContent align="end" className="w-56">
+   187→   187→                  <div className="px-3 py-2"><p className="text-sm font-medium">{user?.name}</p><p className="text-xs text-muted-foreground">{user?.email}</p></div>
+   188→   188→                  <DropdownMenuSeparator />
+   189→   189→                  <DropdownMenuItem onClick={() => navigateTo('profile')}><User size={16} className="mr-2" />My Profile</DropdownMenuItem>
+   190→   190→                  <DropdownMenuItem onClick={() => navigateTo('orders')}><Package size={16} className="mr-2" />My Orders</DropdownMenuItem>
+   191→   191→                  <DropdownMenuItem onClick={() => navigateTo('wishlist')}><Heart size={16} className="mr-2" />Wishlist</DropdownMenuItem>
+   192→   192→                  <DropdownMenuItem onClick={() => navigateTo('addresses')}><MapPin size={16} className="mr-2" />Addresses</DropdownMenuItem>
+   193→   193→                  <DropdownMenuSeparator />
+   194→   194→                  <DropdownMenuItem onClick={() => { logout(); setCustomerView('home'); toast.success('Logged out'); }} className="text-destructive"><LogOut size={16} className="mr-2" />Logout</DropdownMenuItem>
+   195→   195→                </DropdownMenuContent>
+   196→   196→              </DropdownMenu>
+   197→   197→            ) : (
+   198→   198→              <Button variant="ghost" size="sm" onClick={() => navigateTo('login')} className="hidden sm:flex gap-1.5"><User size={16} />Login</Button>
+   199→   199→            )}
+   200→   200→          </div>
+   201→   201→        </div>
+   202→   202→      </div>
+   203→   203→      {/* Category nav */}
+   204→   204→      <div className="hidden md:block border-t bg-muted/30">
+   205→   205→        <div className="container mx-auto px-4">
+   206→   206→          <nav className="flex items-center gap-6 h-10 text-sm overflow-x-auto">
+   207→   207→            <CategoriesNav />
+   208→   208→          </nav>
+   209→   209→        </div>
+   210→   210→      </div>
+   211→   211→      {/* Mobile menu */}
+   212→   212→      <Sheet open={isMobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+   213→   213→        <SheetContent side="left" className="w-80 p-0">
+   214→   214→          <SheetHeader className="p-4 border-b"><SheetTitle className="flex items-center gap-2"><Store size={20} className="text-orange-500" />MarketHub</SheetTitle></SheetHeader>
+   215→   215→          <ScrollArea className="h-[calc(100vh-80px)]">
+   216→   216→            <div className="p-4 space-y-2">
+   217→   217→              <CategoriesNav mobile />
+   218→   218→              <Separator className="my-3" />
+   219→   219→              {isAuthenticated ? (
+   220→   220→                <>
+   221→   221→                  <p className="text-sm font-medium px-2">{user?.name}</p>
+   222→   222→                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('profile'); setMobileMenuOpen(false); }}><User size={16} className="mr-2" />Profile</Button>
+   223→   223→                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('orders'); setMobileMenuOpen(false); }}><Package size={16} className="mr-2" />Orders</Button>
+   224→   224→                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('wishlist'); setMobileMenuOpen(false); }}><Heart size={16} className="mr-2" />Wishlist</Button>
+   225→   225→                  <Button variant="ghost" className="w-full justify-start text-destructive" onClick={() => { logout(); setMobileMenuOpen(false); toast.success('Logged out'); }}><LogOut size={16} className="mr-2" />Logout</Button>
+   226→   226→                </>
+   227→   227→              ) : (
+   228→   228→                <Button className="w-full bg-orange-500 hover:bg-orange-600" onClick={() => { navigateTo('login'); setMobileMenuOpen(false); }}>Login / Register</Button>
+   229→   229→              )}
+   230→   230→            </div>
+   231→   231→          </ScrollArea>
+   232→   232→        </SheetContent>
+   233→   233→      </Sheet>
+   234→   234→      {/* Cart Sheet */}
+   235→   235→      <CartSheet />
+   236→   236→    </header>
+   237→   237→  );
+   238→   238→}
+   239→   239→
+   240→   240→function CategoriesNav({ mobile }: { mobile?: boolean }) {
+   241→   241→  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: ApiResponse<Category[]>) => r.data || []) });
+   242→   242→  const { setSelectedCategory, setCustomerView, setMobileMenuOpen } = useNavigationStore();
+   243→   243→
+   244→   244→  const handleCategoryClick = (slug: string) => {
+   245→   245→    setSelectedCategory(slug);
+   246→   246→    setCustomerView('products');
+   247→   247→    if (mobile) setMobileMenuOpen(false);
+   248→   248→  };
+   249→   249→
+   250→   250→  if (mobile) {
+   251→   251→    return categories?.map(cat => (
+   252→   252→      <div key={cat.id} className="space-y-1">
+   253→   253→        <Button variant="ghost" className="w-full justify-start font-medium" onClick={() => handleCategoryClick(cat.slug)}>{cat.name}</Button>
+   254→   254→        {cat.children?.map(child => (
+   255→   255→          <Button key={child.id} variant="ghost" className="w-full justify-start pl-8 text-sm text-muted-foreground" onClick={() => handleCategoryClick(child.slug)}>{child.name}</Button>
+   256→   256→        ))}
+   257→   257→      </div>
+   258→   258→    ));
+   259→   259→  }
+   260→   260→
+   261→   261→  return <>
+   262→   262→    <Button variant="ghost" size="sm" className="h-10 text-sm font-medium" onClick={() => { setCustomerView('products'); setSelectedCategory(null); }}>All Products</Button>
+   263→   263→    {categories?.map(cat => (
+   264→   264→      <DropdownMenu key={cat.id}>
+   265→   265→        <DropdownMenuTrigger asChild>
+   266→   266→          <Button variant="ghost" size="sm" className="h-10 text-sm font-medium hover:text-orange-500">{cat.name}{cat.children?.length ? <ChevronDown size={14} className="ml-1" /> : null}</Button>
+   267→   267→        </DropdownMenuTrigger>
+   268→   268→        {cat.children?.length ? (
+   269→   269→          <DropdownMenuContent>
+   270→   270→            {cat.children.map(child => (
+   271→   271→              <DropdownMenuItem key={child.id} onClick={() => handleCategoryClick(child.slug)}>{child.name} <Badge variant="secondary" className="ml-auto text-xs">{child._count?.products || 0}</Badge></DropdownMenuItem>
+   272→   272→            ))}
+   273→   273→          </DropdownMenuContent>
+   274→   274→        ) : null}
+   275→   275→      </DropdownMenu>
+   276→   276→    ))}
+   277→   277→  </>;
+   278→   278→}
+   279→   279→
+   280→   280→function CartSheet() {
+   281→   281→  const { items, removeItem, updateQuantity, getSubtotal, getShipping } = useCartStore();
+   282→   282→  const { isCartOpen, setCartOpen, navigateTo } = useNavigationStore();
+   283→   283→
+   284→   284→  return (
+   285→   285→    <Sheet open={isCartOpen} onOpenChange={setCartOpen}>
+   286→   286→      <SheetContent className="w-full sm:max-w-md flex flex-col">
+   287→   287→        <SheetHeader><SheetTitle className="flex items-center gap-2"><ShoppingCart size={20} />Cart ({items.length})</SheetTitle></SheetHeader>
+   288→   288→        {items.length === 0 ? (
+   289→   289→          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3">
+   290→   290→            <ShoppingCart size={48} className="text-muted-foreground/30" /><p>Your cart is empty</p>
+   291→   291→            <Button variant="outline" onClick={() => setCartOpen(false)}>Continue Shopping</Button>
+   292→   292→          </div>
+   293→   293→        ) : (
+   294→   294→          <>
+   295→   295→            <ScrollArea className="flex-1 -mx-6 px-6">
+   296→   296→              <div className="space-y-4 py-4">{items.map(item => (
+   297→   297→                <div key={item.productId} className="flex gap-3 p-3 bg-muted/30 rounded-lg">
+   298→   298→                  <div className="w-16 h-16 rounded-md overflow-hidden bg-muted shrink-0">
+   299→   299→                    {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={20} /></div>}
+   300→   300→                  </div>
+   301→   301→                  <div className="flex-1 min-w-0">
+   302→   302→                    <p className="text-sm font-medium truncate">{item.name}</p>
+   303→   303→                    <p className="text-xs text-muted-foreground">{item.vendorName}</p>
+   304→   304→                    <p className="text-sm font-bold mt-1">{formatCurrency(item.price)}</p>
+   305→   305→                    <div className="flex items-center gap-2 mt-1">
+   306→   306→                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateQuantity(item.productId, item.quantity - 1)}><Minus size={12} /></Button>
+   307→   307→                      <span className="text-sm w-6 text-center">{item.quantity}</span>
+   308→   308→                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateQuantity(item.productId, item.quantity + 1)}><Plus size={12} /></Button>
+   309→   309→                      <Button size="icon" variant="ghost" className="h-6 w-6 ml-auto text-destructive" onClick={() => { removeItem(item.productId); toast.success('Removed from cart'); }}><Trash2 size={12} /></Button>
+   310→   310→                    </div>
+   311→   311→                  </div>
+   312→   312→                </div>
+   313→   313→              ))}</div>
+   314→   314→            </ScrollArea>
+   315→   315→            <div className="border-t pt-4 space-y-3">
+   316→   316→              <div className="flex justify-between text-sm"><span>Subtotal</span><span>{formatCurrency(getSubtotal())}</span></div>
+   317→   317→              <div className="flex justify-between text-sm"><span>Shipping</span><span>{getShipping() === 0 ? <span className="text-green-600">Free</span> : formatCurrency(getShipping())}</span></div>
+   318→   318→              <Separator />
+   319→   319→              <div className="flex justify-between font-bold"><span>Total</span><span>{formatCurrency(getSubtotal() + getShipping())}</span></div>
+   320→   320→              <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white" onClick={() => { setCartOpen(false); navigateTo('checkout'); }}>
+   321→   321→                Checkout ({formatCurrency(getSubtotal() + getShipping())})
+   322→   322→              </Button>
+   323→   323→            </div>
+   324→   324→          </>
+   325→   325→        )}
+   326→   326→      </SheetContent>
+   327→   327→    </Sheet>
+   328→   328→  );
+   329→   329→}
+   330→   330→
+   331→   331→// ============ HOME PAGE ============
+   332→   332→
+   333→   333→function HomePage() {
+   334→   334→  const { data: banners } = useQuery({ queryKey: ['banners'], queryFn: () => fetch('/api/banners?position=HOME').then(r => r.json()).then((r: ApiResponse<Banner[]>) => r.data || []) });
+   335→   335→  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: ApiResponse<Category[]>) => r.data || []) });
+   336→   336→  const { data: featuredData } = useQuery({ queryKey: ['products', 'featured'], queryFn: () => fetch('/api/products?featured=true&limit=8').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
+   337→   337→  const { data: newArrivals } = useQuery({ queryKey: ['products', 'new'], queryFn: () => fetch('/api/products?limit=8&sort=newest').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
+   338→   338→  const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: ApiResponse<Brand[]>) => r.data || []) });
+   339→   339→  const [bannerIdx, setBannerIdx] = useState(0);
+   340→   340→
+   341→   341→  useEffect(() => {
+   342→   342→    if ((banners?.length || 0) > 1) {
+   343→   343→      const timer = setInterval(() => setBannerIdx(i => (i + 1) % (banners?.length || 1)), 5000);
+   344→   344→      return () => clearInterval(timer);
+   345→   345→    }
+   346→   346→  }, [banners?.length]);
+   347→   347→
+   348→   348→  const { setSelectedCategory, setCustomerView } = useNavigationStore();
+   349→   349→
+   350→   350→  return (
+   351→   351→    <div className="space-y-10 pb-10">
+   352→   352→      {/* Hero Banner */}
+   353→   353→      {banners && banners.length > 0 && (
+   354→   354→        <div className="relative overflow-hidden rounded-xl mx-4 mt-4 md:mx-0">
+   355→   355→          <AnimatePresence mode="wait">
+   356→   356→            <motion.img key={bannerIdx} src={banners[bannerIdx]?.image} alt={banners[bannerIdx]?.title} className="w-full h-48 md:h-80 object-cover" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+   357→   357→          </AnimatePresence>
+   358→   358→          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
+   359→   359→            {banners.map((_, i) => <button key={i} className={`w-2.5 h-2.5 rounded-full transition-all ${i === bannerIdx ? 'bg-orange-500 w-6' : 'bg-white/70'}`} onClick={() => setBannerIdx(i)} />)}
+   360→   360→          </div>
+   361→   361→        </div>
+   362→   362→      )}
+   363→   363→
+   364→   364→      {/* Categories */}
+   365→   365→      {categories && categories.length > 0 && (
+   366→   366→        <section className="container mx-auto px-4">
+   367→   367→          <div className="flex items-center justify-between mb-4">
+   368→   368→            <h2 className="text-xl font-bold">Shop by Category</h2>
+   369→   369→            <Button variant="ghost" size="sm" className="text-orange-500" onClick={() => { setSelectedCategory(null); setCustomerView('products'); }}>View All <ArrowRight size={14} /></Button>
+   370→   370→          </div>
+   371→   371→          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-3">
+   372→   372→            {categories.slice(0, 7).map(cat => {
+   373→   373→              const allCats = [cat, ...(cat.children || [])];
+   374→   374→              return allCats.slice(0, 1).map(c => (
+   375→   375→                <motion.div key={c.id} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+   376→   376→                  <Card className="cursor-pointer hover:border-orange-300 transition-colors text-center p-4" onClick={() => { setSelectedCategory(c.slug); setCustomerView('products'); }}>
+   377→   377→                    <div className="w-12 h-12 mx-auto rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-2 text-orange-500 font-bold text-lg">{c.name[0]}</div>
+   378→   378→                    <p className="text-xs font-medium truncate">{c.name}</p>
+   379→   379→                    <p className="text-[10px] text-muted-foreground">{c._count?.products || 0} items</p>
+   380→   380→                  </Card>
+   381→   381→                </motion.div>
+   382→   382→              ));
+   383→   383→            })}
+   384→   384→          </div>
+   385→   385→        </section>
+   386→   386→      )}
+   387→   387→
+   388→   388→      {/* Featured Products */}
+   389→   389→      {featuredData && featuredData.length > 0 && (
+   390→   390→        <section className="container mx-auto px-4">
+   391→   391→          <div className="flex items-center justify-between mb-4">
+   392→   392→            <h2 className="text-xl font-bold">Featured Products</h2>
+   393→   393→            <Button variant="ghost" size="sm" className="text-orange-500" onClick={() => { setSelectedCategory(null); setCustomerView('products'); }}>View All <ArrowRight size={14} /></Button>
+   394→   394→          </div>
+   395→   395→          <ProductGrid products={featuredData} />
+   396→   396→        </section>
+   397→   397→      )}
+   398→   398→
+   399→   399→      {/* Brands */}
+   400→   400→      {brands && brands.length > 0 && (
+   401→   401→        <section className="container mx-auto px-4">
+   402→   402→          <h2 className="text-xl font-bold mb-4">Top Brands</h2>
+   403→   403→          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
+   404→   404→            {brands.map(brand => (
+   405→   405→              <Card key={brand.id} className="flex items-center justify-center p-4 hover:border-orange-300 transition-colors cursor-pointer h-20">
+   406→   406→                <span className="font-bold text-sm text-center">{brand.name}</span>
+   407→   407→              </Card>
+   408→   408→            ))}
+   409→   409→          </div>
+   410→   410→        </section>
+   411→   411→      )}
+   412→   412→
+   413→   413→      {/* New Arrivals */}
+   414→   414→      {newArrivals && newArrivals.length > 0 && (
+   415→   415→        <section className="container mx-auto px-4">
+   416→   416→          <div className="flex items-center justify-between mb-4">
+   417→   417→            <h2 className="text-xl font-bold">New Arrivals</h2>
+   418→   418→          </div>
+   419→   419→          <ProductGrid products={newArrivals} />
+   420→   420→        </section>
+   421→   421→      )}
+   422→   422→
+   423→   423→      {/* Features */}
+   424→   424→      <section className="container mx-auto px-4">
+   425→   425→        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   426→   426→          {[
+   427→   427→            { icon: <Truck size={24} />, title: 'Free Shipping', desc: 'On orders above ₹500' },
+   428→   428→            { icon: <Shield size={24} />, title: 'Secure Payment', desc: '100% secure payments' },
+   429→   429→            { icon: <RefreshCw size={24} />, title: 'Easy Returns', desc: '7-day return policy' },
+   430→   430→            { icon: <Gift size={24} />, title: 'Best Deals', desc: 'Unbeatable prices' },
+   431→   431→          ].map((f, i) => (
+   432→   432→            <Card key={i} className="p-4 text-center"><div className="mx-auto text-orange-500 mb-2">{f.icon}</div><h3 className="font-medium text-sm">{f.title}</h3><p className="text-xs text-muted-foreground">{f.desc}</p></Card>
+   433→   433→          ))}
+   434→   434→        </div>
+   435→   435→      </section>
+   436→   436→    </div>
+   437→   437→  );
+   438→   438→}
+   439→   439→
+   440→   440→// Need RefreshCw icon
+   441→   441→function RefreshCw(props: React.SVGProps<SVGSVGElement> & { size?: number }) {
+   442→   442→  const { size = 24, ...rest } = props;
+   443→   443→  return (
+   444→   444→    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...rest}>
+   445→   445→      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" />
+   446→   446→    </svg>
+   447→   447→  );
+   448→   448→}
+   449→   449→
+   450→   450→// ============ FILTER SIDEBAR (extracted) ============
+   451→   451→
+   452→   452→function FilterSidebarContent({ allCategories, allBrands }: { allCategories: Category[]; allBrands: Brand[] }) {
+   453→   453→  const { selectedCategory, selectedBrand, priceRange, setPriceRange, setSelectedBrand } = useNavigationStore();
+   454→   454→  const navStore = useNavigationStore();
+   455→   455→
+   456→   456→  return (
+   457→   457→    <div className="space-y-6">
+   458→   458→      <div>
+   459→   459→        <h3 className="font-semibold mb-3 flex items-center gap-2"><Filter size={16} /> Filters</h3>
+   460→   460→        <Accordion type="multiple" defaultValue={['category', 'brand', 'price', 'rating']}>
+   461→   461→          <AccordionItem value="category"><AccordionTrigger>Category</AccordionTrigger>
+   462→   462→            <AccordionContent>
+   463→   463→              <div className="space-y-2 max-h-48 overflow-y-auto">
+   464→   464→                <Button variant={selectedCategory === null ? 'secondary' : 'ghost'} size="sm" className="w-full justify-start" onClick={() => { navStore.setSelectedCategory(null); }}>All Categories</Button>
+   465→   465→                {allCategories.map(cat => (
+   466→   466→                  <Button key={cat.id} variant={selectedCategory === cat.slug ? 'secondary' : 'ghost'} size="sm" className="w-full justify-start" onClick={() => { navStore.setSelectedCategory(cat.slug); }}>
+   467→   467→                    {cat.name} <Badge variant="secondary" className="ml-auto text-xs">{cat._count?.products || 0}</Badge>
+   468→   468→                  </Button>
+   469→   469→                ))}
+   470→   470→              </div>
+   471→   471→            </AccordionContent>
+   472→   472→          </AccordionItem>
+   473→   473→          <AccordionItem value="brand"><AccordionTrigger>Brand</AccordionTrigger>
+   474→   474→            <AccordionContent>
+   475→   475→              <div className="space-y-2 max-h-48 overflow-y-auto">
+   476→   476→                {allBrands.map(brand => (
+   477→   477→                  <label key={brand.id} className="flex items-center gap-2 cursor-pointer">
+   478→   478→                    <Checkbox checked={selectedBrand === brand.slug} onCheckedChange={() => setSelectedBrand(selectedBrand === brand.slug ? null : brand.slug)} />
+   479→   479→                    <span className="text-sm">{brand.name}</span>
+   480→   480→                    <span className="text-xs text-muted-foreground ml-auto">({brand._count?.products || 0})</span>
+   481→   481→                  </label>
+   482→   482→                ))}
+   483→   483→              </div>
+   484→   484→            </AccordionContent>
+   485→   485→          </AccordionItem>
+   486→   486→          <AccordionItem value="price"><AccordionTrigger>Price Range</AccordionTrigger>
+   487→   487→            <AccordionContent>
+   488→   488→              <Slider min={0} max={100000} step={1000} value={priceRange} onValueChange={(v) => { setPriceRange(v as [number, number]); }} className="mt-2" />
+   489→   489→              <div className="flex justify-between text-sm mt-2"><span>{formatCurrency(priceRange[0])}</span><span>{formatCurrency(priceRange[1])}</span></div>
+   490→   490→            </AccordionContent>
+   491→   491→          </AccordionItem>
+   492→   492→        </Accordion>
+   493→   493→      </div>
+   494→   494→    </div>
+   495→   495→  );
+   496→   496→}
+   497→   497→
+   498→   498→// ============ PRODUCTS LIST PAGE ============
+   499→   499→
+   500→   500→function ProductsPage() {
+
+[showing lines 1-500 of 1536; use offset=501 with limit to continue reading]

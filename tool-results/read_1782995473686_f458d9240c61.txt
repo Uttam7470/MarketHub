@@ -1,0 +1,502 @@
+   500→      </Dialog>
+   501→    </div>
+   502→  );
+   503→}
+   504→
+   505→// ============ CATEGORY MANAGEMENT ============
+   506→
+   507→function AdminCategories() {
+   508→  const qc = useQueryClient();
+   509→  const { data: categories, isLoading } = useQuery({
+   510→    queryKey: ['categories'],
+   511→    queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: any) => r.data || []),
+   512→  });
+   513→
+   514→  const [showAdd, setShowAdd] = useState(false);
+   515→  const [editId, setEditId] = useState<string | null>(null);
+   516→  const [form, setForm] = useState({ name: '', description: '', parentId: '', sortOrder: '0' });
+   517→
+   518→  const saveMutation = useMutation({
+   519→    mutationFn: async () => {
+   520→      if (editId) {
+   521→        return fetch('/api/categories', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editId, name: form.name, description: form.description, parentId: form.parentId || null, sortOrder: parseInt(form.sortOrder) }) }).then(r => r.json());
+   522→      }
+   523→      return fetch('/api/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, description: form.description, parentId: form.parentId || null, sortOrder: parseInt(form.sortOrder) }) }).then(r => r.json());
+   524→    },
+   525→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success(editId ? 'Category updated' : 'Category created'); setShowAdd(false); setEditId(null); setForm({ name: '', description: '', parentId: '', sortOrder: '0' }); },
+   526→    onError: () => toast.error('Failed to save category'),
+   527→  });
+   528→
+   529→  const deleteMutation = useMutation({
+   530→    mutationFn: (id: string) => fetch(`/api/categories?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+   531→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success('Category deleted'); },
+   532→    onError: () => toast.error('Failed to delete'),
+   533→  });
+   534→
+   535→  const handleEdit = (cat: any) => { setForm({ name: cat.name, description: cat.description || '', parentId: cat.parentId || '', sortOrder: String(cat.sortOrder) }); setEditId(cat.id); setShowAdd(true); };
+   536→
+   537→  return (
+   538→    <div className="p-6 space-y-6">
+   539→      <div className="flex items-center justify-between">
+   540→        <div><h1 className="text-2xl font-bold">Categories</h1><p className="text-muted-foreground text-sm">Manage product categories and subcategories</p></div>
+   541→        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => { setForm({ name: '', description: '', parentId: '', sortOrder: '0' }); setEditId(null); setShowAdd(true); }}><Plus size={16} className="mr-1.5" />Add Category</Button>
+   542→      </div>
+   543→
+   544→      {isLoading ? <div className="space-y-3">{Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div> :
+   545→      <div className="space-y-2">
+   546→        {categories?.map((cat: any) => (
+   547→          <div key={cat.id}>
+   548→            <Card className="p-4 flex items-center justify-between">
+   549→              <div className="flex items-center gap-3">
+   550→                <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-sm font-bold">{cat.name[0]}</div>
+   551→                <div><p className="font-medium">{cat.name}</p><p className="text-sm text-muted-foreground">{cat._count?.products || 0} products</p></div>
+   552→              </div>
+   553→              <div className="flex items-center gap-1">
+   554→                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(cat)}><Pencil size={14} /></Button>
+   555→                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(cat.id)}><Trash2 size={14} /></Button>
+   556→              </div>
+   557→            </Card>
+   558→            {cat.children?.map((child: any) => (
+   559→              <Card key={child.id} className="p-4 flex items-center justify-between ml-8 mt-1">
+   560→                <div className="flex items-center gap-3">
+   561→                  <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-xs font-bold">{child.name[0]}</div>
+   562→                  <div><p className="font-medium text-sm">{child.name}</p><p className="text-xs text-muted-foreground">{child._count?.products || 0} products</p></div>
+   563→                </div>
+   564→                <div className="flex items-center gap-1">
+   565→                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(child)}><Pencil size={12} /></Button>
+   566→                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(child.id)}><Trash2 size={12} /></Button>
+   567→                </div>
+   568→              </Card>
+   569→            ))}
+   570→          </div>
+   571→        ))}
+   572→      </div>}
+   573→
+   574→      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+   575→        <DialogContent><DialogHeader><DialogTitle>{editId ? 'Edit Category' : 'Add Category'}</DialogTitle></DialogHeader>
+   576→          <div className="space-y-4">
+   577→            <div><Label>Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /></div>
+   578→            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} className="mt-1" /></div>
+   579→            <div><Label>Parent Category</Label><Select value={form.parentId} onValueChange={v => setForm(f => ({...f, parentId: v}))}><SelectTrigger className="mt-1"><SelectValue placeholder="None (Root Category)" /></SelectTrigger><SelectContent><SelectItem value="none">None (Root Category)</SelectItem>{categories?.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+   580→            <div><Label>Sort Order</Label><Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({...f, sortOrder: e.target.value}))} className="mt-1" /></div>
+   581→          </div>
+   582→          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.name}>{saveMutation.isPending ? 'Saving...' : editId ? 'Update' : 'Create'}</Button></DialogFooter>
+   583→        </DialogContent>
+   584→      </Dialog>
+   585→    </div>
+   586→  );
+   587→}
+   588→
+   589→// ============ BRAND MANAGEMENT ============
+   590→
+   591→function AdminBrands() {
+   592→  const qc = useQueryClient();
+   593→  const { data: brands, isLoading } = useQuery({
+   594→    queryKey: ['brands'],
+   595→    queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: any) => r.data || []),
+   596→  });
+   597→
+   598→  const [showAdd, setShowAdd] = useState(false);
+   599→  const [form, setForm] = useState({ name: '', description: '' });
+   600→
+   601→  const addMutation = useMutation({
+   602→    mutationFn: () => fetch('/api/brands', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).then(r => r.json()),
+   603→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['brands'] }); toast.success('Brand created'); setShowAdd(false); setForm({ name: '', description: '' }); },
+   604→    onError: () => toast.error('Failed to create brand'),
+   605→  });
+   606→
+   607→  const deleteMutation = useMutation({
+   608→    mutationFn: (id: string) => fetch(`/api/brands?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+   609→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['brands'] }); toast.success('Brand deleted'); },
+   610→    onError: () => toast.error('Failed to delete'),
+   611→  });
+   612→
+   613→  return (
+   614→    <div className="p-6 space-y-6">
+   615→      <div className="flex items-center justify-between">
+   616→        <div><h1 className="text-2xl font-bold">Brands</h1><p className="text-muted-foreground text-sm">Manage product brands</p></div>
+   617→        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => setShowAdd(true)}><Plus size={16} className="mr-1.5" />Add Brand</Button>
+   618→      </div>
+   619→
+   620→      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   621→        {isLoading ? Array.from({length: 8}).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />) :
+   622→        brands?.map((brand: any) => (
+   623→          <Card key={brand.id} className="p-4 flex items-center justify-between">
+   624→            <div><p className="font-medium">{brand.name}</p><p className="text-sm text-muted-foreground">{brand._count?.products || 0} products</p></div>
+   625→            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive shrink-0" onClick={() => deleteMutation.mutate(brand.id)}><Trash2 size={14} /></Button>
+   626→          </Card>
+   627→        ))}
+   628→      </div>
+   629→
+   630→      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+   631→        <DialogContent><DialogHeader><DialogTitle>Add Brand</DialogTitle></DialogHeader>
+   632→          <div className="space-y-4">
+   633→            <div><Label>Brand Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /></div>
+   634→            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} className="mt-1" /></div>
+   635→          </div>
+   636→          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => addMutation.mutate()} disabled={addMutation.isPending || !form.name}>Create</Button></DialogFooter>
+   637→        </DialogContent>
+   638→      </Dialog>
+   639→    </div>
+   640→  );
+   641→}
+   642→
+   643→// ============ ADMIN PRODUCTS ============
+   644→
+   645→function AdminProducts() {
+   646→  const [page, setPage] = useState(1);
+   647→  const [search, setSearch] = useState('');
+   648→
+   649→  const { data, isLoading } = useQuery({
+   650→    queryKey: ['admin-products', page, search],
+   651→    queryFn: () => fetch(`/api/products?page=${page}&limit=15&search=${search}`).then(r => r.json()).then((r: any) => r),
+   652→  });
+   653→
+   654→  return (
+   655→    <div className="p-6 space-y-6">
+   656→      <div><h1 className="text-2xl font-bold">All Products</h1><p className="text-muted-foreground text-sm">Manage products across all vendors</p></div>
+   657→      <div className="max-w-md"><div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search products..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" /></div></div>
+   658→      <Card>
+   659→        <Table>
+   660→          <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="hidden md:table-cell">Vendor</TableHead><TableHead>Price</TableHead><TableHead>Stock</TableHead><TableHead className="hidden sm:table-cell">Sold</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+   661→          <TableBody>
+   662→            {data?.data?.map((p: any) => (
+   663→              <TableRow key={p.id}>
+   664→                <TableCell><div className="flex items-center gap-3"><div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">{p.images?.[0]?.url && <img src={p.images[0].url} alt="" className="w-full h-full object-cover" />}</div><div className="min-w-0"><p className="font-medium text-sm truncate max-w-48">{p.name}</p><p className="text-xs text-muted-foreground">{p.category?.name}</p></div></div></TableCell>
+   665→                <TableCell className="hidden md:table-cell text-sm">{p.vendor?.businessName}</TableCell>
+   666→                <TableCell className="font-medium">{formatCurrency(p.price)}</TableCell>
+   667→                <TableCell><span className={p.stock < 5 ? 'text-red-600 font-medium' : ''}>{p.stock}</span></TableCell>
+   668→                <TableCell className="hidden sm:table-cell">{p.totalSold}</TableCell>
+   669→                <TableCell><Badge variant={p.isActive ? 'default' : 'secondary'}>{p.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+   670→              </TableRow>
+   671→            ))}
+   672→          </TableBody>
+   673→        </Table>
+   674→        {data?.meta?.totalPages > 1 && (
+   675→          <div className="flex items-center justify-center gap-2 p-4">
+   676→            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></Button>
+   677→            {Array.from({length: Math.min(data.meta.totalPages, 5)}, (_, i) => i + 1).map(p => (
+   678→              <Button key={p} variant={p === page ? 'default' : 'outline'} size="sm" className={p === page ? 'bg-amber-600' : ''} onClick={() => setPage(p)}>{p}</Button>
+   679→            ))}
+   680→            <Button variant="outline" size="sm" disabled={page >= data.meta.totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
+   681→          </div>
+   682→        )}
+   683→      </Card>
+   684→    </div>
+   685→  );
+   686→}
+   687→
+   688→// ============ ADMIN ORDERS ============
+   689→
+   690→function AdminOrders() {
+   691→  const qc = useQueryClient();
+   692→  const [statusFilter, setStatusFilter] = useState('all');
+   693→  const [page, setPage] = useState(1);
+   694→  const params = new URLSearchParams({ page: String(page), limit: '15' });
+   695→  if (statusFilter !== 'all') params.set('status', statusFilter);
+   696→
+   697→  const { data, isLoading } = useQuery({
+   698→    queryKey: ['admin-orders', params.toString()],
+   699→    queryFn: () => fetch(`/api/orders?${params}`).then(r => r.json()).then((r: any) => r),
+   700→  });
+   701→
+   702→  const updateMutation = useMutation({
+   703→    mutationFn: ({ id, status }: { id: string; status: string }) => fetch(`/api/orders/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }).then(r => r.json()),
+   704→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-orders'] }); toast.success('Order updated'); },
+   705→    onError: () => toast.error('Failed to update'),
+   706→  });
+   707→
+   708→  const statusColor: Record<string, string> = { NEW: 'bg-blue-100 text-blue-700', PROCESSING: 'bg-amber-100 text-amber-700', SHIPPED: 'bg-orange-100 text-orange-700', DELIVERED: 'bg-green-100 text-green-700', CANCELLED: 'bg-red-100 text-red-700' };
+   709→
+   710→  return (
+   711→    <div className="p-6 space-y-6">
+   712→      <div><h1 className="text-2xl font-bold">All Orders</h1><p className="text-muted-foreground text-sm">Manage all platform orders</p></div>
+   713→      <div className="flex gap-2 flex-wrap">
+   714→        {['all', 'NEW', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED', 'REFUNDED'].map(s => (
+   715→          <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-amber-600' : ''} onClick={() => { setStatusFilter(s); setPage(1); }}>{s === 'all' ? 'All' : s}</Button>
+   716→        ))}
+   717→      </div>
+   718→      {isLoading ? <div className="space-y-3">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+   719→      <Card>
+   720→        <Table>
+   721→          <TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Customer</TableHead><TableHead>Items</TableHead><TableHead>Total</TableHead><TableHead>Payment</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+   722→          <TableBody>
+   723→            {data?.data?.map((order: any) => (
+   724→              <TableRow key={order.id}>
+   725→                <TableCell><p className="font-medium text-sm">#{order.orderNumber}</p></TableCell>
+   726→                <TableCell className="text-sm">{order.user?.name}</TableCell>
+   727→                <TableCell className="text-sm">{order.items?.length || 0} items</TableCell>
+   728→                <TableCell className="font-medium">{formatCurrency(order.total)}</TableCell>
+   729→                <TableCell><Badge variant={order.paymentStatus === 'PAID' ? 'default' : 'secondary'} className="text-xs">{order.paymentStatus}</Badge></TableCell>
+   730→                <TableCell><Badge className={statusColor[order.status] || ''}>{order.status}</Badge></TableCell>
+   731→                <TableCell className="text-sm">{new Date(order.createdAt).toLocaleDateString()}</TableCell>
+   732→                <TableCell className="text-right">
+   733→                  <Select value={order.status} onValueChange={(v) => updateMutation.mutate({ id: order.id, status: v })}>
+   734→                    <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+   735→                    <SelectContent>{['NEW', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+   736→                  </Select>
+   737→                </TableCell>
+   738→              </TableRow>
+   739→            ))}
+   740→          </TableBody>
+   741→        </Table>
+   742→        {data?.meta?.totalPages > 1 && (
+   743→          <div className="flex items-center justify-center gap-2 p-4">
+   744→            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></Button>
+   745→            <Button variant="outline" size="sm" disabled={page >= data.meta.totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
+   746→          </div>
+   747→        )}
+   748→      </Card>}
+   749→    </div>
+   750→  );
+   751→}
+   752→
+   753→// ============ ADMIN CUSTOMERS ============
+   754→
+   755→function AdminCustomers() {
+   756→  const [search, setSearch] = useState('');
+   757→  const [page, setPage] = useState(1);
+   758→
+   759→  const { data, isLoading } = useQuery({
+   760→    queryKey: ['admin-customers', search, page],
+   761→    queryFn: () => fetch(`/api/admin/users?role=CUSTOMER&search=${search}&page=${page}&limit=15`).then(r => r.json()).then((r: any) => r),
+   762→  });
+   763→
+   764→  return (
+   765→    <div className="p-6 space-y-6">
+   766→      <div><h1 className="text-2xl font-bold">Customers</h1><p className="text-muted-foreground text-sm">Manage platform customers</p></div>
+   767→      <div className="max-w-md"><div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search customers..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" /></div></div>
+   768→      <Card>
+   769→        <Table>
+   770→          <TableHeader><TableRow><TableHead>Customer</TableHead><TableHead>Email</TableHead><TableHead className="hidden sm:table-cell">Phone</TableHead><TableHead>Joined</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+   771→          <TableBody>
+   772→            {data?.data?.map((u: any) => (
+   773→              <TableRow key={u.id}>
+   774→                <TableCell><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarFallback className="text-xs">{u.name[0]}</AvatarFallback></Avatar><span className="font-medium text-sm">{u.name}</span></div></TableCell>
+   775→                <TableCell className="text-sm">{u.email}</TableCell>
+   776→                <TableCell className="hidden sm:table-cell text-sm">{u.phone || 'N/A'}</TableCell>
+   777→                <TableCell className="text-sm">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+   778→                <TableCell><Badge variant={u.isActive ? 'default' : 'secondary'}>{u.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+   779→              </TableRow>
+   780→            ))}
+   781→          </TableBody>
+   782→        </Table>
+   783→      </Card>
+   784→    </div>
+   785→  );
+   786→}
+   787→
+   788→// ============ ADMIN COUPONS ============
+   789→
+   790→function AdminCoupons() {
+   791→  const qc = useQueryClient();
+   792→  const { data: coupons, isLoading } = useQuery({ queryKey: ['coupons'], queryFn: () => fetch('/api/coupons').then(r => r.json()).then((r: any) => r.data || []) });
+   793→  const [showAdd, setShowAdd] = useState(false);
+   794→  const [form, setForm] = useState({ code: '', discountType: 'PERCENTAGE', discountValue: '10', minOrder: '500', maxDiscount: '1000', usageLimit: '100', startDate: '', endDate: '' });
+   795→
+   796→  const addMutation = useMutation({
+   797→    mutationFn: () => fetch('/api/coupons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, discountValue: parseFloat(form.discountValue), minOrder: parseFloat(form.minOrder) || null, maxDiscount: parseFloat(form.maxDiscount) || null, usageLimit: parseInt(form.usageLimit) || null, startDate: form.startDate || new Date().toISOString(), endDate: form.endDate || new Date(Date.now() + 86400000 * 30).toISOString() }) }).then(r => r.json()),
+   798→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['coupons'] }); toast.success('Coupon created'); setShowAdd(false); },
+   799→    onError: () => toast.error('Failed'),
+   800→  });
+   801→
+   802→  const deleteMutation = useMutation({
+   803→    mutationFn: (id: string) => fetch(`/api/coupons?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+   804→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['coupons'] }); toast.success('Coupon deleted'); },
+   805→  });
+   806→
+   807→  return (
+   808→    <div className="p-6 space-y-6">
+   809→      <div className="flex items-center justify-between">
+   810→        <div><h1 className="text-2xl font-bold">Coupons</h1><p className="text-muted-foreground text-sm">Manage discount coupons</p></div>
+   811→        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => setShowAdd(true)}><Plus size={16} className="mr-1.5" />Add Coupon</Button>
+   812→      </div>
+   813→      <Card>
+   814→        <Table>
+   815→          <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Discount</TableHead><TableHead>Min Order</TableHead><TableHead>Usage</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+   816→          <TableBody>
+   817→            {isLoading ? Array.from({length: 3}).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8" /></TableCell></TableRow>) :
+   818→            coupons?.map((c: any) => (
+   819→              <TableRow key={c.id}>
+   820→                <TableCell className="font-mono font-bold">{c.code}</TableCell>
+   821→                <TableCell>{c.discountType === 'PERCENTAGE' ? `${c.discountValue}%` : formatCurrency(c.discountValue)}{c.maxDiscount ? ` (max ${formatCurrency(c.maxDiscount)})` : ''}</TableCell>
+   822→                <TableCell>{c.minOrder ? formatCurrency(c.minOrder) : 'N/A'}</TableCell>
+   823→                <TableCell>{c.usedCount}/{c.usageLimit || '∞'}</TableCell>
+   824→                <TableCell><Badge variant={c.isActive ? 'default' : 'secondary'}>{c.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+   825→                <TableCell className="text-right"><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(c.id)}><Trash2 size={14} /></Button></TableCell>
+   826→              </TableRow>
+   827→            ))}
+   828→          </TableBody>
+   829→        </Table>
+   830→      </Card>
+   831→
+   832→      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+   833→        <DialogContent><DialogHeader><DialogTitle>Create Coupon</DialogTitle></DialogHeader>
+   834→          <div className="space-y-4">
+   835→            <div><Label>Code *</Label><Input value={form.code} onChange={e => setForm(f => ({...f, code: e.target.value.toUpperCase()}))} className="mt-1 uppercase" /></div>
+   836→            <div className="grid grid-cols-2 gap-4">
+   837→              <div><Label>Discount Type</Label><Select value={form.discountType} onValueChange={v => setForm(f => ({...f, discountType: v}))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PERCENTAGE">Percentage</SelectItem><SelectItem value="FIXED">Fixed Amount</SelectItem></SelectContent></Select></div>
+   838→              <div><Label>Discount Value *</Label><Input type="number" value={form.discountValue} onChange={e => setForm(f => ({...f, discountValue: e.target.value}))} className="mt-1" /></div>
+   839→              <div><Label>Min Order (₹)</Label><Input type="number" value={form.minOrder} onChange={e => setForm(f => ({...f, minOrder: e.target.value}))} className="mt-1" /></div>
+   840→              <div><Label>Max Discount (₹)</Label><Input type="number" value={form.maxDiscount} onChange={e => setForm(f => ({...f, maxDiscount: e.target.value}))} className="mt-1" /></div>
+   841→              <div><Label>Usage Limit</Label><Input type="number" value={form.usageLimit} onChange={e => setForm(f => ({...f, usageLimit: e.target.value}))} className="mt-1" /></div>
+   842→            </div>
+   843→          </div>
+   844→          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => addMutation.mutate()} disabled={addMutation.isPending || !form.code}>Create</Button></DialogFooter>
+   845→        </DialogContent>
+   846→      </Dialog>
+   847→    </div>
+   848→  );
+   849→}
+   850→
+   851→// ============ ADMIN BANNERS ============
+   852→
+   853→function AdminBanners() {
+   854→  const qc = useQueryClient();
+   855→  const { data: banners, isLoading } = useQuery({ queryKey: ['banners'], queryFn: () => fetch('/api/banners?position=HOME').then(r => r.json()).then((r: any) => r.data || []) });
+   856→  const [form, setForm] = useState({ title: '', image: '', link: '', position: 'HOME', sortOrder: '0' });
+   857→
+   858→  const addMutation = useMutation({
+   859→    mutationFn: () => fetch('/api/banners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, sortOrder: parseInt(form.sortOrder) }) }).then(r => r.json()),
+   860→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['banners'] }); toast.success('Banner added'); setForm({ title: '', image: '', link: '', position: 'HOME', sortOrder: '0' }); },
+   861→    onError: () => toast.error('Failed'),
+   862→  });
+   863→
+   864→  const deleteMutation = useMutation({
+   865→    mutationFn: (id: string) => fetch(`/api/banners?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+   866→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['banners'] }); toast.success('Banner deleted'); },
+   867→  });
+   868→
+   869→  return (
+   870→    <div className="p-6 space-y-6">
+   871→      <div><h1 className="text-2xl font-bold">Banners</h1><p className="text-muted-foreground text-sm">Manage homepage banners and advertisements</p></div>
+   872→
+   873→      <Card className="p-6"><h3 className="font-semibold mb-4">Add New Banner</h3>
+   874→        <div className="grid sm:grid-cols-2 gap-4">
+   875→          <div><Label>Title</Label><Input value={form.title} onChange={e => setForm(f => ({...f, title: e.target.value}))} className="mt-1" /></div>
+   876→          <div><Label>Image URL</Label><Input value={form.image} onChange={e => setForm(f => ({...f, image: e.target.value}))} className="mt-1" placeholder="https://..." /></div>
+   877→          <div><Label>Link (optional)</Label><Input value={form.link} onChange={e => setForm(f => ({...f, link: e.target.value}))} className="mt-1" /></div>
+   878→          <div><Label>Sort Order</Label><Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({...f, sortOrder: e.target.value}))} className="mt-1" /></div>
+   879→        </div>
+   880→        <Button className="mt-4 bg-amber-600 hover:bg-amber-700" onClick={() => addMutation.mutate()} disabled={addMutation.isPending || !form.title || !form.image}>Add Banner</Button>
+   881→      </Card>
+   882→
+   883→      <div className="space-y-4">
+   884→        {isLoading ? Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />) :
+   885→        banners?.map((banner: any) => (
+   886→          <Card key={banner.id} className="overflow-hidden">
+   887→            <img src={banner.image} alt={banner.title} className="w-full h-32 md:h-48 object-cover" />
+   888→            <div className="p-4 flex items-center justify-between">
+   889→              <div><p className="font-medium">{banner.title}</p><p className="text-sm text-muted-foreground">Position: {banner.position} • Sort: {banner.sortOrder}</p></div>
+   890→              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteMutation.mutate(banner.id)}><Trash2 size={16} /></Button>
+   891→            </div>
+   892→          </Card>
+   893→        ))}
+   894→      </div>
+   895→    </div>
+   896→  );
+   897→}
+   898→
+   899→// ============ ADMIN REPORTS ============
+   900→
+   901→function AdminReports() {
+   902→  const { data } = useQuery({ queryKey: ['admin-dashboard'], queryFn: () => fetch('/api/admin/dashboard').then(r => r.json()).then((r: any) => r.data) });
+   903→
+   904→  return (
+   905→    <div className="p-6 space-y-6">
+   906→      <div><h1 className="text-2xl font-bold">Reports & Analytics</h1><p className="text-muted-foreground text-sm">Platform performance insights</p></div>
+   907→
+   908→      <div className="grid sm:grid-cols-3 gap-4">
+   909→        <Card className="p-4"><p className="text-sm text-muted-foreground">Total Revenue</p><p className="text-2xl font-bold text-green-600">{formatCurrency(data?.totalRevenue || 0)}</p></Card>
+   910→        <Card className="p-4"><p className="text-sm text-muted-foreground">Platform Earnings (Commission)</p><p className="text-2xl font-bold text-emerald-600">{formatCurrency(data?.platformEarnings || 0)}</p></Card>
+   911→        <Card className="p-4"><p className="text-sm text-muted-foreground">Total Tax Collected</p><p className="text-2xl font-bold">{formatCurrency((data?.totalRevenue || 0) * 0.18)}</p></Card>
+   912→      </div>
+   913→
+   914→      {data?.monthlySales && (
+   915→        <Card className="p-6">
+   916→          <CardHeader className="p-0 mb-4"><CardTitle>Revenue Breakdown</CardTitle></CardHeader>
+   917→          <div className="h-64 flex items-end gap-3">
+   918→            {data.monthlySales.map((ms: any, i: number) => {
+   919→              const maxSale = Math.max(...data.monthlySales.map((m: any) => m.sales), 1);
+   920→              return (
+   921→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+   922→                  <span className="text-xs font-medium">{formatCurrency(ms.sales)}</span>
+   923→                  <div className="w-full rounded-t-md bg-gradient-to-t from-amber-700 to-amber-400" style={{ height: `${Math.max((ms.sales / maxSale) * 100, 4)}%` }} />
+   924→                  <span className="text-xs text-muted-foreground">{ms.month}</span>
+   925→                </div>
+   926→              );
+   927→            })}
+   928→          </div>
+   929→        </Card>
+   930→      )}
+   931→    </div>
+   932→  );
+   933→}
+   934→
+   935→// ============ ADMIN SETTINGS ============
+   936→
+   937→function AdminSettings() {
+   938→  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: () => fetch('/api/settings').then(r => r.json()).then((r: any) => r.data) });
+   939→  const [form, setForm] = useState<any>({});
+   940→
+   941→  React.useEffect(() => { if (settings) setForm(settings); }, [settings]);
+   942→
+   943→  const saveMutation = useMutation({
+   944→    mutationFn: () => fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).then(r => r.json()),
+   945→    onSuccess: () => toast.success('Settings saved'),
+   946→    onError: () => toast.error('Failed to save'),
+   947→  });
+   948→
+   949→  return (
+   950→    <div className="p-6 space-y-6">
+   951→      <div><h1 className="text-2xl font-bold">Platform Settings</h1><p className="text-muted-foreground text-sm">Configure marketplace settings</p></div>
+   952→      <Card className="p-6">
+   953→        <div className="grid sm:grid-cols-2 gap-4">
+   954→          <div><Label>Site Name</Label><Input value={form.siteName || ''} onChange={e => setForm(f => ({...f, siteName: e.target.value}))} className="mt-1" /></div>
+   955→          <div><Label>Site Description</Label><Input value={form.siteDescription || ''} onChange={e => setForm(f => ({...f, siteDescription: e.target.value}))} className="mt-1" /></div>
+   956→          <div><Label>Currency</Label><Input value={form.currency || ''} onChange={e => setForm(f => ({...f, currency: e.target.value}))} className="mt-1" /></div>
+   957→          <div><Label>Currency Symbol</Label><Input value={form.currencySymbol || ''} onChange={e => setForm(f => ({...f, currencySymbol: e.target.value}))} className="mt-1" /></div>
+   958→          <div><Label>Tax Rate (GST %)</Label><Input type="number" value={form.taxRate || ''} onChange={e => setForm(f => ({...f, taxRate: parseFloat(e.target.value)}))} className="mt-1" /></div>
+   959→          <div><Label>Free Shipping Min (₹)</Label><Input type="number" value={form.freeShippingMin || ''} onChange={e => setForm(f => ({...f, freeShippingMin: parseFloat(e.target.value)}))} className="mt-1" /></div>
+   960→          <div><Label>Contact Email</Label><Input value={form.contactEmail || ''} onChange={e => setForm(f => ({...f, contactEmail: e.target.value}))} className="mt-1" /></div>
+   961→          <div><Label>Contact Phone</Label><Input value={form.contactPhone || ''} onChange={e => setForm(f => ({...f, contactPhone: e.target.value}))} className="mt-1" /></div>
+   962→          <div className="sm:col-span-2"><Label>Address</Label><Textarea value={form.address || ''} onChange={e => setForm(f => ({...f, address: e.target.value}))} className="mt-1" /></div>
+   963→        </div>
+   964→        <Button className="mt-4 bg-amber-600 hover:bg-amber-700" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>Save Settings</Button>
+   965→      </Card>
+   966→    </div>
+   967→  );
+   968→}
+   969→
+   970→// ============ MAIN ADMIN APP ============
+   971→
+   972→export default function AdminApp() {
+   973→  const { adminView, setAdminView } = useNavigationStore();
+   974→
+   975→  const renderView = () => {
+   976→    switch (adminView) {
+   977→      case 'admin-dashboard': return <AdminDashboard />;
+   978→      case 'admin-vendors': return <AdminVendors />;
+   979→      case 'admin-categories': return <AdminCategories />;
+   980→      case 'admin-brands': return <AdminBrands />;
+   981→      case 'admin-products': return <AdminProducts />;
+   982→      case 'admin-orders': return <AdminOrders />;
+   983→      case 'admin-customers': return <AdminCustomers />;
+   984→      case 'admin-coupons': return <AdminCoupons />;
+   985→      case 'admin-banners': return <AdminBanners />;
+   986→      case 'admin-reports': return <AdminReports />;
+   987→      case 'admin-settings': return <AdminSettings />;
+   988→      case 'admin-activity-logs': return <div className="p-6"><h1 className="text-2xl font-bold mb-4">Activity Logs</h1><p className="text-muted-foreground">Activity tracking coming soon</p></div>;
+   989→      case 'admin-notifications': return <div className="p-6"><h1 className="text-2xl font-bold mb-4">Notifications</h1><p className="text-muted-foreground">No new notifications</p></div>;
+   990→      default: return <AdminDashboard />;
+   991→    }
+   992→  };
+   993→
+   994→  return (
+   995→    <div className="min-h-screen flex flex-col bg-background">
+   996→      <AdminMobileHeader />
+   997→      <div className="flex flex-1">
+   998→        <AdminSidebar />
+   999→        <main className="flex-1 overflow-auto">{renderView()}</main>
+
+[showing lines 500-999 of 1003; use offset=1000 with limit to continue reading]

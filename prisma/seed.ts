@@ -93,7 +93,21 @@ function randomInt(min: number, max: number): number {
 async function seed() {
   console.log('🌱 Seeding database...');
 
-  // Clean up existing data
+  // Clean up existing data (order matters for foreign keys)
+  await db.flashSaleItem.deleteMany();
+  await db.flashSale.deleteMany();
+  await db.deal.deleteMany();
+  await db.ticketMessage.deleteMany();
+  await db.supportTicket.deleteMany();
+  await db.fAQ.deleteMany();
+  await db.searchAnalytics.deleteMany();
+  await db.searchHistory.deleteMany();
+  await db.recentlyViewed.deleteMany();
+  await db.walletTransaction.deleteMany();
+  await db.payout.deleteMany();
+  await db.vendorWallet.deleteMany();
+  await db.productQA.deleteMany();
+  await db.inventoryHistory.deleteMany();
   await db.orderItem.deleteMany();
   await db.returnRequest.deleteMany();
   await db.order.deleteMany();
@@ -160,12 +174,14 @@ async function seed() {
     { email: 'sportszone@vendor.com', name: 'SportsZone', businessName: 'SportsZone', commission: 12 },
     { email: 'bookworld@vendor.com', name: 'BookWorld', businessName: 'BookWorld', commission: 8 },
   ];
-  const vendors: { id: string; userId: string }[] = [];
+  const vendors: { id: string; userId: string; totalRevenue: number }[] = [];
   for (const vd of vendorData) {
     const vp = await hash('vendor123', 12);
     const user = await db.user.create({
       data: { email: vd.email, password: vp, name: vd.name, role: 'VENDOR', isVerified: true },
     });
+    const vendorTotalSales = randomPrice(50000, 500000);
+    const vendorTotalRevenue = randomPrice(40000, 400000);
     const vendor = await db.vendor.create({
       data: {
         userId: user.id,
@@ -175,12 +191,12 @@ async function seed() {
         businessEmail: vd.email,
         commissionRate: vd.commission,
         status: 'APPROVED',
-        totalSales: randomPrice(50000, 500000),
-        totalRevenue: randomPrice(40000, 400000),
+        totalSales: vendorTotalSales,
+        totalRevenue: vendorTotalRevenue,
         rating: randomPrice(3.5, 5.0),
       },
     });
-    vendors.push({ id: vendor.id, userId: user.id });
+    vendors.push({ id: vendor.id, userId: user.id, totalRevenue: vendorTotalRevenue });
   }
 
   // 5. Create customer users
@@ -229,6 +245,7 @@ async function seed() {
   ];
 
   const allProducts: string[] = [];
+  const badges: (string | null)[] = ['BEST_SELLER', 'NEW_ARRIVAL', 'LIMITED_TIME', 'FESTIVAL_OFFER', null, null, null];
   for (const entry of productEntries) {
     for (const name of entry.names) {
       const vi = entry.vendorIdx[randomInt(0, entry.vendorIdx.length - 1)];
@@ -237,6 +254,7 @@ async function seed() {
       const price = randomPrice(199, 49999);
       const comparePrice = price * randomPrice(1.1, 1.5);
       const stock = randomInt(5, 200);
+      const badge = badges[randomInt(0, badges.length - 1)];
 
       const product = await db.product.create({
         data: {
@@ -253,6 +271,8 @@ async function seed() {
           stock,
           weight: randomPrice(0.1, 10),
           isFeatured: Math.random() > 0.7,
+          badge,
+          estimatedDeliveryDays: randomInt(3, 10),
           rating: randomPrice(3.0, 5.0),
           reviewCount: randomInt(1, 150),
           totalSold: randomInt(10, 500),
@@ -335,6 +355,9 @@ async function seed() {
     if (orderItemsData.length > 0) {
       const shipping = subtotal > 500 ? 0 : 99;
       const tax = subtotal * 0.18;
+      const orderStatus = statuses[randomInt(0, statuses.length - 1)];
+      const isCancelled = orderStatus === 'CANCELLED';
+
       const order = await db.order.create({
         data: {
           userId: customerId,
@@ -343,21 +366,70 @@ async function seed() {
           shippingCost: shipping,
           tax: Math.round(tax * 100) / 100,
           total: Math.round((subtotal + shipping + tax) * 100) / 100,
-          status: statuses[randomInt(0, statuses.length - 1)],
+          status: orderStatus,
           paymentMethod: paymentMethods[randomInt(0, paymentMethods.length - 1)],
           paymentStatus: Math.random() > 0.2 ? 'PAID' : 'PENDING',
           shippingAddress: '123, Main Street, Mumbai, Maharashtra 400001',
+          ...(isCancelled ? {
+            cancellationReason: 'Customer requested cancellation',
+            cancelledAt: new Date(Date.now() - randomInt(1, 5) * 24 * 60 * 60 * 1000),
+          } : {}),
           items: { create: orderItemsData },
         },
       });
     }
   }
 
-  // 8. Create reviews
+  // Also create a guest order (userId is null)
+  {
+    const selectedProducts = getRandomItems(allProducts, 2);
+    let subtotal = 0;
+    const orderItemsData = [];
+    for (const pid of selectedProducts) {
+      const prod = await db.product.findUnique({ where: { id: pid }, include: { vendor: true } });
+      if (prod) {
+        const qty = randomInt(1, 2);
+        const itemTotal = prod.price * qty;
+        subtotal += itemTotal;
+        orderItemsData.push({
+          productId: pid,
+          vendorId: prod.vendorId,
+          productName: prod.name,
+          productImage: `https://placehold.co/100x100/333/fff?text=${encodeURIComponent(prod.name.substring(0, 10))}`,
+          quantity: qty,
+          price: prod.price,
+          total: itemTotal,
+          vendorName: prod.vendor.businessName,
+        });
+      }
+    }
+    if (orderItemsData.length > 0) {
+      const shipping = subtotal > 500 ? 0 : 99;
+      const tax = subtotal * 0.18;
+      await db.order.create({
+        data: {
+          orderNumber: 'ORD-GUEST-00001',
+          subtotal: Math.round(subtotal * 100) / 100,
+          shippingCost: shipping,
+          tax: Math.round(tax * 100) / 100,
+          total: Math.round((subtotal + shipping + tax) * 100) / 100,
+          status: 'DELIVERED',
+          paymentMethod: 'COD',
+          paymentStatus: 'PAID',
+          shippingAddress: '456, Park Avenue, Delhi, Delhi 110001',
+          guestEmail: 'guest@example.com',
+          guestPhone: '+919876543210',
+          items: { create: orderItemsData },
+        },
+      });
+    }
+  }
+
+  // 8. Create reviews (with new fields: images, verifiedPurchase, helpfulCount)
   for (let i = 0; i < 40; i++) {
     const productId = allProducts[randomInt(0, allProducts.length - 1)];
     const userId = customers[randomInt(0, customers.length - 1)];
-    const user = await db.user.findUnique({ where: { id: userId } });
+    const reviewImages = Math.random() > 0.7 ? 'https://placehold.co/400x400/eee/333?text=Review+Photo' : null;
     await db.review.create({
       data: {
         userId,
@@ -365,16 +437,19 @@ async function seed() {
         rating: randomInt(3, 5),
         title: ['Great product!', 'Good quality', 'Worth the price', 'Excellent!', 'Very satisfied'][randomInt(0, 4)],
         comment: `I bought this product and I am ${['very happy', 'satisfied', 'impressed', 'pleased'][randomInt(0, 3)]} with the quality. Would recommend to others.`,
+        images: reviewImages,
+        verifiedPurchase: Math.random() > 0.3,
+        helpfulCount: randomInt(0, 25),
       },
     });
   }
 
-  // 9. Create coupons
+  // 9. Create coupons (with autoSuggest)
   await db.coupon.createMany({
     data: [
-      { code: 'WELCOME10', discountType: 'PERCENTAGE', discountValue: 10, minOrder: 500, maxDiscount: 200, usageLimit: 1000, usedCount: 150, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true },
-      { code: 'FLAT500', discountType: 'FIXED', discountValue: 500, minOrder: 2000, usageLimit: 500, usedCount: 45, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true },
-      { code: 'SAVE20', discountType: 'PERCENTAGE', discountValue: 20, minOrder: 1000, maxDiscount: 1000, usageLimit: 200, usedCount: 80, startDate: new Date('2024-06-01'), endDate: new Date('2025-06-30'), isActive: true },
+      { code: 'WELCOME10', discountType: 'PERCENTAGE', discountValue: 10, minOrder: 500, maxDiscount: 200, usageLimit: 1000, usedCount: 150, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: true },
+      { code: 'FLAT500', discountType: 'FIXED', discountValue: 500, minOrder: 2000, usageLimit: 500, usedCount: 45, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: false },
+      { code: 'SAVE20', discountType: 'PERCENTAGE', discountValue: 20, minOrder: 1000, maxDiscount: 1000, usageLimit: 200, usedCount: 80, startDate: new Date('2024-06-01'), endDate: new Date('2025-06-30'), isActive: true, autoSuggest: true },
     ],
   });
 
@@ -403,12 +478,278 @@ async function seed() {
     },
   });
 
-  // 12. Create activity logs
+  // 12. Create activity logs (with new fields: entityType, entityId, oldValues, newValues, userAgent)
   await db.activityLog.createMany({
     data: [
-      { userId: admin.id, action: 'LOGIN', details: 'Admin logged in', ipAddress: '192.168.1.1' },
-      { userId: vendors[0].userId, action: 'PRODUCT_CREATE', details: 'Created new product', ipAddress: '10.0.0.1' },
-      { userId: customers[0], action: 'ORDER_PLACE', details: 'Placed order #ORD-001000', ipAddress: '172.16.0.1' },
+      { userId: admin.id, action: 'LOGIN', entityType: 'User', entityId: admin.id, details: 'Admin logged in', ipAddress: '192.168.1.1', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      { userId: vendors[0].userId, action: 'PRODUCT_CREATE', entityType: 'Product', entityId: allProducts[0], details: 'Created new product', ipAddress: '10.0.0.1', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X)' },
+      { userId: customers[0], action: 'ORDER_PLACE', entityType: 'Order', entityId: null, details: 'Placed order #ORD-001000', ipAddress: '172.16.0.1', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS)' },
+      { userId: admin.id, action: 'UPDATE', entityType: 'Vendor', entityId: vendors[0].id, details: 'Updated vendor commission rate', oldValues: '{"commissionRate":10}', newValues: '{"commissionRate":12}', ipAddress: '192.168.1.1', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      { userId: vendors[1].userId, action: 'PRODUCT_UPDATE', entityType: 'Product', entityId: allProducts[15], details: 'Updated product price', oldValues: '{"price":999}', newValues: '{"price":899}', ipAddress: '10.0.0.2', userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' },
+    ],
+  });
+
+  // =============================================
+  // NEW MODEL SEED DATA
+  // =============================================
+
+  // 13. Create VendorWallet for all APPROVED vendors
+  for (const vendor of vendors) {
+    const availableBalance = randomPrice(5000, vendor.totalRevenue * 0.6);
+    const totalWithdrawn = randomPrice(1000, vendor.totalRevenue * 0.3);
+    const pendingBalance = vendor.totalRevenue - availableBalance - totalWithdrawn;
+    await db.vendorWallet.create({
+      data: {
+        vendorId: vendor.id,
+        availableBalance: Math.round(availableBalance * 100) / 100,
+        pendingBalance: Math.round(Math.max(0, pendingBalance) * 100) / 100,
+        totalEarned: Math.round(vendor.totalRevenue * 100) / 100,
+        totalWithdrawn: Math.round(totalWithdrawn * 100) / 100,
+      },
+    });
+  }
+
+  // 14. Create FAQs
+  await db.fAQ.createMany({
+    data: [
+      { question: 'How do I place an order?', answer: 'Browse products, add items to your cart, proceed to checkout, select a payment method, and confirm your order. You will receive an order confirmation email with tracking details.', category: 'GENERAL', sortOrder: 1, isActive: true },
+      { question: 'What payment methods are accepted?', answer: 'We accept Credit Cards, Debit Cards, UPI, Net Banking, and Cash on Delivery (COD). All online payments are secured with 256-bit encryption.', category: 'PAYMENT', sortOrder: 2, isActive: true },
+      { question: 'How long does delivery take?', answer: 'Standard delivery takes 3-7 business days depending on your location. Express delivery (available in select cities) takes 1-2 business days. You can track your order from the Orders section.', category: 'ORDER', sortOrder: 3, isActive: true },
+      { question: 'What is the return and refund policy?', answer: 'You can return most items within 7 days of delivery. Items must be unused and in original packaging. Refunds are processed within 5-7 business days after we receive the returned item.', category: 'REFUND', sortOrder: 4, isActive: true },
+      { question: 'How do I become a vendor on MarketHub?', answer: 'Click "Become a Seller" on our homepage, fill in your business details, upload required documents (GST, PAN, bank details), and submit for approval. Once approved, you can start listing products within 24 hours.', category: 'GENERAL', sortOrder: 5, isActive: true },
+    ],
+  });
+
+  // 15. Create FlashSales with items
+  const flashSale1 = await db.flashSale.create({
+    data: {
+      title: 'Lightning Deal - Electronics',
+      description: 'Grab electronics at unbeatable prices! Limited time offer.',
+      banner: 'https://placehold.co/1200x300/f59e0b/ffffff?text=Lightning+Deal+-+Electronics',
+      startDate: new Date('2025-01-01T00:00:00.000Z'),
+      endDate: new Date('2025-12-31T23:59:59.000Z'),
+      isActive: true,
+    },
+  });
+
+  // Get some electronics products for flash sale
+  const electronicsProducts = await db.product.findMany({
+    where: { categoryId: categoryMap['electronics'] },
+    take: 4,
+  });
+
+  for (let i = 0; i < electronicsProducts.length; i++) {
+    const prod = electronicsProducts[i];
+    const discount = randomInt(15, 40);
+    await db.flashSaleItem.create({
+      data: {
+        flashSaleId: flashSale1.id,
+        productId: prod.id,
+        salePrice: Math.round(prod.price * (1 - discount / 100) * 100) / 100,
+        originalPrice: prod.price,
+        discountPercent: discount,
+        totalStock: randomInt(20, 100),
+        soldCount: randomInt(5, 50),
+        sortOrder: i,
+      },
+    });
+  }
+
+  const flashSale2 = await db.flashSale.create({
+    data: {
+      title: 'Flash Sale - Fashion Week',
+      description: 'Style up with amazing fashion deals this week!',
+      banner: 'https://placehold.co/1200x300/e63946/ffffff?text=Flash+Sale+-+Fashion+Week',
+      startDate: new Date('2025-01-01T00:00:00.000Z'),
+      endDate: new Date('2025-12-31T23:59:59.000Z'),
+      isActive: true,
+    },
+  });
+
+  const fashionProducts = await db.product.findMany({
+    where: { categoryId: categoryMap['fashion'] },
+    take: 3,
+  });
+
+  for (let i = 0; i < fashionProducts.length; i++) {
+    const prod = fashionProducts[i];
+    const discount = randomInt(20, 50);
+    await db.flashSaleItem.create({
+      data: {
+        flashSaleId: flashSale2.id,
+        productId: prod.id,
+        salePrice: Math.round(prod.price * (1 - discount / 100) * 100) / 100,
+        originalPrice: prod.price,
+        discountPercent: discount,
+        totalStock: randomInt(30, 150),
+        soldCount: randomInt(10, 80),
+        sortOrder: i,
+      },
+    });
+  }
+
+  // 16. Create Deals
+  const dealProducts = await db.product.findMany({
+    where: { isFeatured: true },
+    take: 3,
+  });
+
+  for (let i = 0; i < dealProducts.length; i++) {
+    const prod = dealProducts[i];
+    const discount = randomInt(10, 35);
+    await db.deal.create({
+      data: {
+        title: `Deal of the Day - ${prod.name}`,
+        description: `Don't miss out on ${prod.name} at ${discount}% off! Limited time only.`,
+        productId: prod.id,
+        discountPercent: discount,
+        startDate: new Date('2025-01-01T00:00:00.000Z'),
+        endDate: new Date('2025-12-31T23:59:59.000Z'),
+        isActive: true,
+        sortOrder: i + 1,
+      },
+    });
+  }
+
+  // 17. Create SearchAnalytics
+  await db.searchAnalytics.createMany({
+    data: [
+      { query: 'wireless headphones', searchCount: 1250, resultCount: 8, noResults: false, lastSearched: new Date('2025-01-15T10:30:00.000Z') },
+      { query: 'iphone 15', searchCount: 980, resultCount: 3, noResults: false, lastSearched: new Date('2025-01-15T09:15:00.000Z') },
+      { query: 'laptop under 50000', searchCount: 756, resultCount: 12, noResults: false, lastSearched: new Date('2025-01-14T18:45:00.000Z') },
+      { query: 'running shoes', searchCount: 634, resultCount: 15, noResults: false, lastSearched: new Date('2025-01-15T11:00:00.000Z') },
+      { query: 'saree', searchCount: 521, resultCount: 9, noResults: false, lastSearched: new Date('2025-01-13T14:20:00.000Z') },
+      { query: 'yoga mat', searchCount: 412, resultCount: 6, noResults: false, lastSearched: new Date('2025-01-15T07:30:00.000Z') },
+      { query: 'smart watch', searchCount: 389, resultCount: 7, noResults: false, lastSearched: new Date('2025-01-14T16:00:00.000Z') },
+      { query: 'nonexistent product xyz', searchCount: 45, resultCount: 0, noResults: true, lastSearched: new Date('2025-01-12T22:10:00.000Z') },
+    ],
+  });
+
+  // 18. Create SearchHistory for a few users
+  await db.searchHistory.createMany({
+    data: [
+      { userId: customers[0], query: 'wireless headphones', results: 8 },
+      { userId: customers[0], query: 'laptop under 50000', results: 12 },
+      { userId: customers[1], query: 'running shoes', results: 15 },
+      { userId: customers[2], query: 'saree', results: 9 },
+      { sessionId: 'guest-session-abc123', query: 'smart watch', results: 7 },
+    ],
+  });
+
+  // 19. Create RecentlyViewed for some users
+  const recentlyViewedData = [];
+  for (let i = 0; i < 3; i++) {
+    const userId = customers[i];
+    const productIds = getRandomItems(allProducts, randomInt(3, 6));
+    for (const pid of productIds) {
+      recentlyViewedData.push({ userId, productId: pid });
+    }
+  }
+  await db.recentlyViewed.createMany({ data: recentlyViewedData });
+
+  // 20. Create SupportTickets with messages
+  const supportTicket1 = await db.supportTicket.create({
+    data: {
+      userId: customers[0],
+      subject: 'Order not received after expected delivery date',
+      status: 'IN_PROGRESS',
+      priority: 'HIGH',
+      category: 'ORDER',
+      assignedTo: admin.id,
+    },
+  });
+  await db.ticketMessage.createMany({
+    data: [
+      { ticketId: supportTicket1.id, userId: customers[0], message: 'I placed order #ORD-001003 on Jan 5th and the estimated delivery was Jan 10th, but I still haven\'t received it. Can you please check?', isStaff: false },
+      { ticketId: supportTicket1.id, userId: admin.id, message: 'I\'m sorry for the delay. I\'ve checked with the courier and there was a transit delay. Your order is expected to be delivered by Jan 13th. I\'ll keep you updated.', isStaff: true },
+    ],
+  });
+
+  const supportTicket2 = await db.supportTicket.create({
+    data: {
+      userId: customers[3],
+      subject: 'Wrong product delivered',
+      status: 'OPEN',
+      priority: 'URGENT',
+      category: 'PRODUCT',
+    },
+  });
+  await db.ticketMessage.createMany({
+    data: [
+      { ticketId: supportTicket2.id, userId: customers[3], message: 'I ordered a Wireless Bluetooth Headphone (Black) but received a wired earphone instead. This is completely wrong. I need a replacement ASAP.', isStaff: false },
+    ],
+  });
+
+  const supportTicket3 = await db.supportTicket.create({
+    data: {
+      userId: customers[5],
+      subject: 'Refund not processed for returned item',
+      status: 'RESOLVED',
+      priority: 'MEDIUM',
+      category: 'REFUND',
+      assignedTo: admin.id,
+    },
+  });
+  await db.ticketMessage.createMany({
+    data: [
+      { ticketId: supportTicket3.id, userId: customers[5], message: 'I returned a product on Dec 28th and the tracking shows it was delivered to your warehouse on Jan 2nd. But I still haven\'t received my refund of ₹1,299.', isStaff: false },
+      { ticketId: supportTicket3.id, userId: admin.id, message: 'Thank you for your patience. The refund has been processed to your original payment method. It should reflect in 3-5 business days. Reference: REF-2025-0089.', isStaff: true },
+      { ticketId: supportTicket3.id, userId: customers[5], message: 'Thank you! I received the refund today. Closing this ticket.', isStaff: false },
+    ],
+  });
+
+  const supportTicket4 = await db.supportTicket.create({
+    data: {
+      subject: 'Payment failed but amount deducted',
+      status: 'OPEN',
+      priority: 'HIGH',
+      category: 'PAYMENT',
+    },
+  });
+  await db.ticketMessage.createMany({
+    data: [
+      { ticketId: supportTicket4.id, message: 'I tried to place an order as a guest and the payment page showed "Transaction Failed" but ₹2,499 was deducted from my bank account. Order was not placed. Please help.', isStaff: false },
+    ],
+  });
+
+  // 21. Create ProductQA for some products
+  const qaProducts = getRandomItems(allProducts, 5);
+  for (const pid of qaProducts) {
+    const prod = await db.product.findUnique({ where: { id: pid } });
+    if (prod) {
+      await db.productQA.create({
+        data: {
+          productId: pid,
+          userId: customers[randomInt(0, customers.length - 1)],
+          question: `Is this ${prod.name.substring(0, 20)} available in different colors?`,
+          answer: 'Yes, this product is available in multiple color options. Please check the variants section on the product page.',
+          answeredBy: vendors[0].userId,
+          answeredAt: new Date(Date.now() - randomInt(1, 10) * 24 * 60 * 60 * 1000),
+        },
+      });
+    }
+  }
+
+  // 22. Create InventoryHistory for some products
+  const invProducts = getRandomItems(allProducts, 8);
+  for (const pid of invProducts) {
+    await db.inventoryHistory.createMany({
+      data: [
+        { productId: pid, type: 'ADDED', quantity: randomInt(20, 100), note: 'Initial stock' },
+        { productId: pid, type: 'SOLD', quantity: randomInt(1, 15), note: 'Customer order' },
+        { productId: pid, type: 'ADDED', quantity: randomInt(5, 30), note: 'Restocked by vendor' },
+      ],
+    });
+  }
+
+  // 23. Create Notifications for users
+  await db.notification.createMany({
+    data: [
+      { userId: customers[0], title: 'Order Shipped', message: 'Your order #ORD-001003 has been shipped! Track your delivery.', type: 'ORDER', link: '/orders', isRead: false },
+      { userId: customers[1], title: 'Price Drop Alert', message: 'A product in your wishlist has dropped in price by 20%!', type: 'PROMOTION', link: '/wishlist', isRead: false },
+      { userId: vendors[0].userId, title: 'New Order Received', message: 'You have received a new order. Please process it within 24 hours.', type: 'ORDER', isRead: true },
+      { userId: customers[2], title: 'Welcome to MarketHub!', message: 'Thank you for signing up. Use code WELCOME10 for 10% off your first order.', type: 'INFO', isRead: true },
+      { userId: null, title: 'Flash Sale Live Now!', message: 'Lightning deals on electronics are live. Grab them before they\'re gone!', type: 'PROMOTION', isRead: false },
     ],
   });
 
@@ -419,6 +760,12 @@ async function seed() {
   console.log(`   Products: ${allProducts.length}`);
   console.log(`   Categories: ${CATEGORIES.length}`);
   console.log(`   Brands: ${BRANDS.length}`);
+  console.log(`   FAQs: 5`);
+  console.log(`   FlashSales: 2`);
+  console.log(`   Deals: ${dealProducts.length}`);
+  console.log(`   VendorWallets: ${vendors.length}`);
+  console.log(`   SupportTickets: 4`);
+  console.log(`   SearchAnalytics: 8`);
 }
 
 seed()

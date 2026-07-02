@@ -10,7 +10,9 @@ import {
   Package, Truck, CheckCircle, Clock, Shield, Gift, TrendingUp,
   BarChart3, Users, ArrowRight, Eye, Share2, GitCompare, Tag,
   Store, CreditCard, Banknote, Smartphone, Building2, Home,
-  Settings, LogOut, Bell, Sun, Moon, Monitor, Filter, SlidersHorizontal
+  Settings, LogOut, Bell, Sun, Moon, Monitor, Filter, SlidersHorizontal,
+  Bookmark, Send, Printer, RotateCcw, XCircle,
+  MessageCircle, Facebook, Twitter, Link as LinkIcon, HelpCircle
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -42,6 +44,8 @@ import type { Product, Category, Brand, Order, Banner, CustomerAddress, ApiRespo
 
 const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 const discountPercent = (price: number, compare?: number | null) => compare ? Math.round(((compare - price) / compare) * 100) : 0;
+const badgeColors: Record<string, string> = { BEST_SELLER: 'bg-emerald-500 text-white', NEW_ARRIVAL: 'bg-blue-500 text-white', LIMITED_TIME: 'bg-red-500 text-white', FESTIVAL_OFFER: 'bg-amber-500 text-white' };
+const badgeLabels: Record<string, string> = { BEST_SELLER: 'Best Seller', NEW_ARRIVAL: 'New', LIMITED_TIME: 'Limited', FESTIVAL_OFFER: 'Festival' };
 
 function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
   const stars = [];
@@ -76,7 +80,12 @@ function ProductCard({ product }: { product: Product }) {
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground"><Package size={48} /></div>
           )}
-          {discount > 0 && <Badge className="absolute top-2 left-2 bg-red-500 text-white text-xs">{discount}% OFF</Badge>}
+          <div className="absolute top-2 left-2 flex flex-col gap-1">
+            {discount > 0 && <Badge className="bg-red-500 text-white text-xs">{discount}% OFF</Badge>}
+            {product.badge && (
+              <Badge className={badgeColors[product.badge] || 'bg-gray-500 text-white'}>{badgeLabels[product.badge]}</Badge>
+            )}
+          </div>
           {product.stock < 5 && product.stock > 0 && <Badge variant="secondary" className="absolute top-2 right-10 text-xs">Low Stock</Badge>}
           {product.stock === 0 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Badge variant="destructive">Out of Stock</Badge></div>}
           <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -128,15 +137,29 @@ function ProductGrid({ products, loading }: { products: Product[]; loading?: boo
 
 function CustomerHeader() {
   const { user, isAuthenticated, logout } = useAuthStore();
-  const { customerView, searchQuery, setSearchQuery, setCustomerView, setMobileMenuOpen, isMobileMenuOpen, isCartOpen, setCartOpen, setAppView, navigateTo } = useNavigationStore();
+  const { customerView, searchQuery, setSearchQuery, setCustomerView, setMobileMenuOpen, isMobileMenuOpen, isCartOpen, setCartOpen, setAppView, navigateTo, setSelectedProductId } = useNavigationStore();
   const { getItemCount } = useCartStore();
   const { setTheme, theme } = useTheme();
   const itemCount = getItemCount();
   const [searchInput, setSearchInput] = useState(searchQuery);
   const [mounted, setMounted] = useState(false);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => { setSearchInput(searchQuery); }, [searchQuery]);
   useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (!searchInput.trim()) { setSuggestions([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search/suggestions?q=${encodeURIComponent(searchInput)}`);
+        const data = await res.json();
+        setSuggestions(data.data || []);
+      } catch { setSuggestions([]); }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,11 +184,21 @@ function CustomerHeader() {
             <span className="text-xl font-bold hidden sm:block">MarketHub</span>
           </div>
 
-          <form onSubmit={handleSearch} className="flex-1 max-w-2xl mx-4">
+          <form onSubmit={handleSearch} className="flex-1 max-w-2xl mx-4 relative" onFocus={() => setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}>
             <div className="relative">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input placeholder="Search products, brands, categories..." value={searchInput} onChange={e => setSearchInput(e.target.value)} className="pl-10 pr-4 h-10 bg-muted/50" />
             </div>
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+                {suggestions.map((p: any) => (
+                  <div key={p.id} className="flex items-center gap-3 p-2 hover:bg-muted cursor-pointer" onClick={() => { setSearchQuery(p.name); setSearchInput(p.name); setShowSuggestions(false); setSelectedProductId(p.id); navigateTo('product-detail'); }}>
+                    <img src={p.images?.[0]?.url || ''} className="w-8 h-8 object-cover rounded" alt="" />
+                    <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{p.name}</p><p className="text-xs text-muted-foreground">₹{p.price.toLocaleString('en-IN')}</p></div>
+                  </div>
+                ))}
+              </div>
+            )}
           </form>
 
           <div className="flex items-center gap-1">
@@ -336,7 +369,29 @@ function HomePage() {
   const { data: featuredData } = useQuery({ queryKey: ['products', 'featured'], queryFn: () => fetch('/api/products?featured=true&limit=8').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
   const { data: newArrivals } = useQuery({ queryKey: ['products', 'new'], queryFn: () => fetch('/api/products?limit=8&sort=newest').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
   const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: ApiResponse<Brand[]>) => r.data || []) });
+  const { data: popularSearches } = useQuery({ queryKey: ['popular-searches'], queryFn: () => fetch('/api/search/popular').then(r => r.json()).then((r: any) => r.data || []) });
+  const { setSelectedCategory, setCustomerView, setSearchQuery } = useNavigationStore();
   const [bannerIdx, setBannerIdx] = useState(0);
+
+  // Recently Viewed
+  const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const stored = localStorage.getItem('marketplace-recently-viewed');
+      return stored ? JSON.parse(stored).slice(0, 6) : [];
+    } catch { return []; }
+  });
+
+  const { data: recentlyViewedProducts } = useQuery({
+    queryKey: ['recently-viewed', recentlyViewedIds],
+    queryFn: async () => {
+      if (!recentlyViewedIds.length) return [];
+      const res = await fetch('/api/products?limit=50');
+      const data = await res.json();
+      return (data.data || []).filter((p: Product) => recentlyViewedIds.includes(p.id));
+    },
+    enabled: recentlyViewedIds.length > 0,
+  });
 
   useEffect(() => {
     if ((banners?.length || 0) > 1) {
@@ -344,8 +399,6 @@ function HomePage() {
       return () => clearInterval(timer);
     }
   }, [banners?.length]);
-
-  const { setSelectedCategory, setCustomerView } = useNavigationStore();
 
   return (
     <div className="space-y-10 pb-10">
@@ -433,6 +486,33 @@ function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* Popular Searches */}
+      {popularSearches && (popularSearches as any[]).length > 0 && (
+        <section className="container mx-auto px-4">
+          <h2 className="text-xl font-bold mb-4">Popular Searches</h2>
+          <div className="flex flex-wrap gap-2">
+            {(popularSearches as any[]).map((s: any, i: number) => (
+              <Button key={i} variant="outline" size="sm" className="rounded-full" onClick={() => { setSearchQuery(s.query || s); setCustomerView('products'); }}>
+                <Search size={14} className="mr-1.5" />{s.query || s}
+              </Button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Recently Viewed */}
+      {recentlyViewedProducts && recentlyViewedProducts.length > 0 && (
+        <section className="container mx-auto px-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold">Recently Viewed</h2>
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { try { localStorage.removeItem('marketplace-recently-viewed'); } catch {} setRecentlyViewedIds([]); }}>
+              <Trash2 size={14} className="mr-1.5" />Clear
+            </Button>
+          </div>
+          <ProductGrid products={recentlyViewedProducts} />
+        </section>
+      )}
     </div>
   );
 }
@@ -587,6 +667,24 @@ function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('specs');
 
+  const { data: similarProducts = [] } = useQuery({
+    queryKey: ['similar-products', selectedProductId, product?.categoryId],
+    queryFn: () => fetch(`/api/products?categoryId=${product?.categoryId}&limit=4`).then(r => r.json()).then((r: any) => (r.data || []).filter((p: any) => p.id !== selectedProductId).slice(0, 4)),
+    enabled: !!product?.categoryId,
+  });
+
+  const { data: frequentlyBought = [] } = useQuery({
+    queryKey: ['frequently-bought', selectedProductId, product?.vendorId],
+    queryFn: () => fetch(`/api/products?vendorId=${product?.vendorId}&limit=4`).then(r => r.json()).then((r: any) => (r.data || []).filter((p: any) => p.id !== selectedProductId).slice(0, 4)),
+    enabled: !!product?.vendorId,
+  });
+
+  const { data: qaList = [] } = useQuery({
+    queryKey: ['product-qa', selectedProductId],
+    queryFn: () => fetch(`/api/products/${selectedProductId}/qa`).then(r => r.json()).then((r: any) => r.data || []),
+    enabled: !!selectedProductId,
+  });
+
   const variantsByType = useMemo(() => {
     const map: Record<string, string[]> = {};
     product?.variants?.forEach(v => { if (!map[v.name]) map[v.name] = []; if (!map[v.name].includes(v.value)) map[v.name].push(v.value); });
@@ -690,8 +788,19 @@ function ProductDetailPage() {
             </Button>
           </div>
 
+          {/* Share Buttons */}
+          <div className="flex items-center gap-2 mt-3">
+            <span className="text-sm text-muted-foreground">Share:</span>
+            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(product.name + ' ' + window.location.href)}`)}><MessageCircle size={14} /></Button>
+            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`)}><Facebook size={14} /></Button>
+            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(product.name)}&url=${encodeURIComponent(window.location.href)}`)}><Twitter size={14} /></Button>
+            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success('Link copied!'); }}><LinkIcon size={14} /></Button>
+          </div>
+
           {/* Features */}
-          <div className="grid grid-cols-2 gap-3 pt-2">
+          <div className="grid grid-cols-1 gap-3 pt-2">
+            <div className="flex items-center gap-2 text-sm"><Truck size={16} className="text-orange-500" /><span>Estimated delivery: {product.estimatedDeliveryDays || 5}-{(product.estimatedDeliveryDays || 5) + 3} business days</span></div>
+            <div className="grid grid-cols-2 gap-3">
             {[
               { icon: <Truck size={16} />, text: 'Free delivery above ₹500' },
               { icon: <RefreshCw size={16} />, text: '7-day easy returns' },
@@ -700,16 +809,17 @@ function ProductDetailPage() {
             ].map((f, i) => (
               <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground"><span className="text-orange-500">{f.icon}</span>{f.text}</div>
             ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Tabs: Description, Specs, Reviews */}
+      {/* Tabs: Description, Specs, Reviews, Q&A */}
       <div className="mt-10">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start border-b rounded-none h-auto p-0">
-            {['specs', 'description', 'reviews'].map(t => (
-              <TabsTrigger key={t} value={t} className="rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:shadow-none px-6 py-3 capitalize">{t}</TabsTrigger>
+            {['specs', 'description', 'reviews', 'qa'].map(t => (
+              <TabsTrigger key={t} value={t} className="rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:shadow-none px-6 py-3 capitalize">{t === 'qa' ? 'Q&A' : t}</TabsTrigger>
             ))}
           </TabsList>
           <TabsContent value="specs" className="pt-4">
@@ -725,8 +835,29 @@ function ProductDetailPage() {
           <TabsContent value="reviews" className="pt-4">
             <ReviewsSection productId={product.id} reviews={product.reviews || []} reviewCount={product._count?.reviews || 0} rating={product.rating} />
           </TabsContent>
+          <TabsContent value="qa" className="pt-4">
+            <p className="text-muted-foreground text-center py-8">No questions yet for this product.</p>
+          </TabsContent>
         </Tabs>
       </div>
+
+      {/* Similar Products */}
+      {similarProducts.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-xl font-bold mb-4">Similar Products</h2>
+          <ProductGrid products={similarProducts} />
+        </div>
+      )}
+
+      {/* Frequently Bought Together */}
+      {frequentlyBought.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-xl font-bold mb-4">Frequently Bought Together</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {frequentlyBought.map(p => <ProductCard key={p.id} product={p} />)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -793,13 +924,106 @@ function ReviewsSection({ productId, reviews, reviewCount, rating }: { productId
   );
 }
 
+function ProductQASection({ productId, qaList }: { productId: string; qaList: any[] }) {
+  const { isAuthenticated, user } = useAuthStore();
+  const queryClient = useQueryClient();
+  const [showDialog, setShowDialog] = useState(false);
+  const [question, setQuestion] = useState('');
+
+  const submitQuestion = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/products/${productId}/qa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user!.id, question }),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['product-qa', productId] });
+      toast.success('Question submitted!');
+      setShowDialog(false);
+      setQuestion('');
+    },
+    onError: () => toast.error('Failed to submit question'),
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <HelpCircle size={20} className="text-orange-500" />
+          <h3 className="text-lg font-bold">Questions & Answers</h3>
+          <Badge variant="secondary">{qaList.length}</Badge>
+        </div>
+        <Button variant="outline" onClick={() => { if (!isAuthenticated) { toast.info('Please login to ask a question'); return; } setShowDialog(true); }}>
+          <Send size={14} className="mr-1.5" />Ask Question
+        </Button>
+      </div>
+
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ask a Question</DialogTitle>
+            <DialogDescription>Get answers from the community and seller</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Your Question</Label>
+              <Textarea placeholder="What would you like to know about this product?" value={question} onChange={e => setQuestion(e.target.value)} className="mt-1" rows={3} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
+            <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => submitQuestion.mutate()} disabled={!question.trim() || submitQuestion.isPending}>
+              {submitQuestion.isPending ? 'Submitting...' : 'Submit Question'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="space-y-4">
+        {qaList.length === 0 && (
+          <p className="text-muted-foreground text-center py-8">No questions yet. Be the first to ask!</p>
+        )}
+        {qaList.map((qa: any) => (
+          <Card key={qa.id} className="p-4">
+            <div className="flex items-start gap-3">
+              <Avatar className="h-8 w-8 shrink-0"><AvatarFallback className="text-xs">{qa.user?.name?.[0] || 'U'}</AvatarFallback></Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-sm">{qa.user?.name || 'Anonymous'}</p>
+                  <span className="text-xs text-muted-foreground">{new Date(qa.createdAt).toLocaleDateString()}</span>
+                </div>
+                <p className="text-sm mt-1">{qa.question}</p>
+                {qa.answer && (
+                  <div className="mt-3 ml-4 pl-4 border-l-2 border-orange-500 bg-orange-50 dark:bg-orange-900/10 rounded-r-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Seller Answer</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{qa.answer}</p>
+                  </div>
+                )}
+                {!qa.answer && (
+                  <p className="text-xs text-muted-foreground mt-1 italic">No answer yet</p>
+                )}
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ============ CART PAGE ============
 
 function CartPage() {
-  const { items, removeItem, updateQuantity, getSubtotal, getShipping, getTax, getTotal, couponCode, couponDiscount, applyCoupon, removeCoupon, clearCart } = useCartStore();
+  const { items, removeItem, updateQuantity, getSubtotal, getShipping, getTax, getTotal, couponCode, couponDiscount, applyCoupon, removeCoupon, clearCart, addItem } = useCartStore();
   const { navigateTo, isAuthenticated } = useNavigationStore();
   const { data: coupons } = useQuery({ queryKey: ['coupons'], queryFn: () => fetch('/api/coupons').then(r => r.json()).then((r: ApiResponse<any[]>) => r.data || []) });
   const [couponInput, setCouponInput] = useState('');
+  const [savedForLater, setSavedForLater] = useState<any[]>([]);
   const qc = useQueryClient();
 
   const handleApplyCoupon = () => {
@@ -844,13 +1068,30 @@ function CartPage() {
                   <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.productId, item.quantity - 1)}><Minus size={14} /></Button>
                   <span className="w-8 text-center">{item.quantity}</span>
                   <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.productId, Math.min(item.stock, item.quantity + 1))}><Plus size={14} /></Button>
-                  <Button size="sm" variant="ghost" className="text-destructive ml-auto" onClick={() => { removeItem(item.productId); toast.success('Removed'); }}><Trash2 size={16} className="mr-1" />Remove</Button>
+                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { removeItem(item.productId); toast.success('Removed'); }}><Trash2 size={16} className="mr-1" />Remove</Button>
+                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => { setSavedForLater(prev => [...prev, item]); removeItem(item.productId); toast.success('Saved for later'); }}>
+                    <Bookmark size={14} className="mr-1" />Save for Later
+                  </Button>
                 </div>
               </div>
               <div className="text-right shrink-0"><p className="font-bold">{formatCurrency(item.price * item.quantity)}</p></div>
             </Card>
           ))}
         </div>
+        {savedForLater.length > 0 && (
+          <Card className="p-4 mt-4">
+            <h3 className="font-bold mb-3">Saved for Later ({savedForLater.length})</h3>
+            <div className="space-y-2">
+              {savedForLater.map(item => (
+                <div key={item.productId} className="flex items-center gap-3 p-2 border rounded-lg">
+                  {item.image && <img src={item.image} className="w-12 h-12 object-cover rounded" alt="" />}
+                  <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{item.name}</p><p className="text-sm text-orange-500 font-bold">₹{item.price.toLocaleString('en-IN')}</p></div>
+                  <Button size="sm" onClick={() => { setSavedForLater(prev => prev.filter(i => i.productId !== item.productId)); addItem(item); toast.success('Moved to cart'); }}>Move to Cart</Button>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
         <div>
           <Card className="p-6 sticky top-24 space-y-4">
             <h3 className="font-bold text-lg">Order Summary</h3>
@@ -867,6 +1108,16 @@ function CartPage() {
             ) : (
               <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 p-2 rounded"><span className="text-sm text-green-600">Code: {couponCode}</span><Button variant="ghost" size="sm" className="text-destructive h-6" onClick={removeCoupon}>Remove</Button></div>
             )}
+            <div className="mt-3">
+              <p className="text-xs text-muted-foreground mb-2">Available Coupons:</p>
+              <div className="flex flex-wrap gap-2">
+                {coupons?.filter((c: any) => c.isActive).slice(0, 3).map((c: any) => (
+                  <Badge key={c.id} variant="outline" className="cursor-pointer hover:bg-orange-50 text-xs" onClick={() => setCouponInput(c.code)}>
+                    {c.code} - {c.discountType === 'PERCENTAGE' ? `${c.discountValue}% off` : `₹${c.discountValue} off`}
+                  </Badge>
+                ))}
+              </div>
+            </div>
             <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 text-lg" onClick={() => { if (!isAuthenticated) { navigateTo('login'); toast.info('Please login first'); return; } navigateTo('checkout'); }}>
               Proceed to Checkout
             </Button>
@@ -887,16 +1138,34 @@ function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState('COD');
   const [address, setAddress] = useState({ fullName: user?.name || '', phone: user?.phone || '', addressLine1: '', city: '', state: '', pincode: '' });
   const [placing, setPlacing] = useState(false);
+  const [isGuest, setIsGuest] = useState(!isAuthenticated);
+  const [guestInfo, setGuestInfo] = useState({ email: '', phone: '' });
+  const [sameAddress, setSameAddress] = useState(true);
+  const [billingForm, setBillingForm] = useState({ fullName: '', phone: '', address: '', city: '', state: '', pincode: '' });
   const qc = useQueryClient();
 
-  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
-  useEffect(() => { if (isAuthenticated && items.length === 0) navigateTo('cart'); }, [isAuthenticated, items.length, navigateTo]);
-  if (!isAuthenticated) return null;
+  useEffect(() => { if (items.length === 0) navigateTo('cart'); }, [items.length, navigateTo]);
   if (items.length === 0) return null;
+  if (!isAuthenticated && !isGuest) {
+    return (
+      <div className="container mx-auto px-4 py-16 max-w-lg text-center space-y-4">
+        <Package size={64} className="mx-auto text-muted-foreground/30" />
+        <h2 className="text-xl font-bold">Continue to Checkout</h2>
+        <p className="text-muted-foreground">Log in for a faster experience, or continue as guest.</p>
+        <div className="flex gap-3 justify-center">
+          <Button variant="outline" onClick={() => navigateTo('login')}>Login</Button>
+          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setIsGuest(true)}>Continue as Guest</Button>
+        </div>
+      </div>
+    );
+  }
 
   const handlePlaceOrder = async () => {
     if (!address.fullName || !address.phone || !address.addressLine1 || !address.city || !address.pincode) {
       toast.error('Please fill all address fields'); return;
+    }
+    if (!isAuthenticated && (!guestInfo.email || !guestInfo.phone)) {
+      toast.error('Please fill guest email and phone'); return;
     }
     setPlacing(true);
     try {
@@ -904,7 +1173,7 @@ function CheckoutPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user!.id,
+          ...(isAuthenticated ? { userId: user!.id } : { guestEmail: guestInfo.email, guestPhone: guestInfo.phone }),
           items: items.map(i => ({ productId: i.productId, quantity: i.quantity })),
           shippingAddress: `${address.fullName}, ${address.addressLine1}, ${address.city}, ${address.state} - ${address.pincode}, Phone: ${address.phone}`,
           paymentMethod,
@@ -924,6 +1193,15 @@ function CheckoutPage() {
   return (
     <div className="container mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold mb-6">Checkout</h1>
+      {isGuest && !isAuthenticated && (
+        <Card className="p-4 mb-4">
+          <h3 className="font-semibold mb-3">Guest Information</h3>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div><Label>Email *</Label><Input className="mt-1" type="email" value={guestInfo.email} onChange={e => setGuestInfo(g => ({...g, email: e.target.value}))} /></div>
+            <div><Label>Phone *</Label><Input className="mt-1" value={guestInfo.phone} onChange={e => setGuestInfo(g => ({...g, phone: e.target.value}))} /></div>
+          </div>
+        </Card>
+      )}
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <Card className="p-6">
@@ -937,6 +1215,24 @@ function CheckoutPage() {
               <div><Label>Pincode</Label><Input value={address.pincode} onChange={e => setAddress(a => ({...a, pincode: e.target.value}))} className="mt-1" /></div>
             </div>
           </Card>
+
+          <div className="flex items-center gap-2 mb-4">
+            <Checkbox id="same-billing" checked={sameAddress} onCheckedChange={(v) => setSameAddress(v === true)} />
+            <Label htmlFor="same-billing" className="text-sm">Billing address same as shipping</Label>
+          </div>
+          {!sameAddress && (
+            <Card className="p-4 mb-4 border-dashed">
+              <h3 className="font-semibold mb-3">Billing Address</h3>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div><Label>Full Name</Label><Input className="mt-1" value={billingForm.fullName} onChange={e => setBillingForm(f => ({...f, fullName: e.target.value}))} /></div>
+                <div><Label>Phone</Label><Input className="mt-1" value={billingForm.phone} onChange={e => setBillingForm(f => ({...f, phone: e.target.value}))} /></div>
+                <div className="sm:col-span-2"><Label>Address</Label><Textarea className="mt-1" rows={2} value={billingForm.address} onChange={e => setBillingForm(f => ({...f, address: e.target.value}))} /></div>
+                <div><Label>City</Label><Input className="mt-1" value={billingForm.city} onChange={e => setBillingForm(f => ({...f, city: e.target.value}))} /></div>
+                <div><Label>State</Label><Input className="mt-1" value={billingForm.state} onChange={e => setBillingForm(f => ({...f, state: e.target.value}))} /></div>
+                <div><Label>Pincode</Label><Input className="mt-1" value={billingForm.pincode} onChange={e => setBillingForm(f => ({...f, pincode: e.target.value}))} /></div>
+              </div>
+            </Card>
+          )}
 
           <Card className="p-6">
             <h2 className="font-bold text-lg mb-4 flex items-center gap-2"><CreditCard size={20} className="text-orange-500" />Payment Method</h2>
@@ -1026,6 +1322,13 @@ function OrdersPage() {
 function OrderDetailPage() {
   const { user, isAuthenticated } = useAuthStore();
   const { selectedOrderId, navigateTo } = useNavigationStore();
+  const { addItem } = useCartStore();
+  const qc = useQueryClient();
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showReturnDialog, setShowReturnDialog] = useState(false);
+  const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
   const { data: order, isLoading } = useQuery({
     queryKey: ['order', selectedOrderId],
     queryFn: () => fetch(`/api/orders/${selectedOrderId}`).then(r => r.json()).then((r: ApiResponse<Order>) => r.data),
@@ -1043,6 +1346,28 @@ function OrderDetailPage() {
     NEW: 'bg-blue-100 text-blue-700', PROCESSING: 'bg-amber-100 text-amber-700', PACKED: 'bg-purple-100 text-purple-700',
     SHIPPED: 'bg-orange-100 text-orange-700', DELIVERED: 'bg-green-100 text-green-700', CANCELLED: 'bg-red-100 text-red-700',
   };
+
+  const handleReorder = async () => {
+    if (!order.items) return;
+    order.items.forEach(item => {
+      for (let i = 0; i < item.quantity; i++) {
+        addItem({ productId: item.productId, name: item.productName, price: item.price, image: item.productImage || '', vendorName: item.vendorName || '', vendorId: item.vendorId, stock: 999 });
+      }
+    });
+    toast.success('Items added to cart');
+    navigateTo('cart');
+  };
+
+  const cancelMutation = useMutation({
+    mutationFn: () => fetch(`/api/orders/${selectedOrderId}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: cancelReason }) }).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Order cancelled'); setShowCancelDialog(false); },
+  });
+  const returnMutation = useMutation({
+    mutationFn: () => fetch(`/api/orders/${selectedOrderId}/return`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: returnReason }) }).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Return request submitted'); setShowReturnDialog(false); },
+  });
+
+  const handleInvoice = () => { setShowInvoiceDialog(true); };
 
   return (
     <div className="container mx-auto px-4 py-6">
@@ -1075,6 +1400,13 @@ function OrderDetailPage() {
             ))}</div>
           </Card>
           {order.trackingId && <Card className="p-4"><p className="text-sm text-muted-foreground">Tracking ID</p><p className="font-medium">{order.trackingId}</p>{order.courierName && <p className="text-sm text-muted-foreground">Courier: {order.courierName}</p>}</Card>}
+          {/* Actions */}
+          <div className="flex flex-wrap gap-2 mt-4">
+            {order?.status === 'NEW' && <Button variant="destructive" size="sm" onClick={() => setShowCancelDialog(true)}><XCircle size={14} className="mr-1" />Cancel Order</Button>}
+            {order?.status === 'DELIVERED' && <Button variant="outline" size="sm" onClick={() => setShowReturnDialog(true)}><RotateCcw size={14} className="mr-1" />Request Return</Button>}
+            <Button variant="outline" size="sm" onClick={handleReorder}><ShoppingCart size={14} className="mr-1" />Reorder</Button>
+            <Button variant="outline" size="sm" onClick={handleInvoice}><Printer size={14} className="mr-1" />Download Invoice</Button>
+          </div>
         </div>
         <Card className="p-6 h-fit space-y-3">
           <h3 className="font-bold">Order Summary</h3>
@@ -1095,6 +1427,68 @@ function OrderDetailPage() {
           <div className="text-sm"><p className="text-muted-foreground mb-1">Shipping Address</p><p>{order.shippingAddress}</p></div>
         </Card>
       </div>
+
+      {/* Cancel Order Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent><DialogHeader><DialogTitle>Cancel Order</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">Are you sure? This action cannot be undone.</p>
+        <Textarea placeholder="Reason for cancellation (optional)" value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
+        <DialogFooter><Button variant="outline" onClick={() => setShowCancelDialog(false)}>Keep Order</Button><Button variant="destructive" onClick={() => cancelMutation.mutate()} disabled={cancelMutation.isPending}>Cancel Order</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Return Order Dialog */}
+      <Dialog open={showReturnDialog} onOpenChange={setShowReturnDialog}>
+        <DialogContent><DialogHeader><DialogTitle>Request Return</DialogTitle></DialogHeader>
+        <Select value={returnReason} onValueChange={setReturnReason}><SelectTrigger><SelectValue placeholder="Select reason" /></SelectTrigger>
+          <SelectContent><SelectItem value="defective">Defective Product</SelectItem><SelectItem value="wrong">Wrong Item Received</SelectItem><SelectItem value="not_as_described">Not as Described</SelectItem><SelectItem value="changed_mind">Changed My Mind</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select>
+        <DialogFooter><Button variant="outline" onClick={() => setShowReturnDialog(false)}>Cancel</Button><Button onClick={() => returnMutation.mutate()} disabled={!returnReason || returnMutation.isPending}>Submit Request</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invoice Dialog */}
+      <Dialog open={showInvoiceDialog} onOpenChange={setShowInvoiceDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Printer size={18} />Invoice - Order #{order.orderNumber}</DialogTitle>
+          </DialogHeader>
+          <div id="invoice-content" className="border rounded-lg p-6 space-y-4 bg-white text-black dark:bg-white dark:text-black">
+            <div className="flex justify-between items-start">
+              <div><h2 className="text-xl font-bold text-orange-600">MarketHub</h2><p className="text-sm text-gray-500">Your one-stop marketplace</p></div>
+              <div className="text-right"><p className="font-bold">INVOICE</p><p className="text-sm text-gray-500">#{order.orderNumber}</p><p className="text-sm text-gray-500">{new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
+            </div>
+            <Separator />
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div><p className="font-medium text-gray-500">Bill To</p><p className="font-medium">{user?.name}</p><p>{user?.email}</p></div>
+              <div className="text-right"><p className="font-medium text-gray-500">Ship To</p><p>{order.shippingAddress}</p></div>
+            </div>
+            <Separator />
+            <table className="w-full text-sm">
+              <thead><tr className="border-b"><th className="text-left py-2">Item</th><th className="text-center py-2">Qty</th><th className="text-right py-2">Price</th><th className="text-right py-2">Total</th></tr></thead>
+              <tbody>
+                {order.items?.map(item => (
+                  <tr key={item.id} className="border-b"><td className="py-2">{item.productName}</td><td className="text-center py-2">{item.quantity}</td><td className="text-right py-2">{formatCurrency(item.price)}</td><td className="text-right py-2">{formatCurrency(item.total)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex justify-end">
+              <div className="w-48 space-y-1 text-sm">
+                <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(order.subtotal)}</span></div>
+                <div className="flex justify-between"><span>Shipping</span><span>{order.shippingCost === 0 ? 'FREE' : formatCurrency(order.shippingCost)}</span></div>
+                <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(order.tax)}</span></div>
+                {order.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(order.discount)}</span></div>}
+                <Separator />
+                <div className="flex justify-between font-bold text-base"><span>Total</span><span className="text-orange-600">{formatCurrency(order.total)}</span></div>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 text-center">Thank you for shopping with MarketHub!</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowInvoiceDialog(false)}>Close</Button>
+            <Button variant="outline" onClick={() => { window.print(); }}><Printer size={14} className="mr-1" />Print</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

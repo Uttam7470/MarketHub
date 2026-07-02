@@ -1,0 +1,1185 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useMemo } from 'react';
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→import { motion } from 'framer-motion';
+     6→import { toast } from 'sonner';
+     7→import {
+     8→  Package, ShoppingCart, DollarSign, Star, TrendingUp, BarChart3, Plus, Pencil, Trash2,
+     9→  Search, Filter, Eye, ChevronLeft, ChevronRight, Upload, Settings, Bell, LogOut,
+    10→  Store, Menu, X, User, AlertTriangle, CheckCircle, Clock, Truck, BoxIcon, XCircle, ShieldCheck,
+    11→  Wallet, Copy, Printer, ArrowDownUp, FileText, RotateCcw, Ban
+    12→} from 'lucide-react';
+    13→
+    14→import { Button } from '@/components/ui/button';
+    15→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    16→import { Input } from '@/components/ui/input';
+    17→import { Label } from '@/components/ui/label';
+    18→import { Badge } from '@/components/ui/badge';
+    19→import { Separator } from '@/components/ui/separator';
+    20→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    21→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    22→import { Textarea } from '@/components/ui/textarea';
+    23→import { Skeleton } from '@/components/ui/skeleton';
+    24→import { ScrollArea } from '@/components/ui/scroll-area';
+    25→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    26→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+    27→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+    28→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    29→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    30→import { useAuthStore, useNavigationStore } from '@/stores';
+    31→import type { Product, Order, ApiResponse, VendorDashboardStats, VendorWallet, WalletTransaction } from '@/types';
+    32→
+    33→const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    34→
+    35→function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
+    36→  const stars = [];
+    37→  for (let i = 1; i <= 5; i++) {
+    38→    if (i <= Math.floor(rating)) stars.push(<Star key={i} className="fill-amber-400 text-amber-400" size={size} />);
+    39→    else if (i - 0.5 <= rating) stars.push(<Star key={i} className="fill-amber-400 text-amber-400" size={size} style={{ clipPath: 'inset(0 50% 0 0)' }} />);
+    40→    else stars.push(<Star key={i} className="text-muted-foreground/30" size={size} />);
+    41→  }
+    42→  return <span className="inline-flex items-center gap-0.5">{stars}</span>;
+    43→}
+    44→
+    45→// ============ VENDOR LAYOUT ============
+    46→
+    47→const VENDOR_NAV = [
+    48→  { key: 'vendor-dashboard', label: 'Dashboard', icon: BarChart3 },
+    49→  { key: 'vendor-products', label: 'Products', icon: Package },
+    50→  { key: 'vendor-add-product', label: 'Add Product', icon: Plus },
+    51→  { key: 'vendor-orders', label: 'Orders', icon: ShoppingCart },
+    52→  { key: 'vendor-reports', label: 'Reports', icon: TrendingUp },
+    53→  { key: 'vendor-wallet', label: 'Wallet', icon: Wallet },
+    54→  { key: 'vendor-profile', label: 'Profile', icon: User },
+    55→  { key: 'vendor-settings', label: 'Settings', icon: Settings },
+    56→];
+    57→
+    58→function VendorSidebar() {
+    59→  const { vendorView, setVendorView, setAppView } = useNavigationStore();
+    60→  const { user, vendorId, logout } = useAuthStore();
+    61→  const [collapsed, setCollapsed] = useState(false);
+    62→
+    63→  return (
+    64→    <aside className={`${collapsed ? 'w-16' : 'w-64'} border-r bg-card flex flex-col transition-all duration-300 hidden lg:flex`}>
+    65→      <div className="p-4 border-b flex items-center gap-3">
+    66→        <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-500 font-bold shrink-0">{user?.name?.[0]}</div>
+    67→        {!collapsed && <div className="min-w-0"><p className="font-semibold text-sm truncate">{user?.name}</p><p className="text-xs text-muted-foreground truncate">Vendor Panel</p></div>}
+    68→      </div>
+    69→      <ScrollArea className="flex-1 py-2">
+    70→        <nav className="px-2 space-y-1">
+    71→          {VENDOR_NAV.map(item => (
+    72→            <TooltipProvider key={item.key} delayDuration={0}>
+    73→              <Tooltip>
+    74→                <TooltipTrigger asChild>
+    75→                  <Button variant={vendorView === item.key ? 'secondary' : 'ghost'} size="sm" className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => setVendorView(item.key as any)}>
+    76→                    <item.icon size={18} />
+    77→                    {!collapsed && <span>{item.label}</span>}
+    78→                  </Button>
+    79→                </TooltipTrigger>
+    80→                {collapsed && <TooltipContent side="right">{item.label}</TooltipContent>}
+    81→              </Tooltip>
+    82→            </TooltipProvider>
+    83→          ))}
+    84→        </nav>
+    85→      </ScrollArea>
+    86→      <div className="p-3 border-t space-y-1">
+    87→        <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''} text-muted-foreground`} onClick={() => { logout(); setAppView('customer'); toast.success('Logged out'); }}>
+    88→          <LogOut size={18} />{!collapsed && <span>Logout</span>}
+    89→        </Button>
+    90→        <Button variant="ghost" size="sm" className="w-full justify-center lg:hidden" onClick={() => setCollapsed(!collapsed)}>
+    91→          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+    92→        </Button>
+    93→      </div>
+    94→    </aside>
+    95→  );
+    96→}
+    97→
+    98→function VendorMobileHeader() {
+    99→  const { user, logout } = useAuthStore();
+   100→  const { vendorView, setVendorView, setAppView } = useNavigationStore();
+   101→  const [open, setOpen] = useState(false);
+   102→
+   103→  return (
+   104→    <header className="lg:hidden sticky top-0 z-50 bg-background border-b px-4 h-14 flex items-center justify-between">
+   105→      <div className="flex items-center gap-2">
+   106→        <Button variant="ghost" size="icon" onClick={() => setOpen(true)}><Menu size={20} /></Button>
+   107→        <Store size={20} className="text-orange-500" />
+   108→        <span className="font-bold">Vendor Panel</span>
+   109→      </div>
+   110→      <div className="flex items-center gap-2">
+   111→        <Avatar className="h-8 w-8"><AvatarFallback className="text-xs bg-orange-100 text-orange-600">{user?.name?.[0]}</AvatarFallback></Avatar>
+   112→      </div>
+   113→      {open && (
+   114→        <div className="fixed inset-0 z-50">
+   115→          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
+   116→          <div className="absolute left-0 top-0 bottom-0 w-72 bg-background border-r p-4 space-y-2">
+   117→            <div className="flex items-center justify-between mb-4"><span className="font-bold">Menu</span><Button variant="ghost" size="icon" onClick={() => setOpen(false)}><X size={20} /></Button></div>
+   118→            {VENDOR_NAV.map(item => (
+   119→              <Button key={item.key} variant={vendorView === item.key ? 'secondary' : 'ghost'} className="w-full justify-start gap-3" onClick={() => { setVendorView(item.key as any); setOpen(false); }}>
+   120→                <item.icon size={18} />{item.label}
+   121→              </Button>
+   122→            ))}
+   123→            <Separator />
+   124→            <Button variant="ghost" className="w-full justify-start gap-3 text-destructive" onClick={() => { logout(); setAppView('customer'); }}><LogOut size={18} />Logout</Button>
+   125→          </div>
+   126→        </div>
+   127→      )}
+   128→    </header>
+   129→  );
+   130→}
+   131→
+   132→// ============ VENDOR DASHBOARD ============
+   133→
+   134→function VendorDashboard() {
+   135→  const { vendorId } = useAuthStore();
+   136→  const { data, isLoading } = useQuery({
+   137→    queryKey: ['vendor-dashboard', vendorId],
+   138→    queryFn: () => fetch(`/api/vendor/dashboard?vendorId=${vendorId}`).then(r => r.json()).then((r: ApiResponse<VendorDashboardStats>) => r.data),
+   139→    enabled: !!vendorId,
+   140→  });
+   141→
+   142→  if (isLoading) return <div className="p-6 space-y-4">{Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>;
+   143→  if (!data) return <div className="p-6 text-center text-muted-foreground">Failed to load dashboard</div>;
+   144→
+   145→  const stats = [
+   146→    { label: 'Total Revenue', value: formatCurrency(data.totalRevenue), icon: DollarSign, color: 'text-green-600 bg-green-100 dark:bg-green-900/30' },
+   147→    { label: 'Total Orders', value: String(data.totalOrders), icon: ShoppingCart, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30' },
+   148→    { label: 'Products', value: String(data.totalProducts), icon: Package, color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30' },
+   149→    { label: 'Avg Rating', value: data.avgRating?.toFixed(1) || '0', icon: Star, color: 'text-amber-600 bg-amber-100 dark:bg-amber-900/30' },
+   150→  ];
+   151→
+   152→  return (
+   153→    <div className="p-6 space-y-6">
+   154→      <div>
+   155→        <h1 className="text-2xl font-bold">Dashboard</h1>
+   156→        <p className="text-muted-foreground">Welcome back! Here&apos;s your business overview.</p>
+   157→      </div>
+   158→
+   159→      {data.lowStockProducts > 0 && (
+   160→        <Card className="border-amber-500 bg-amber-50 dark:bg-amber-900/10 p-4 flex items-center gap-3">
+   161→          <AlertTriangle className="text-amber-500 shrink-0" size={20} />
+   162→          <p className="text-sm"><span className="font-medium">{data.lowStockProducts} products</span> are running low on stock. <span className="text-amber-600 cursor-pointer underline" onClick={() => useNavigationStore.getState().setVendorView('vendor-products')}>Manage inventory</span></p>
+   163→        </Card>
+   164→      )}
+   165→
+   166→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   167→        {stats.map(s => (
+   168→          <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+   169→            <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">{s.label}</p><p className="text-2xl font-bold mt-1">{s.value}</p></div><div className={`w-10 h-10 rounded-lg flex items-center justify-center ${s.color}`}><s.icon size={20} /></div></div></Card>
+   170→          </motion.div>
+   171→        ))}
+   172→      </div>
+   173→
+   174→      {/* Sales Chart */}
+   175→      {data.monthlySales && data.monthlySales.length > 0 && (
+   176→        <Card className="p-6">
+   177→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Monthly Sales</CardTitle></CardHeader>
+   178→          <div className="h-48 flex items-end gap-2">
+   179→            {data.monthlySales.map((ms, i) => {
+   180→              const maxSale = Math.max(...data.monthlySales.map(m => m.sales), 1);
+   181→              const height = (ms.sales / maxSale) * 100;
+   182→              return (
+   183→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+   184→                  <span className="text-xs font-medium">{formatCurrency(ms.sales)}</span>
+   185→                  <div className="w-full bg-orange-500 rounded-t-md transition-all duration-500" style={{ height: `${Math.max(height, 4)}%` }} />
+   186→                  <span className="text-xs text-muted-foreground">{ms.month}</span>
+   187→                </div>
+   188→              );
+   189→            })}
+   190→          </div>
+   191→        </Card>
+   192→      )}
+   193→
+   194→      <div className="grid lg:grid-cols-2 gap-6">
+   195→        {/* Recent Orders */}
+   196→        <Card className="p-6">
+   197→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Recent Orders</CardTitle></CardHeader>
+   198→          <div className="space-y-3">
+   199→            {data.recentOrders?.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No recent orders</p>}
+   200→            {data.recentOrders?.slice(0, 5).map(order => (
+   201→              <div key={order.id} className="flex items-center justify-between py-2 border-b last:border-0">
+   202→                <div>
+   203→                  <p className="text-sm font-medium">#{order.orderNumber}</p>
+   204→                  <p className="text-xs text-muted-foreground">{order.user?.name} • {new Date(order.createdAt).toLocaleDateString()}</p>
+   205→                </div>
+   206→                <div className="text-right">
+   207→                  <p className="text-sm font-bold">{formatCurrency(order.total)}</p>
+   208→                  <Badge variant="secondary" className="text-xs">{order.status}</Badge>
+   209→                </div>
+   210→              </div>
+   211→            ))}
+   212→          </div>
+   213→        </Card>
+   214→
+   215→        {/* Top Products */}
+   216→        <Card className="p-6">
+   217→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Top Products</CardTitle></CardHeader>
+   218→          <div className="space-y-3">
+   219→            {data.topProducts?.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No products yet</p>}
+   220→            {data.topProducts?.map((product, i) => (
+   221→              <div key={product.id} className="flex items-center gap-3 py-2 border-b last:border-0">
+   222→                <span className="text-lg font-bold text-muted-foreground w-6">#{i + 1}</span>
+   223→                <div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">
+   224→                  {product.images?.[0]?.url && <img src={product.images[0].url} alt="" className="w-full h-full object-cover" />}
+   225→                </div>
+   226→                <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{product.name}</p><p className="text-xs text-muted-foreground">{product.totalSold} sold</p></div>
+   227→                <p className="text-sm font-bold">{formatCurrency(product.price)}</p>
+   228→              </div>
+   229→            ))}
+   230→          </div>
+   231→        </Card>
+   232→      </div>
+   233→    </div>
+   234→  );
+   235→}
+   236→
+   237→// ============ VENDOR PRODUCTS ============
+   238→
+   239→function VendorProducts() {
+   240→  const { vendorId } = useAuthStore();
+   241→  const { setSelectedProductId, setVendorView } = useNavigationStore();
+   242→  const qc = useQueryClient();
+   243→  const [page, setPage] = useState(1);
+   244→  const [search, setSearch] = useState('');
+   245→  const [statusFilter, setStatusFilter] = useState<string>('all');
+   246→  const [deleteId, setDeleteId] = useState<string | null>(null);
+   247→
+   248→  const { data, isLoading } = useQuery({
+   249→    queryKey: ['vendor-products', vendorId, page, search, statusFilter],
+   250→    queryFn: () => {
+   251→      const params = new URLSearchParams({ vendorId: vendorId || '', page: String(page), limit: '12', search });
+   252→      if (statusFilter !== 'all') params.set('status', statusFilter);
+   253→      return fetch(`/api/products?${params}`).then(r => r.json()).then((r: ApiResponse<Product[]>) => r);
+   254→    },
+   255→    enabled: !!vendorId,
+   256→  });
+   257→
+   258→  const deleteMutation = useMutation({
+   259→    mutationFn: (id: string) => fetch(`/api/products?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+   260→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['vendor-products'] }); toast.success('Product deleted'); setDeleteId(null); },
+   261→    onError: () => toast.error('Failed to delete product'),
+   262→  });
+   263→
+   264→  const duplicateMutation = useMutation({
+   265→    mutationFn: (id: string) => fetch(`/api/vendor/products/${id}/duplicate`, { method: 'POST' }).then(r => r.json()),
+   266→    onSuccess: (data) => {
+   267→      if (data.success) { toast.success('Product duplicated successfully'); qc.invalidateQueries({ queryKey: ['vendor-products'] }); }
+   268→      else toast.error(data.error || 'Failed to duplicate');
+   269→    },
+   270→    onError: () => toast.error('Failed to duplicate product'),
+   271→  });
+   272→
+   273→  const statusColor: Record<string, string> = {
+   274→    PUBLISHED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+   275→    DRAFT: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+   276→    ARCHIVED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+   277→  };
+   278→
+   279→  const statusFilters = ['all', 'PUBLISHED', 'DRAFT', 'ARCHIVED'];
+   280→
+   281→  return (
+   282→    <div className="p-6 space-y-6">
+   283→      <div className="flex flex-wrap items-center justify-between gap-4">
+   284→        <div><h1 className="text-2xl font-bold">Products</h1><p className="text-muted-foreground text-sm">Manage your product catalog</p></div>
+   285→        <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setVendorView('vendor-add-product')}><Plus size={16} className="mr-1.5" />Add Product</Button>
+   286→      </div>
+   287→
+   288→      <div className="flex flex-col sm:flex-row gap-3">
+   289→        <div className="relative flex-1 max-w-md"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search products..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" /></div>
+   290→        <div className="flex gap-2 flex-wrap">
+   291→          {statusFilters.map(s => (
+   292→            <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-orange-500 hover:bg-orange-600' : ''} onClick={() => { setStatusFilter(s); setPage(1); }}>
+   293→              {s === 'all' ? 'All' : s}
+   294→            </Button>
+   295→          ))}
+   296→        </div>
+   297→      </div>
+   298→
+   299→      {isLoading ? <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{Array.from({length: 6}).map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}</div> :
+   300→      <Card>
+   301→        <Table>
+   302→          <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="hidden md:table-cell">Category</TableHead><TableHead>Price</TableHead><TableHead>Stock</TableHead><TableHead className="hidden sm:table-cell">Status</TableHead><TableHead className="hidden sm:table-cell">Rating</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+   303→          <TableBody>
+   304→            {!data?.data?.length && <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No products found</TableCell></TableRow>}
+   305→            {data?.data?.map(product => (
+   306→              <TableRow key={product.id}>
+   307→                <TableCell>
+   308→                  <div className="flex items-center gap-3">
+   309→                    <div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">
+   310→                      {product.images?.[0]?.url ? <img src={product.images[0].url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={16} /></div>}
+   311→                    </div>
+   312→                    <div className="min-w-0"><p className="font-medium text-sm truncate max-w-48">{product.name}</p><p className="text-xs text-muted-foreground">SKU: {product.sku || 'N/A'}</p></div>
+   313→                  </div>
+   314→                </TableCell>
+   315→                <TableCell className="hidden md:table-cell"><Badge variant="secondary">{product.category?.name}</Badge></TableCell>
+   316→                <TableCell>
+   317→                  <div><span className="font-medium">{formatCurrency(product.price)}</span></div>
+   318→                  {product.compareAtPrice && <span className="text-xs text-muted-foreground line-through">{formatCurrency(product.compareAtPrice)}</span>}
+   319→                </TableCell>
+   320→                <TableCell>
+   321→                  <span className={`font-medium ${product.stock < 5 ? 'text-red-600' : product.stock < 20 ? 'text-amber-600' : 'text-green-600'}`}>{product.stock}</span>
+   322→                </TableCell>
+   323→                <TableCell className="hidden sm:table-cell">
+   324→                  <Badge variant="secondary" className={statusColor[product.productStatus] || ''}>{product.productStatus}</Badge>
+   325→                </TableCell>
+   326→                <TableCell className="hidden sm:table-cell"><div className="flex items-center gap-1"><StarRating rating={product.rating} size={12} /><span className="text-sm">{product.rating}</span></div></TableCell>
+   327→                <TableCell className="text-right">
+   328→                  <div className="flex items-center justify-end gap-1">
+   329→                    <TooltipProvider delayDuration={0}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateMutation.mutate(product.id)} disabled={duplicateMutation.isPending}><Copy size={14} /></Button></TooltipTrigger><TooltipContent>Duplicate</TooltipContent></Tooltip></TooltipProvider>
+   330→                    <TooltipProvider delayDuration={0}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectedProductId(product.id); setVendorView('vendor-add-product'); }}><Pencil size={14} /></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip></TooltipProvider>
+   331→                    <TooltipProvider delayDuration={0}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(product.id)}><Trash2 size={14} /></Button></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip></TooltipProvider>
+   332→                  </div>
+   333→                </TableCell>
+   334→              </TableRow>
+   335→            ))}
+   336→          </TableBody>
+   337→        </Table>
+   338→        {data?.meta && data.meta.totalPages > 1 && (
+   339→          <div className="flex items-center justify-center gap-2 p-4">
+   340→            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></Button>
+   341→            {Array.from({ length: Math.min(data.meta.totalPages, 5) }, (_, i) => i + 1).map(p => (
+   342→              <Button key={p} variant={p === page ? 'default' : 'outline'} size="sm" className={p === page ? 'bg-orange-500' : ''} onClick={() => setPage(p)}>{p}</Button>
+   343→            ))}
+   344→            <Button variant="outline" size="sm" disabled={page >= data.meta.totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
+   345→          </div>
+   346→        )}
+   347→      </Card>}
+   348→
+   349→      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+   350→        <DialogContent><DialogHeader><DialogTitle>Delete Product</DialogTitle><DialogDescription>Are you sure? This action cannot be undone.</DialogDescription></DialogHeader>
+   351→          <DialogFooter><Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button><Button variant="destructive" onClick={() => deleteId && deleteMutation.mutate(deleteId)} disabled={deleteMutation.isPending}>Delete</Button></DialogFooter>
+   352→        </DialogContent>
+   353→      </Dialog>
+   354→    </div>
+   355→  );
+   356→}
+   357→
+   358→// ============ ADD/EDIT PRODUCT ============
+   359→
+   360→function VendorAddProduct() {
+   361→  const { vendorId } = useAuthStore();
+   362→  const { selectedProductId, setVendorView } = useNavigationStore();
+   363→  const qc = useQueryClient();
+   364→  const isEditing = !!selectedProductId;
+   365→
+   366→  const { data: product } = useQuery({
+   367→    queryKey: ['product', selectedProductId],
+   368→    queryFn: () => fetch(`/api/products/${selectedProductId}`).then(r => r.json()).then((r: ApiResponse<Product>) => r.data),
+   369→    enabled: isEditing,
+   370→  });
+   371→
+   372→  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: any) => { const flat: any[] = []; (r.data || []).forEach((c: any) => { flat.push(c); c.children?.forEach((ch: any) => flat.push(ch)); }); return flat; }) });
+   373→  const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: any) => r.data || []) });
+   374→
+   375→  const [form, setForm] = useState({
+   376→    name: '', slug: '', description: '', shortDescription: '', sku: '', barcode: '',
+   377→    price: '', compareAtPrice: '', costPrice: '', stock: '10', weight: '', warranty: '', returnPolicy: '',
+   378→    categoryId: '', brandId: '', isFeatured: false, seoTitle: '', seoDescription: '', seoKeywords: '',
+   379→    productStatus: 'DRAFT', badge: 'NONE', estimatedDeliveryDays: '7',
+   380→  });
+   381→
+   382→  React.useEffect(() => {
+   383→    if (product) {
+   384→      setForm({
+   385→        name: product.name || '', slug: product.slug || '', description: product.description || '', shortDescription: product.shortDescription || '',
+   386→        sku: product.sku || '', barcode: product.barcode || '', price: String(product.price || ''), compareAtPrice: String(product.compareAtPrice || ''),
+   387→        costPrice: String(product.costPrice || ''), stock: String(product.stock || '10'), weight: String(product.weight || ''), warranty: product.warranty || '',
+   388→        returnPolicy: product.returnPolicy || '', categoryId: product.categoryId || '', brandId: product.brandId || '',
+   389→        isFeatured: product.isFeatured || false, seoTitle: product.seoTitle || '', seoDescription: product.seoDescription || '', seoKeywords: product.seoKeywords || '',
+   390→        productStatus: product.productStatus || 'DRAFT', badge: product.badge || 'NONE', estimatedDeliveryDays: String(product.estimatedDeliveryDays || 7),
+   391→      });
+   392→    }
+   393→  }, [product]);
+   394→
+   395→  const saveMutation = useMutation({
+   396→    mutationFn: async () => {
+   397→      const body = {
+   398→        vendorId,
+   399→        ...form,
+   400→        price: parseFloat(form.price) || 0,
+   401→        compareAtPrice: parseFloat(form.compareAtPrice) || null,
+   402→        costPrice: parseFloat(form.costPrice) || null,
+   403→        stock: parseInt(form.stock) || 0,
+   404→        weight: parseFloat(form.weight) || null,
+   405→        estimatedDeliveryDays: parseInt(form.estimatedDeliveryDays) || 7,
+   406→        badge: form.badge === 'NONE' ? null : form.badge,
+   407→        images: [{ url: `https://placehold.co/600x600/f97316/ffffff?text=${encodeURIComponent(form.name.substring(0, 15))}`, alt: form.name, sortOrder: 0 }],
+   408→        specs: [{ key: 'Warranty', value: form.warranty || 'Standard' }],
+   409→      };
+   410→      if (isEditing) {
+   411→        const res = await fetch('/api/products', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedProductId, ...body }) });
+   412→        return res.json();
+   413→      }
+   414→      const res = await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+   415→      return res.json();
+   416→    },
+   417→    onSuccess: (data) => {
+   418→      if (data.success) { toast.success(isEditing ? 'Product updated!' : 'Product created!'); qc.invalidateQueries({ queryKey: ['vendor-products'] }); setVendorView('vendor-products'); }
+   419→      else toast.error(data.error || 'Failed to save product');
+   420→    },
+   421→    onError: () => toast.error('Failed to save product'),
+   422→  });
+   423→
+   424→  const update = (key: string, value: string | boolean) => setForm(f => ({ ...f, [key]: value }));
+   425→
+   426→  return (
+   427→    <div className="p-6 space-y-6">
+   428→      <div className="flex items-center gap-4">
+   429→        <Button variant="ghost" size="icon" onClick={() => { setVendorView('vendor-products'); useNavigationStore.getState().setSelectedProductId(null); }}><ChevronLeft size={20} /></Button>
+   430→        <div><h1 className="text-2xl font-bold">{isEditing ? 'Edit Product' : 'Add New Product'}</h1><p className="text-muted-foreground text-sm">{isEditing ? 'Update product details' : 'Fill in the product information'}</p></div>
+   431→      </div>
+   432→
+   433→      <div className="grid lg:grid-cols-3 gap-6">
+   434→        <div className="lg:col-span-2 space-y-6">
+   435→          <Card className="p-6"><h3 className="font-semibold mb-4">Basic Information</h3>
+   436→            <div className="space-y-4">
+   437→              <div><Label>Product Name *</Label><Input value={form.name} onChange={e => { update('name', e.target.value); update('slug', e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-')); }} className="mt-1" placeholder="Product name" /></div>
+   438→              <div><Label>Slug</Label><Input value={form.slug} onChange={e => update('slug', e.target.value)} className="mt-1" /></div>
+   439→              <div><Label>Short Description</Label><Input value={form.shortDescription} onChange={e => update('shortDescription', e.target.value)} className="mt-1" placeholder="Brief product summary" /></div>
+   440→              <div><Label>Full Description</Label><Textarea value={form.description} onChange={e => update('description', e.target.value)} className="mt-1" rows={4} placeholder="Detailed product description" /></div>
+   441→            </div>
+   442→          </Card>
+   443→
+   444→          <Card className="p-6"><h3 className="font-semibold mb-4">Pricing & Inventory</h3>
+   445→            <div className="grid sm:grid-cols-2 gap-4">
+   446→              <div><Label>Price * (₹)</Label><Input type="number" value={form.price} onChange={e => update('price', e.target.value)} className="mt-1" /></div>
+   447→              <div><Label>Compare at Price (₹)</Label><Input type="number" value={form.compareAtPrice} onChange={e => update('compareAtPrice', e.target.value)} className="mt-1" /></div>
+   448→              <div><Label>Cost Price (₹)</Label><Input type="number" value={form.costPrice} onChange={e => update('costPrice', e.target.value)} className="mt-1" /></div>
+   449→              <div><Label>Stock Quantity *</Label><Input type="number" value={form.stock} onChange={e => update('stock', e.target.value)} className="mt-1" /></div>
+   450→              <div><Label>SKU</Label><Input value={form.sku} onChange={e => update('sku', e.target.value)} className="mt-1" /></div>
+   451→              <div><Label>Barcode</Label><Input value={form.barcode} onChange={e => update('barcode', e.target.value)} className="mt-1" /></div>
+   452→              <div><Label>Weight (kg)</Label><Input type="number" value={form.weight} onChange={e => update('weight', e.target.value)} className="mt-1" /></div>
+   453→            </div>
+   454→          </Card>
+   455→
+   456→          <Card className="p-6"><h3 className="font-semibold mb-4">SEO</h3>
+   457→            <div className="space-y-4">
+   458→              <div><Label>SEO Title</Label><Input value={form.seoTitle} onChange={e => update('seoTitle', e.target.value)} className="mt-1" /></div>
+   459→              <div><Label>SEO Description</Label><Textarea value={form.seoDescription} onChange={e => update('seoDescription', e.target.value)} className="mt-1" rows={2} /></div>
+   460→              <div><Label>SEO Keywords</Label><Input value={form.seoKeywords} onChange={e => update('seoKeywords', e.target.value)} className="mt-1" /></div>
+   461→            </div>
+   462→          </Card>
+   463→        </div>
+   464→
+   465→        <div className="space-y-6">
+   466→          <Card className="p-6"><h3 className="font-semibold mb-4">Organization</h3>
+   467→            <div className="space-y-4">
+   468→              <div><Label>Category *</Label><Select value={form.categoryId} onValueChange={v => update('categoryId', v)}><SelectTrigger className="mt-1"><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent>{categories?.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+   469→              <div><Label>Brand</Label><Select value={form.brandId} onValueChange={v => update('brandId', v)}><SelectTrigger className="mt-1"><SelectValue placeholder="Select brand" /></SelectTrigger><SelectContent>{brands?.map((b: any) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select></div>
+   470→            </div>
+   471→          </Card>
+   472→
+   473→          <Card className="p-6"><h3 className="font-semibold mb-4">Publishing</h3>
+   474→            <div className="space-y-4">
+   475→              <div><Label>Status</Label><Select value={form.productStatus} onValueChange={v => update('productStatus', v)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="DRAFT">Draft</SelectItem><SelectItem value="PUBLISHED">Published</SelectItem><SelectItem value="ARCHIVED">Archived</SelectItem></SelectContent></Select></div>
+   476→              <div><Label>Badge</Label><Select value={form.badge} onValueChange={v => update('badge', v)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="NONE">None</SelectItem><SelectItem value="BEST_SELLER">Best Seller</SelectItem><SelectItem value="NEW_ARRIVAL">New Arrival</SelectItem><SelectItem value="LIMITED_TIME">Limited Time</SelectItem><SelectItem value="FESTIVAL_OFFER">Festival Offer</SelectItem></SelectContent></Select></div>
+   477→              <div><Label>Est. Delivery (days)</Label><Input type="number" min={1} max={30} value={form.estimatedDeliveryDays} onChange={e => update('estimatedDeliveryDays', e.target.value)} className="mt-1" /></div>
+   478→            </div>
+   479→          </Card>
+   480→
+   481→          <Card className="p-6"><h3 className="font-semibold mb-4">Policies</h3>
+   482→            <div className="space-y-4">
+   483→              <div><Label>Warranty</Label><Input value={form.warranty} onChange={e => update('warranty', e.target.value)} className="mt-1" placeholder="e.g., 1 year manufacturer warranty" /></div>
+   484→              <div><Label>Return Policy</Label><Input value={form.returnPolicy} onChange={e => update('returnPolicy', e.target.value)} className="mt-1" placeholder="e.g., 7-day easy returns" /></div>
+   485→            </div>
+   486→          </Card>
+   487→
+   488→          <Card className="p-6">
+   489→            <Button className="w-full bg-orange-500 hover:bg-orange-600" size="lg" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.name || !form.price || !form.categoryId}>
+   490→              {saveMutation.isPending ? 'Saving...' : isEditing ? 'Update Product' : 'Create Product'}
+   491→            </Button>
+   492→          </Card>
+   493→        </div>
+   494→      </div>
+   495→    </div>
+   496→  );
+   497→}
+   498→
+   499→// ============ VENDOR ORDERS ============
+   500→
+   501→function VendorOrders() {
+   502→  const qc = useQueryClient();
+   503→  const { vendorId } = useAuthStore();
+   504→  const { setSelectedOrderId, setVendorView } = useNavigationStore();
+   505→  const [statusFilter, setStatusFilter] = useState('all');
+   506→  const [page, setPage] = useState(1);
+   507→  const [printDialog, setPrintDialog] = useState<{ open: boolean; order: Order | null; mode: 'invoice' | 'packing' }>({ open: false, order: null, mode: 'invoice' });
+   508→
+   509→  const params = new URLSearchParams({ vendorId: vendorId || '', page: String(page), limit: '15' });
+   510→  if (statusFilter !== 'all') params.set('status', statusFilter);
+   511→
+   512→  const { data, isLoading } = useQuery({
+   513→    queryKey: ['vendor-orders', params.toString()],
+   514→    queryFn: () => fetch(`/api/orders?${params}`).then(r => r.json()).then((r: ApiResponse<Order[]>) => r),
+   515→    enabled: !!vendorId,
+   516→  });
+   517→
+   518→  const { data: statsData } = useQuery({
+   519→    queryKey: ['vendor-dashboard', vendorId],
+   520→    queryFn: () => fetch(`/api/vendor/dashboard?vendorId=${vendorId}`).then(r => r.json()).then((r: ApiResponse<VendorDashboardStats>) => r.data),
+   521→    enabled: !!vendorId,
+   522→  });
+   523→
+   524→  const updateMutation = useMutation({
+   525→    mutationFn: ({ orderId, status, trackingId }: { orderId: string; status: string; trackingId?: string }) =>
+   526→      fetch(`/api/orders/${orderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, trackingId }) }).then(r => r.json()),
+   527→    onSuccess: () => { toast.success('Order updated'); qc.invalidateQueries({ queryKey: ['vendor-orders'] }); },
+   528→    onError: () => toast.error('Failed to update order'),
+   529→  });
+   530→
+   531→  const statusColor: Record<string, string> = {
+   532→    NEW: 'bg-blue-100 text-blue-700', PROCESSING: 'bg-amber-100 text-amber-700', PACKED: 'bg-purple-100 text-purple-700',
+   533→    SHIPPED: 'bg-orange-100 text-orange-700', DELIVERED: 'bg-green-100 text-green-700', CANCELLED: 'bg-red-100 text-red-700',
+   534→  };
+   535→
+   536→  const vendorItems = (order: Order) => order.items?.filter(i => i.vendorId === vendorId) || [];
+   537→  const vendorTotal = (order: Order) => vendorItems(order).reduce((sum, i) => sum + i.total, 0);
+   538→
+   539→  const openPrint = (order: Order, mode: 'invoice' | 'packing') => {
+   540→    setPrintDialog({ open: true, order, mode });
+   541→  };
+   542→
+   543→  return (
+   544→    <div className="p-6 space-y-6">
+   545→      <div><h1 className="text-2xl font-bold">Orders</h1><p className="text-muted-foreground text-sm">Manage and fulfill customer orders</p></div>
+   546→
+   547→      {/* Summary Cards */}
+   548→      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   549→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+   550→          <Card className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center"><Ban size={20} className="text-red-600" /></div><div><p className="text-xs text-muted-foreground">Cancelled Orders</p><p className="text-xl font-bold">{statsData?.cancelledOrders || 0}</p></div></div></Card>
+   551→        </motion.div>
+   552→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }}>
+   553→          <Card className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><RotateCcw size={20} className="text-amber-600" /></div><div><p className="text-xs text-muted-foreground">Refund Rate</p><p className="text-xl font-bold">{(statsData?.refundRate || 0).toFixed(1)}%</p></div></div></Card>
+   554→        </motion.div>
+   555→      </div>
+   556→
+   557→      <div className="flex gap-2 flex-wrap">
+   558→        {['all', 'NEW', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map(s => (
+   559→          <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-orange-500' : ''} onClick={() => { setStatusFilter(s); setPage(1); }}>
+   560→            {s === 'all' ? 'All' : s}
+   561→          </Button>
+   562→        ))}
+   563→      </div>
+   564→
+   565→      {isLoading ? <div className="space-y-3">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+   566→      <div className="space-y-4">
+   567→        {!data?.data?.length && <Card className="p-8 text-center text-muted-foreground">No orders found</Card>}
+   568→        {data?.data?.map(order => (
+   569→          <Card key={order.id} className="p-4">
+   570→            <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+   571→              <div>
+   572→                <p className="font-medium">Order #{order.orderNumber}</p>
+   573→                <p className="text-sm text-muted-foreground">{order.user?.name} • {new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+   574→              </div>
+   575→              <div className="flex items-center gap-2">
+   576→                <Badge className={statusColor[order.status] || ''}>{order.status}</Badge>
+   577→                <span className="font-bold text-lg">{formatCurrency(vendorTotal(order))}</span>
+   578→              </div>
+   579→            </div>
+   580→            <div className="space-y-2 mb-3">
+   581→              {vendorItems(order).map(item => (
+   582→                <div key={item.id} className="flex items-center gap-3 text-sm">
+   583→                  <div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">{item.productImage && <img src={item.productImage} alt="" className="w-full h-full object-cover" />}</div>
+   584→                  <div className="flex-1 min-w-0"><p className="truncate">{item.productName}</p><p className="text-muted-foreground">Qty: {item.quantity} × {formatCurrency(item.price)}</p></div>
+   585→                  <span className="font-medium">{formatCurrency(item.total)}</span>
+   586→                </div>
+   587→              ))}
+   588→            </div>
+   589→            <div className="flex gap-2 flex-wrap">
+   590→              {order.status === 'NEW' && <Button size="sm" variant="outline" onClick={() => updateMutation.mutate({ orderId: order.id, status: 'PROCESSING' })}><Clock size={14} className="mr-1" />Accept & Process</Button>}
+   591→              {order.status === 'PROCESSING' && <Button size="sm" variant="outline" onClick={() => updateMutation.mutate({ orderId: order.id, status: 'PACKED' })}><BoxIcon size={14} className="mr-1" />Mark Packed</Button>}
+   592→              {order.status === 'PACKED' && <Button size="sm" variant="outline" onClick={() => updateMutation.mutate({ orderId: order.id, status: 'SHIPPED' })}><Truck size={14} className="mr-1" />Mark Shipped</Button>}
+   593→              <Button size="sm" variant="outline" onClick={() => openPrint(order, 'invoice')}><FileText size={14} className="mr-1" />Invoice</Button>
+   594→              <Button size="sm" variant="outline" onClick={() => openPrint(order, 'packing')}><Printer size={14} className="mr-1" />Packing Slip</Button>
+   595→            </div>
+   596→          </Card>
+   597→        ))}
+   598→      </div>}
+   599→
+   600→      {/* Print Dialog */}
+   601→      <Dialog open={printDialog.open} onOpenChange={(open) => { if (!open) window.close(); setPrintDialog({ open, order: null, mode: 'invoice' }); }}>
+   602→        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+   603→          <DialogHeader>
+   604→            <DialogTitle>{printDialog.mode === 'invoice' ? 'Invoice' : 'Packing Slip'} - #{printDialog.order?.orderNumber}</DialogTitle>
+   605→          </DialogHeader>
+   606→          <div id="print-content" className="space-y-4 text-sm">
+   607→            {printDialog.mode === 'invoice' ? (
+   608→              <div className="space-y-4">
+   609→                <div className="flex justify-between items-start border-b pb-4">
+   610→                  <div><h3 className="text-lg font-bold text-orange-600">INVOICE</h3><p className="text-muted-foreground">Order #{printDialog.order?.orderNumber}</p><p className="text-muted-foreground">{new Date(printDialog.order?.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
+   611→                  <div className="text-right"><p className="font-medium">{printDialog.order?.user?.name}</p><p className="text-muted-foreground text-xs">{printDialog.order?.shippingAddress}</p></div>
+   612→                </div>
+   613→                <Table>
+   614→                  <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty</TableHead><TableHead>Price</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
+   615→                  <TableBody>
+   616→                    {vendorItems(printDialog.order!).map(item => (
+   617→                      <TableRow key={item.id}><TableCell>{item.productName}</TableCell><TableCell>{item.quantity}</TableCell><TableCell>{formatCurrency(item.price)}</TableCell><TableCell className="text-right">{formatCurrency(item.total)}</TableCell></TableRow>
+   618→                    ))}
+   619→                  </TableBody>
+   620→                </Table>
+   621→                <div className="flex justify-end"><Card className="p-4 w-64 space-y-1"><div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(vendorTotal(printDialog.order!))}</span></div><div className="flex justify-between font-bold text-lg border-t pt-2 mt-2"><span>Total</span><span className="text-orange-600">{formatCurrency(vendorTotal(printDialog.order!))}</span></div></Card></div>
+   622→                <p className="text-xs text-muted-foreground text-center">Payment: {printDialog.order?.paymentMethod} • Status: {printDialog.order?.paymentStatus}</p>
+   623→              </div>
+   624→            ) : (
+   625→              <div className="space-y-4">
+   626→                <div className="flex justify-between items-start border-b pb-4">
+   627→                  <div><h3 className="text-lg font-bold text-orange-600">PACKING SLIP</h3><p className="text-muted-foreground">Order #{printDialog.order?.orderNumber}</p></div>
+   628→                  <div className="text-right"><p className="font-medium">{printDialog.order?.user?.name}</p><p className="text-muted-foreground text-xs">{printDialog.order?.shippingAddress}</p></div>
+   629→                </div>
+   630→                <div className="space-y-2">
+   631→                  {vendorItems(printDialog.order!).map(item => (
+   632→                    <div key={item.id} className="flex items-center justify-between py-2 border-b last:border-0">
+   633→                      <div className="flex items-center gap-3"><div className="w-8 h-8 rounded bg-muted overflow-hidden shrink-0">{item.productImage && <img src={item.productImage} alt="" className="w-full h-full object-cover" />}</div><span>{item.productName}</span></div>
+   634→                      <Badge variant="secondary">Qty: {item.quantity}</Badge>
+   635→                    </div>
+   636→                  ))}
+   637→                </div>
+   638→                <p className="text-xs text-muted-foreground text-center">Date: {new Date(printDialog.order?.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+   639→              </div>
+   640→            )}
+   641→          </div>
+   642→          <DialogFooter>
+   643→            <Button variant="outline" onClick={() => setPrintDialog({ open: false, order: null, mode: 'invoice' })}>Close</Button>
+   644→            <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => window.print()}>Print</Button>
+   645→          </DialogFooter>
+   646→        </DialogContent>
+   647→      </Dialog>
+   648→    </div>
+   649→  );
+   650→}
+   651→
+   652→// ============ VENDOR REPORTS ============
+   653→
+   654→function VendorReports() {
+   655→  const { vendorId } = useAuthStore();
+   656→  const { data } = useQuery({
+   657→    queryKey: ['vendor-dashboard', vendorId],
+   658→    queryFn: () => fetch(`/api/vendor/dashboard?vendorId=${vendorId}`).then(r => r.json()).then((r: ApiResponse<VendorDashboardStats>) => r.data),
+   659→    enabled: !!vendorId,
+   660→  });
+   661→
+   662→  const latestComparison = data?.monthlyComparison?.[data.monthlyComparison.length - 1];
+   663→  const comparisonChange = latestComparison ? ((latestComparison.thisMonth - latestComparison.lastMonth) / Math.max(latestComparison.lastMonth, 1)) * 100 : 0;
+   664→
+   665→  return (
+   666→    <div className="p-6 space-y-6">
+   667→      <div><h1 className="text-2xl font-bold">Reports</h1><p className="text-muted-foreground text-sm">Business performance and analytics</p></div>
+   668→
+   669→      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+   670→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+   671→          <Card className="p-4"><p className="text-sm text-muted-foreground">Total Revenue</p><p className="text-2xl font-bold text-green-600">{formatCurrency(data?.totalRevenue || 0)}</p></Card>
+   672→        </motion.div>
+   673→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }}>
+   674→          <Card className="p-4"><p className="text-sm text-muted-foreground">Total Orders</p><p className="text-2xl font-bold">{data?.totalOrders || 0}</p></Card>
+   675→        </motion.div>
+   676→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+   677→          <Card className="p-4"><p className="text-sm text-muted-foreground">Average Rating</p><p className="text-2xl font-bold flex items-center gap-1"><StarRating rating={data?.avgRating || 0} size={20} />{data?.avgRating?.toFixed(1)}</p></Card>
+   678→        </motion.div>
+   679→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+   680→          <Card className="p-4"><div className="flex items-center gap-2"><Ban size={16} className="text-red-500" /><p className="text-sm text-muted-foreground">Cancelled</p></div><p className="text-2xl font-bold text-red-600">{data?.cancelledOrders || 0}</p></Card>
+   681→        </motion.div>
+   682→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
+   683→          <Card className="p-4"><div className="flex items-center gap-2"><RotateCcw size={16} className="text-amber-500" /><p className="text-sm text-muted-foreground">Refund Rate</p></div><p className="text-2xl font-bold text-amber-600">{(data?.refundRate || 0).toFixed(1)}%</p></Card>
+   684→        </motion.div>
+   685→      </div>
+   686→
+   687→      {/* Monthly Comparison */}
+   688→      {latestComparison && (
+   689→        <Card className="p-6">
+   690→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg flex items-center gap-2"><ArrowDownUp size={18} />Monthly Comparison</CardTitle></CardHeader>
+   691→          <div className="grid sm:grid-cols-2 gap-6">
+   692→            <div className="space-y-3">
+   693→              <div className="flex items-center justify-between">
+   694→                <div><p className="text-sm text-muted-foreground">This Month</p><p className="text-2xl font-bold text-green-600">{formatCurrency(latestComparison.thisMonth)}</p></div>
+   695→                <div className={`text-sm font-medium px-2 py-1 rounded ${comparisonChange >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+   696→                  {comparisonChange >= 0 ? '+' : ''}{comparisonChange.toFixed(1)}%
+   697→                </div>
+   698→              </div>
+   699→              <div className="w-full bg-muted rounded-full h-3"><div className="h-3 rounded-full bg-orange-500 transition-all" style={{ width: `${Math.min((latestComparison.thisMonth / Math.max(latestComparison.lastMonth, 1)) * 100, 100)}%` }} /></div>
+   700→            </div>
+   701→            <div>
+   702→              <p className="text-sm text-muted-foreground">Last Month</p>
+   703→              <p className="text-2xl font-bold">{formatCurrency(latestComparison.lastMonth)}</p>
+   704→              <p className="text-xs text-muted-foreground mt-1">{latestComparison.month}</p>
+   705→            </div>
+   706→          </div>
+   707→        </Card>
+   708→      )}
+   709→
+   710→      {data?.monthlySales && (
+   711→        <Card className="p-6">
+   712→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Revenue Trend</CardTitle></CardHeader>
+   713→          <div className="h-64 flex items-end gap-3">
+   714→            {data.monthlySales.map((ms, i) => {
+   715→              const maxSale = Math.max(...data.monthlySales.map(m => m.sales), 1);
+   716→              return (
+   717→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+   718→                  <span className="text-xs font-medium">{formatCurrency(ms.sales)}</span>
+   719→                  <div className="w-full rounded-t-md bg-gradient-to-t from-orange-600 to-orange-400 transition-all duration-500" style={{ height: `${Math.max((ms.sales / maxSale) * 100, 2)}%` }} />
+   720→                  <span className="text-xs text-muted-foreground">{ms.month}</span>
+   721→                </div>
+   722→              );
+   723→            })}
+   724→          </div>
+   725→        </Card>
+   726→      )}
+   727→
+   728→      {/* Top Categories */}
+   729→      {data?.topCategories && data.topCategories.length > 0 && (
+   730→        <Card className="p-6">
+   731→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Top Categories</CardTitle></CardHeader>
+   732→          <Table>
+   733→            <TableHeader><TableRow><TableHead>Category</TableHead><TableHead>Orders</TableHead><TableHead>Revenue</TableHead></TableRow></TableHeader>
+   734→            <TableBody>
+   735→              {data.topCategories.map((cat, i) => (
+   736→                <TableRow key={i}>
+   737→                  <TableCell><div className="flex items-center gap-2"><span className="text-lg font-bold text-muted-foreground w-6">#{i + 1}</span><span className="text-sm font-medium">{cat.name}</span></div></TableCell>
+   738→                  <TableCell className="font-medium">{cat.count}</TableCell>
+   739→                  <TableCell className="font-medium text-green-600">{formatCurrency(cat.revenue)}</TableCell>
+   740→                </TableRow>
+   741→              ))}
+   742→            </TableBody>
+   743→          </Table>
+   744→        </Card>
+   745→      )}
+   746→
+   747→      <Card className="p-6">
+   748→        <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Top Selling Products</CardTitle></CardHeader>
+   749→        <Table>
+   750→          <TableHeader><TableRow><TableHead>Product</TableHead><TableHead>Sold</TableHead><TableHead>Revenue</TableHead><TableHead>Rating</TableHead></TableRow></TableHeader>
+   751→          <TableBody>
+   752→            {data?.topProducts?.map(p => (
+   753→              <TableRow key={p.id}>
+   754→                <TableCell><div className="flex items-center gap-2"><div className="w-8 h-8 rounded bg-muted shrink-0 overflow-hidden">{p.images?.[0]?.url && <img src={p.images[0].url} alt="" className="w-full h-full object-cover" />}</div><span className="text-sm truncate max-w-48">{p.name}</span></div></TableCell>
+   755→                <TableCell className="font-medium">{p.totalSold}</TableCell>
+   756→                <TableCell className="font-medium">{formatCurrency(p.price * p.totalSold)}</TableCell>
+   757→                <TableCell><StarRating rating={p.rating} size={12} /></TableCell>
+   758→              </TableRow>
+   759→            ))}
+   760→            {(!data?.topProducts?.length) && <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No data available</TableCell></TableRow>}
+   761→          </TableBody>
+   762→        </Table>
+   763→      </Card>
+   764→    </div>
+   765→  );
+   766→}
+   767→
+   768→// ============ VENDOR PROFILE ============
+   769→
+   770→function VendorProfile() {
+   771→  const { user, vendorId } = useAuthStore();
+   772→  const { data: vendor, isLoading } = useQuery({
+   773→    queryKey: ['vendor', vendorId],
+   774→    queryFn: () => fetch(`/api/vendors/${vendorId}`).then(r => r.json()).then((r: any) => r.data),
+   775→    enabled: !!vendorId,
+   776→  });
+   777→
+   778→  if (isLoading) return <div className="p-6"><Skeleton className="h-64 rounded-xl" /></div>;
+   779→
+   780→  return (
+   781→    <div className="p-6 space-y-6">
+   782→      <div><h1 className="text-2xl font-bold">Business Profile</h1><p className="text-muted-foreground text-sm">Your vendor account information</p></div>
+   783→
+   784→      <Card className="p-6">
+   785→        <div className="flex items-start gap-6 mb-6">
+   786→          <div className="w-20 h-20 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-500 text-3xl font-bold shrink-0">{vendor?.businessName?.[0]}</div>
+   787→          <div>
+   788→            <h2 className="text-xl font-bold">{vendor?.businessName}</h2>
+   789→            <div className="flex items-center gap-2 mt-1"><Badge variant={vendor?.status === 'APPROVED' ? 'default' : 'secondary'}>{vendor?.status}</Badge><StarRating rating={vendor?.rating || 0} size={14} /></div>
+   790→            <p className="text-sm text-muted-foreground mt-1">{vendor?.description}</p>
+   791→          </div>
+   792→        </div>
+   793→        <Separator className="my-4" />
+   794→        <div className="grid sm:grid-cols-2 gap-4 text-sm">
+   795→          <div><span className="text-muted-foreground">Business Email:</span> <span className="ml-2">{vendor?.businessEmail || user?.email}</span></div>
+   796→          <div><span className="text-muted-foreground">Phone:</span> <span className="ml-2">{vendor?.businessPhone || 'Not set'}</span></div>
+   797→          <div><span className="text-muted-foreground">GST Number:</span> <span className="ml-2">{vendor?.gstNumber || 'Not set'}</span></div>
+   798→          <div><span className="text-muted-foreground">Commission Rate:</span> <span className="ml-2 font-medium">{vendor?.commissionRate}%</span></div>
+   799→          <div><span className="text-muted-foreground">Total Sales:</span> <span className="ml-2 font-medium text-green-600">{formatCurrency(vendor?.totalSales || 0)}</span></div>
+   800→          <div><span className="text-muted-foreground">Total Revenue:</span> <span className="ml-2 font-medium">{formatCurrency(vendor?.totalRevenue || 0)}</span></div>
+   801→        </div>
+   802→      </Card>
+   803→    </div>
+   804→  );
+   805→}
+   806→
+   807→// ============ VENDOR SETTINGS ============
+   808→
+   809→function VendorSettings() {
+   810→  return (
+   811→    <div className="p-6 space-y-6">
+   812→      <div><h1 className="text-2xl font-bold">Settings</h1><p className="text-muted-foreground text-sm">Manage your vendor account settings</p></div>
+   813→      <Card className="p-6">
+   814→        <h3 className="font-semibold mb-4">Store Settings</h3>
+   815→        <div className="space-y-4">
+   816→          <div><Label>Business Name</Label><Input className="mt-1" defaultValue={useAuthStore.getState().user?.name || ''} /></div>
+   817→          <div><Label>Business Email</Label><Input className="mt-1" type="email" defaultValue={useAuthStore.getState().user?.email || ''} /></div>
+   818→          <div><Label>Business Phone</Label><Input className="mt-1" /></div>
+   819→          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => toast.success('Settings saved')}>Save Changes</Button>
+   820→        </div>
+   821→      </Card>
+   822→    </div>
+   823→  );
+   824→}
+   825→
+   826→// ============ VENDOR PENDING / REJECTED PAGE ============
+   827→
+   828→function VendorPendingPage() {
+   829→  const { user, logout, vendorId, vendorStatus } = useAuthStore();
+   830→  const { setAppView } = useNavigationStore();
+   831→  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+   832→  const { data: vendor, isLoading } = useQuery({
+   833→    queryKey: ['vendor-status', vendorId],
+   834→    queryFn: () => fetch(`/api/vendors/${vendorId}`).then(r => r.json()).then((r: any) => r.data),
+   835→    enabled: !!vendorId,
+   836→  });
+   837→
+   838→  // Sync vendor status from server
+   839→  React.useEffect(() => {
+   840→    if (vendor?.status) {
+   841→      useAuthStore.getState().login(
+   842→        useAuthStore.getState().user!,
+   843→        useAuthStore.getState().token!,
+   844→        vendorId,
+   845→        vendor.status
+   846→      );
+   847→      if (vendor.rejectionReason) {
+   848→        setRejectionReason(vendor.rejectionReason);
+   849→      }
+   850→      // If approved, navigate to dashboard
+   851→      if (vendor.status === 'APPROVED') {
+   852→        const timer = setTimeout(() => useNavigationStore.getState().setVendorView('vendor-dashboard'), 100);
+   853→        return () => clearTimeout(timer);
+   854→      }
+   855→    }
+   856→  }, [vendor?.status, vendorId]);
+   857→
+   858→  const isRejected = vendorStatus === 'REJECTED' || vendor?.status === 'REJECTED';
+   859→  const isPending = vendorStatus === 'PENDING' || vendor?.status === 'PENDING';
+   860→
+   861→  if (isLoading) {
+   862→    return (
+   863→      <div className="min-h-screen flex items-center justify-center">
+   864→        <Skeleton className="h-64 w-full max-w-md rounded-xl" />
+   865→      </div>
+   866→    );
+   867→  }
+   868→
+   869→  return (
+   870→    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+   871→      <motion.div
+   872→        initial={{ opacity: 0, scale: 0.9 }}
+   873→        animate={{ opacity: 1, scale: 1 }}
+   874→        className="w-full max-w-lg text-center space-y-6"
+   875→      >
+   876→        <div className={`mx-auto w-24 h-24 rounded-full flex items-center justify-center ${isRejected ? 'bg-red-100 dark:bg-red-900/20' : 'bg-amber-100 dark:bg-amber-900/20'}`}>
+   877→          {isRejected ? (
+   878→            <XCircle size={48} className="text-red-500" />
+   879→          ) : (
+   880→            <Clock size={48} className="text-amber-500" />
+   881→          )}
+   882→        </div>
+   883→
+   884→        <div>
+   885→          <h1 className="text-2xl font-bold">
+   886→            {isRejected ? 'Application Rejected' : 'Application Pending'}
+   887→          </h1>
+   888→          <p className="text-muted-foreground mt-2">
+   889→            {isRejected
+   890→              ? 'Your vendor application has been rejected by the admin.'
+   891→              : 'Your vendor account is currently under review by our admin team.'}
+   892→          </p>
+   893→        </div>
+   894→
+   895→        <Card className="p-6 text-left">
+   896→          <div className="space-y-3 text-sm">
+   897→            <div className="flex justify-between">
+   898→              <span className="text-muted-foreground">Business Name</span>
+   899→              <span className="font-medium">{user?.name}</span>
+   900→            </div>
+   901→            <div className="flex justify-between">
+   902→              <span className="text-muted-foreground">Email</span>
+   903→              <span className="font-medium">{user?.email}</span>
+   904→            </div>
+   905→            <div className="flex justify-between">
+   906→              <span className="text-muted-foreground">Status</span>
+   907→              <Badge variant={isRejected ? 'destructive' : 'secondary'} className={isPending ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30' : ''}>
+   908→                {vendorStatus || vendor?.status || 'PENDING'}
+   909→              </Badge>
+   910→            </div>
+   911→          </div>
+   912→        </Card>
+   913→
+   914→        {rejectionReason && (
+   915→          <Card className="p-4 border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/10">
+   916→            <p className="text-sm font-medium text-red-700 dark:text-red-400 mb-1">Rejection Reason:</p>
+   917→            <p className="text-sm text-red-600 dark:text-red-300">{rejectionReason}</p>
+   918→          </Card>
+   919→        )}
+   920→
+   921→        {isPending && (
+   922→          <Card className="p-4 border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10">
+   923→            <div className="flex items-start gap-3">
+   924→              <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={20} />
+   925→              <div className="text-sm">
+   926→                <p className="font-medium text-amber-700 dark:text-amber-400">What happens next?</p>
+   927→                <ul className="mt-1 space-y-1 text-amber-600 dark:text-amber-300">
+   928→                  <li>• Our team will review your business details</li>
+   929→                  <li>• You&apos;ll receive a notification once approved</li>
+   930→                  <li>• This usually takes 24-48 hours</li>
+   931→                </ul>
+   932→              </div>
+   933→            </div>
+   934→          </Card>
+   935→        )}
+   936→
+   937→        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+   938→          <Button
+   939→            variant="outline"
+   940→            onClick={() => {
+   941→              logout();
+   942→              setAppView('customer');
+   943→              toast.success('Logged out');
+   944→            }}
+   945→          >
+   946→            Back to Store
+   947→          </Button>
+   948→          {isRejected && (
+   949→            <Button
+   950→              className="bg-orange-500 hover:bg-orange-600"
+   951→              onClick={() => {
+   952→                logout();
+   953→                setAppView('customer');
+   954→                toast.info('Please contact admin to re-apply');
+   955→              }}
+   956→            >
+   957→              Contact Support
+   958→            </Button>
+   959→          )}
+   960→        </div>
+   961→
+   962→        <p className="text-xs text-muted-foreground">
+   963→          Need help? Contact us at support@markethub.com
+   964→        </p>
+   965→      </motion.div>
+   966→    </div>
+   967→  );
+   968→}
+   969→
+   970→// ============ VENDOR WALLET ============
+   971→
+   972→function VendorWalletPage() {
+   973→  const { vendorId } = useAuthStore();
+   974→  const qc = useQueryClient();
+   975→  const [withdrawOpen, setWithdrawOpen] = useState(false);
+   976→  const [withdrawAmount, setWithdrawAmount] = useState('');
+   977→  const [page, setPage] = useState(1);
+   978→
+   979→  const { data: wallet, isLoading: walletLoading } = useQuery({
+   980→    queryKey: ['vendor-wallet', vendorId],
+   981→    queryFn: () => fetch(`/api/vendor/wallet?vendorId=${vendorId}`).then(r => r.json()).then((r: ApiResponse<VendorWallet>) => r.data),
+   982→    enabled: !!vendorId,
+   983→  });
+   984→
+   985→  const { data: txData, isLoading: txLoading } = useQuery({
+   986→    queryKey: ['vendor-wallet-tx', vendorId, page],
+   987→    queryFn: () => fetch(`/api/vendor/wallet?vendorId=${vendorId}&page=${page}&limit=20`).then(r => r.json()).then((r: ApiResponse<{ wallet: VendorWallet; transactions: WalletTransaction[] }>) => r.data),
+   988→    enabled: !!vendorId,
+   989→  });
+   990→
+   991→  const vendorData = txData || (wallet ? { wallet, transactions: [] as WalletTransaction[] } : null);
+   992→
+   993→  const { data: vendorInfo } = useQuery({
+   994→    queryKey: ['vendor', vendorId],
+   995→    queryFn: () => fetch(`/api/vendors/${vendorId}`).then(r => r.json()).then((r: any) => r.data),
+   996→    enabled: !!vendorId,
+   997→  });
+   998→
+   999→  const maskBankAccount = (acc?: string | null) => {
+  1000→    if (!acc) return 'Not set';
+  1001→    return 'XXXX XXXX ' + acc.slice(-4);
+  1002→  };
+  1003→  const maskIfsc = (ifsc?: string | null) => {
+  1004→    if (!ifsc) return 'N/A';
+  1005→    return 'XXXX0' + ifsc.slice(-3);
+  1006→  };
+  1007→
+  1008→  const withdrawMutation = useMutation({
+  1009→    mutationFn: () => fetch('/api/vendor/wallet/withdraw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vendorId, amount: parseFloat(withdrawAmount) }) }).then(r => r.json()),
+  1010→    onSuccess: (data) => {
+  1011→      if (data.success) { toast.success('Withdrawal request submitted!'); setWithdrawOpen(false); setWithdrawAmount(''); qc.invalidateQueries({ queryKey: ['vendor-wallet'] }); qc.invalidateQueries({ queryKey: ['vendor-wallet-tx'] }); }
+  1012→      else toast.error(data.error || 'Withdrawal failed');
+  1013→    },
+  1014→    onError: () => toast.error('Failed to request withdrawal'),
+  1015→  });
+  1016→
+  1017→  const txTypeColor: Record<string, string> = {
+  1018→    EARNING: 'text-green-600',
+  1019→    WITHDRAWAL: 'text-red-600',
+  1020→    ADJUSTMENT: 'text-amber-600',
+  1021→    COMMISSION_DEDUCTION: 'text-orange-600',
+  1022→  };
+  1023→
+  1024→  if (walletLoading) return <div className="p-6 space-y-4">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>;
+  1025→
+  1026→  return (
+  1027→    <div className="p-6 space-y-6">
+  1028→      <div className="flex flex-wrap items-center justify-between gap-4">
+  1029→        <div><h1 className="text-2xl font-bold">Wallet</h1><p className="text-muted-foreground text-sm">Manage your earnings and withdrawals</p></div>
+  1030→        <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setWithdrawOpen(true)}><DollarSign size={16} className="mr-1.5" />Request Withdrawal</Button>
+  1031→      </div>
+  1032→
+  1033→      {/* Balance Cards */}
+  1034→      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+  1035→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+  1036→          <Card className="p-6 border-green-200 dark:border-green-900/50 bg-gradient-to-br from-green-50 to-white dark:from-green-900/10 dark:to-background">
+  1037→            <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center"><DollarSign size={20} className="text-green-600" /></div><p className="text-sm text-muted-foreground">Available Balance</p></div>
+  1038→            <p className="text-3xl font-bold text-green-600">{formatCurrency(vendorData?.wallet?.availableBalance || 0)}</p>
+  1039→          </Card>
+  1040→        </motion.div>
+  1041→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+  1042→          <Card className="p-6 border-amber-200 dark:border-amber-900/50 bg-gradient-to-br from-amber-50 to-white dark:from-amber-900/10 dark:to-background">
+  1043→            <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><Clock size={20} className="text-amber-600" /></div><p className="text-sm text-muted-foreground">Pending Balance</p></div>
+  1044→            <p className="text-3xl font-bold text-amber-600">{formatCurrency(vendorData?.wallet?.pendingBalance || 0)}</p>
+  1045→          </Card>
+  1046→        </motion.div>
+  1047→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
+  1048→          <Card className="p-6 border-orange-200 dark:border-orange-900/50 bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/10 dark:to-background">
+  1049→            <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center"><TrendingUp size={20} className="text-orange-600" /></div><p className="text-sm text-muted-foreground">Total Earned</p></div>
+  1050→            <p className="text-3xl font-bold text-orange-600">{formatCurrency(vendorData?.wallet?.totalEarned || 0)}</p>
+  1051→          </Card>
+  1052→        </motion.div>
+  1053→      </div>
+  1054→
+  1055→      {/* Transaction History */}
+  1056→      <Card className="p-6">
+  1057→        <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Transaction History</CardTitle></CardHeader>
+  1058→        {txLoading ? <div className="space-y-3">{Array.from({length: 5}).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div> : (
+  1059→          <>
+  1060→            <div className="max-h-96 overflow-y-auto">
+  1061→              <Table>
+  1062→                <TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right hidden sm:table-cell">Balance After</TableHead><TableHead className="hidden md:table-cell">Date</TableHead></TableRow></TableHeader>
+  1063→                <TableBody>
+  1064→                  {(!vendorData?.transactions?.length) && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No transactions yet</TableCell></TableRow>}
+  1065→                  {vendorData?.transactions?.map(tx => (
+  1066→                    <TableRow key={tx.id}>
+  1067→                      <TableCell><Badge variant="secondary" className={txTypeColor[tx.type] || ''}>{tx.type.replace(/_/g, ' ')}</Badge></TableCell>
+  1068→                      <TableCell className="text-sm max-w-48 truncate">{tx.description || '-'}</TableCell>
+  1069→                      <TableCell className={`text-right font-medium ${tx.type === 'EARNING' ? 'text-green-600' : 'text-red-600'}`}>{tx.type === 'EARNING' ? '+' : '-'}{formatCurrency(tx.amount)}</TableCell>
+  1070→                      <TableCell className="text-right hidden sm:table-cell">{formatCurrency(tx.balance)}</TableCell>
+  1071→                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{new Date(tx.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</TableCell>
+  1072→                    </TableRow>
+  1073→                  ))}
+  1074→                </TableBody>
+  1075→              </Table>
+  1076→            </div>
+  1077→          </>
+  1078→        )}
+  1079→      </Card>
+  1080→
+  1081→      {/* Withdrawal Dialog */}
+  1082→      <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
+  1083→        <DialogContent>
+  1084→          <DialogHeader>
+  1085→            <DialogTitle>Request Withdrawal</DialogTitle>
+  1086→            <DialogDescription>Enter the amount you want to withdraw to your bank account.</DialogDescription>
+  1087→          </DialogHeader>
+  1088→          <div className="space-y-4">
+  1089→            <div>
+  1090→              <Label>Available Balance</Label>
+  1091→              <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(vendorData?.wallet?.availableBalance || 0)}</p>
+  1092→            </div>
+  1093→            <div>
+  1094→              <Label>Amount (₹)</Label>
+  1095→              <Input type="number" min={1} max={vendorData?.wallet?.availableBalance || 0} value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="mt-1" placeholder="Enter withdrawal amount" />
+  1096→              <p className="text-xs text-muted-foreground mt-1">Minimum withdrawal: ₹500</p>
+  1097→            </div>
+  1098→            <Separator />
+  1099→            <div className="text-sm space-y-2">
+  1100→              <p className="font-medium">Bank Account Details</p>
+  1101→              <div className="grid grid-cols-2 gap-2 text-muted-foreground">
+  1102→                <span>Bank:</span><span className="text-foreground">{vendorInfo?.bankName || 'Not set'}</span>
+  1103→                <span>Account:</span><span className="text-foreground font-mono">{maskBankAccount(vendorInfo?.bankAccount)}</span>
+  1104→                <span>IFSC:</span><span className="text-foreground font-mono">{maskIfsc(vendorInfo?.bankIfsc)}</span>
+  1105→              </div>
+  1106→            </div>
+  1107→          </div>
+  1108→          <DialogFooter>
+  1109→            <Button variant="outline" onClick={() => { setWithdrawOpen(false); setWithdrawAmount(''); }}>Cancel</Button>
+  1110→            <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => withdrawMutation.mutate()} disabled={withdrawMutation.isPending || !withdrawAmount || parseFloat(withdrawAmount) < 500 || parseFloat(withdrawAmount) > (vendorData?.wallet?.availableBalance || 0)}>
+  1111→              {withdrawMutation.isPending ? 'Submitting...' : 'Confirm Withdrawal'}
+  1112→            </Button>
+  1113→          </DialogFooter>
+  1114→        </DialogContent>
+  1115→      </Dialog>
+  1116→    </div>
+  1117→  );
+  1118→}
+  1119→
+  1120→// ============ MAIN VENDOR APP ============
+  1121→
+  1122→export default function VendorApp() {
+  1123→  const { vendorView, setVendorView } = useNavigationStore();
+  1124→  const { user, vendorStatus, isAuthenticated } = useAuthStore();
+  1125→
+  1126→  // Gate: If vendor is not APPROVED, show pending/rejected page
+  1127→  if (!isAuthenticated || !user) {
+  1128→    return (
+  1129→      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+  1130→        <Card className="p-8 max-w-md w-full text-center space-y-4">
+  1131→          <Store size={48} className="mx-auto text-muted-foreground" />
+  1132→          <h2 className="text-xl font-bold">Vendor Access Required</h2>
+  1133→          <p className="text-sm text-muted-foreground">Please log in to access the vendor panel.</p>
+  1134→          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => useNavigationStore.getState().setAppView('customer')}>
+  1135→            Go to Login
+  1136→          </Button>
+  1137→        </Card>
+  1138→      </div>
+  1139→    );
+  1140→  }
+  1141→
+  1142→  if (vendorStatus === 'PENDING' || vendorStatus === 'REJECTED') {
+  1143→    return <VendorPendingPage />;
+  1144→  }
+  1145→
+  1146→  if (vendorStatus === 'SUSPENDED') {
+  1147→    return (
+  1148→      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+  1149→        <Card className="p-8 max-w-md w-full text-center space-y-4">
+  1150→          <XCircle size={48} className="mx-auto text-red-500" />
+  1151→          <h2 className="text-xl font-bold">Account Suspended</h2>
+  1152→          <p className="text-sm text-muted-foreground">Your vendor account has been suspended. Please contact the admin for more information.</p>
+  1153→          <Button variant="outline" onClick={() => { useAuthStore.getState().logout(); useNavigationStore.getState().setAppView('customer'); }}>
+  1154→            Back to Store
+  1155→          </Button>
+  1156→        </Card>
+  1157→      </div>
+  1158→    );
+  1159→  }
+  1160→
+  1161→  const renderView = () => {
+  1162→    switch (vendorView) {
+  1163→      case 'vendor-dashboard': return <VendorDashboard />;
+  1164→      case 'vendor-products': return <VendorProducts />;
+  1165→      case 'vendor-add-product': return <VendorAddProduct />;
+  1166→      case 'vendor-orders': return <VendorOrders />;
+  1167→      case 'vendor-reports': return <VendorReports />;
+  1168→      case 'vendor-wallet': return <VendorWalletPage />;
+  1169→      case 'vendor-profile': return <VendorProfile />;
+  1170→      case 'vendor-settings': return <VendorSettings />;
+  1171→      case 'vendor-notifications': return <div className="p-6"><h1 className="text-2xl font-bold mb-4">Notifications</h1><p className="text-muted-foreground">No new notifications</p></div>;
+  1172→      default: return <VendorDashboard />;
+  1173→    }
+  1174→  };
+  1175→
+  1176→  return (
+  1177→    <div className="min-h-screen flex flex-col bg-background">
+  1178→      <VendorMobileHeader />
+  1179→      <div className="flex flex-1">
+  1180→        <VendorSidebar />
+  1181→        <main className="flex-1 overflow-auto">{renderView()}</main>
+  1182→      </div>
+  1183→    </div>
+  1184→  );
+  1185→}
