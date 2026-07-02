@@ -581,12 +581,12 @@ export type CustomerView =
   | 'home' | 'products' | 'product-detail' | 'cart' | 'checkout' 
   | 'orders' | 'order-detail' | 'profile' | 'addresses' | 'wishlist' 
   | 'compare' | 'login' | 'register' | 'search' | 'notifications' 
-  | 'support' | 'faq' | 'track-order' | 'returns';
+  | 'support' | 'faq' | 'track-order' | 'returns' | 'contact' | 'help';
 
 export type VendorView = 
   | 'vendor-login' | 'vendor-dashboard' | 'vendor-products' | 'vendor-add-product'
   | 'vendor-orders' | 'vendor-reports' | 'vendor-profile' | 'vendor-notifications'
-  | 'vendor-settings' | 'vendor-wallet';
+  | 'vendor-settings' | 'vendor-wallet' | 'vendor-inventory';
 
 export type AdminView = 
   | 'admin-login' | 'admin-dashboard' | 'admin-vendors' | 'admin-vendor-detail'

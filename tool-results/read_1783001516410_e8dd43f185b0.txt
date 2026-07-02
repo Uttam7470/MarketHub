@@ -1,0 +1,532 @@
+  1400→            ))}</div>
+  1401→          </Card>
+  1402→          {order.trackingId && <Card className="p-4"><p className="text-sm text-muted-foreground">Tracking ID</p><p className="font-medium">{order.trackingId}</p>{order.courierName && <p className="text-sm text-muted-foreground">Courier: {order.courierName}</p>}</Card>}
+  1403→          {/* Actions */}
+  1404→          <div className="flex flex-wrap gap-2 mt-4">
+  1405→            {order?.status === 'NEW' && <Button variant="destructive" size="sm" onClick={() => setShowCancelDialog(true)}><XCircle size={14} className="mr-1" />Cancel Order</Button>}
+  1406→            {order?.status === 'DELIVERED' && <Button variant="outline" size="sm" onClick={() => setShowReturnDialog(true)}><RotateCcw size={14} className="mr-1" />Request Return</Button>}
+  1407→            <Button variant="outline" size="sm" onClick={handleReorder}><ShoppingCart size={14} className="mr-1" />Reorder</Button>
+  1408→            <Button variant="outline" size="sm" onClick={handleInvoice}><Printer size={14} className="mr-1" />Download Invoice</Button>
+  1409→          </div>
+  1410→        </div>
+  1411→        <Card className="p-6 h-fit space-y-3">
+  1412→          <h3 className="font-bold">Order Summary</h3>
+  1413→          <div className="space-y-2 text-sm">
+  1414→            <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(order.subtotal)}</span></div>
+  1415→            <div className="flex justify-between"><span>Shipping</span><span>{order.shippingCost === 0 ? 'FREE' : formatCurrency(order.shippingCost)}</span></div>
+  1416→            <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(order.tax)}</span></div>
+  1417→            {order.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(order.discount)}</span></div>}
+  1418→            <Separator />
+  1419→            <div className="flex justify-between font-bold text-lg"><span>Total</span><span className="text-orange-500">{formatCurrency(order.total)}</span></div>
+  1420→          </div>
+  1421→          <Separator />
+  1422→          <div className="text-sm space-y-1">
+  1423→            <p><span className="text-muted-foreground">Payment:</span> {order.paymentMethod}</p>
+  1424→            <p><span className="text-muted-foreground">Status:</span> <Badge variant={order.paymentStatus === 'PAID' ? 'default' : 'secondary'}>{order.paymentStatus}</Badge></p>
+  1425→          </div>
+  1426→          <Separator />
+  1427→          <div className="text-sm"><p className="text-muted-foreground mb-1">Shipping Address</p><p>{order.shippingAddress}</p></div>
+  1428→        </Card>
+  1429→      </div>
+  1430→
+  1431→      {/* Cancel Order Dialog */}
+  1432→      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+  1433→        <DialogContent><DialogHeader><DialogTitle>Cancel Order</DialogTitle></DialogHeader>
+  1434→        <p className="text-sm text-muted-foreground">Are you sure? This action cannot be undone.</p>
+  1435→        <Textarea placeholder="Reason for cancellation (optional)" value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
+  1436→        <DialogFooter><Button variant="outline" onClick={() => setShowCancelDialog(false)}>Keep Order</Button><Button variant="destructive" onClick={() => cancelMutation.mutate()} disabled={cancelMutation.isPending}>Cancel Order</Button></DialogFooter>
+  1437→        </DialogContent>
+  1438→      </Dialog>
+  1439→
+  1440→      {/* Return Order Dialog */}
+  1441→      <Dialog open={showReturnDialog} onOpenChange={setShowReturnDialog}>
+  1442→        <DialogContent><DialogHeader><DialogTitle>Request Return</DialogTitle></DialogHeader>
+  1443→        <Select value={returnReason} onValueChange={setReturnReason}><SelectTrigger><SelectValue placeholder="Select reason" /></SelectTrigger>
+  1444→          <SelectContent><SelectItem value="defective">Defective Product</SelectItem><SelectItem value="wrong">Wrong Item Received</SelectItem><SelectItem value="not_as_described">Not as Described</SelectItem><SelectItem value="changed_mind">Changed My Mind</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select>
+  1445→        <DialogFooter><Button variant="outline" onClick={() => setShowReturnDialog(false)}>Cancel</Button><Button onClick={() => returnMutation.mutate()} disabled={!returnReason || returnMutation.isPending}>Submit Request</Button></DialogFooter>
+  1446→        </DialogContent>
+  1447→      </Dialog>
+  1448→
+  1449→      {/* Invoice Dialog */}
+  1450→      <Dialog open={showInvoiceDialog} onOpenChange={setShowInvoiceDialog}>
+  1451→        <DialogContent className="max-w-2xl">
+  1452→          <DialogHeader>
+  1453→            <DialogTitle className="flex items-center gap-2"><Printer size={18} />Invoice - Order #{order.orderNumber}</DialogTitle>
+  1454→          </DialogHeader>
+  1455→          <div id="invoice-content" className="border rounded-lg p-6 space-y-4 bg-white text-black dark:bg-white dark:text-black">
+  1456→            <div className="flex justify-between items-start">
+  1457→              <div><h2 className="text-xl font-bold text-orange-600">MarketHub</h2><p className="text-sm text-gray-500">Your one-stop marketplace</p></div>
+  1458→              <div className="text-right"><p className="font-bold">INVOICE</p><p className="text-sm text-gray-500">#{order.orderNumber}</p><p className="text-sm text-gray-500">{new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
+  1459→            </div>
+  1460→            <Separator />
+  1461→            <div className="grid grid-cols-2 gap-4 text-sm">
+  1462→              <div><p className="font-medium text-gray-500">Bill To</p><p className="font-medium">{user?.name}</p><p>{user?.email}</p></div>
+  1463→              <div className="text-right"><p className="font-medium text-gray-500">Ship To</p><p>{order.shippingAddress}</p></div>
+  1464→            </div>
+  1465→            <Separator />
+  1466→            <table className="w-full text-sm">
+  1467→              <thead><tr className="border-b"><th className="text-left py-2">Item</th><th className="text-center py-2">Qty</th><th className="text-right py-2">Price</th><th className="text-right py-2">Total</th></tr></thead>
+  1468→              <tbody>
+  1469→                {order.items?.map(item => (
+  1470→                  <tr key={item.id} className="border-b"><td className="py-2">{item.productName}</td><td className="text-center py-2">{item.quantity}</td><td className="text-right py-2">{formatCurrency(item.price)}</td><td className="text-right py-2">{formatCurrency(item.total)}</td></tr>
+  1471→                ))}
+  1472→              </tbody>
+  1473→            </table>
+  1474→            <div className="flex justify-end">
+  1475→              <div className="w-48 space-y-1 text-sm">
+  1476→                <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(order.subtotal)}</span></div>
+  1477→                <div className="flex justify-between"><span>Shipping</span><span>{order.shippingCost === 0 ? 'FREE' : formatCurrency(order.shippingCost)}</span></div>
+  1478→                <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(order.tax)}</span></div>
+  1479→                {order.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(order.discount)}</span></div>}
+  1480→                <Separator />
+  1481→                <div className="flex justify-between font-bold text-base"><span>Total</span><span className="text-orange-600">{formatCurrency(order.total)}</span></div>
+  1482→              </div>
+  1483→            </div>
+  1484→            <p className="text-xs text-gray-400 text-center">Thank you for shopping with MarketHub!</p>
+  1485→          </div>
+  1486→          <DialogFooter>
+  1487→            <Button variant="outline" onClick={() => setShowInvoiceDialog(false)}>Close</Button>
+  1488→            <Button variant="outline" onClick={() => { window.print(); }}><Printer size={14} className="mr-1" />Print</Button>
+  1489→          </DialogFooter>
+  1490→        </DialogContent>
+  1491→      </Dialog>
+  1492→    </div>
+  1493→  );
+  1494→}
+  1495→
+  1496→// ============ LOGIN / REGISTER / VENDOR REGISTER ============
+  1497→
+  1498→function LoginPage() {
+  1499→  const { login, setLoading, isLoading } = useAuthStore();
+  1500→  const { navigateTo, setAppView } = useNavigationStore();
+  1501→  const [mode, setMode] = useState<'login' | 'register' | 'vendor-register'>('login');
+  1502→  const [form, setForm] = useState({
+  1503→    email: '', password: '', name: '', phone: '',
+  1504→    businessName: '', businessEmail: '', businessPhone: '',
+  1505→    businessAddress: '', gstNumber: '', panNumber: '',
+  1506→    bankName: '', bankAccount: '', bankIfsc: '', description: '',
+  1507→  });
+  1508→
+  1509→  const updateForm = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }));
+  1510→
+  1511→  const handleLogin = async (e: React.FormEvent) => {
+  1512→    e.preventDefault();
+  1513→    if (!form.email || !form.password) { toast.error('Please fill all fields'); return; }
+  1514→    setLoading(true);
+  1515→    try {
+  1516→      const res = await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.email, password: form.password }) });
+  1517→      const data = await res.json();
+  1518→      if (data.success) {
+  1519→        login(data.data.user, data.data.token, data.data.vendorId, data.data.vendorStatus);
+  1520→        toast.success(`Welcome back, ${data.data.user.name}!`);
+  1521→        if (data.data.user.role === 'ADMIN') { useNavigationStore.getState().setAppView('admin'); }
+  1522→        else if (data.data.user.role === 'VENDOR') { useNavigationStore.getState().setAppView('vendor'); }
+  1523→        else { navigateTo('home'); }
+  1524→      } else { toast.error(data.error || 'Login failed'); }
+  1525→    } catch { toast.error('Something went wrong'); }
+  1526→    setLoading(false);
+  1527→  };
+  1528→
+  1529→  const handleRegister = async (e: React.FormEvent) => {
+  1530→    e.preventDefault();
+  1531→    if (!form.name || !form.email || !form.password) { toast.error('Please fill all required fields'); return; }
+  1532→    setLoading(true);
+  1533→    try {
+  1534→      const res = await fetch('/api/auth', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, email: form.email, password: form.password, phone: form.phone }) });
+  1535→      const data = await res.json();
+  1536→      if (data.success) { login(data.data.user, data.data.token); toast.success('Account created!'); navigateTo('home'); }
+  1537→      else { toast.error(data.error || 'Registration failed'); }
+  1538→    } catch { toast.error('Something went wrong'); }
+  1539→    setLoading(false);
+  1540→  };
+  1541→
+  1542→  const handleVendorRegister = async (e: React.FormEvent) => {
+  1543→    e.preventDefault();
+  1544→    if (!form.name || !form.email || !form.password || !form.businessName) {
+  1545→      toast.error('Please fill all required fields');
+  1546→      return;
+  1547→    }
+  1548→    if (form.password.length < 6) {
+  1549→      toast.error('Password must be at least 6 characters');
+  1550→      return;
+  1551→    }
+  1552→    setLoading(true);
+  1553→    try {
+  1554→      const res = await fetch('/api/auth/vendor-register', {
+  1555→        method: 'POST',
+  1556→        headers: { 'Content-Type': 'application/json' },
+  1557→        body: JSON.stringify({
+  1558→          name: form.name,
+  1559→          email: form.email,
+  1560→          password: form.password,
+  1561→          phone: form.phone,
+  1562→          businessName: form.businessName,
+  1563→          businessEmail: form.businessEmail || form.email,
+  1564→          businessPhone: form.businessPhone,
+  1565→          businessAddress: form.businessAddress,
+  1566→          gstNumber: form.gstNumber,
+  1567→          panNumber: form.panNumber,
+  1568→          bankName: form.bankName,
+  1569→          bankAccount: form.bankAccount,
+  1570→          bankIfsc: form.bankIfsc,
+  1571→          description: form.description,
+  1572→        }),
+  1573→      });
+  1574→      const data = await res.json();
+  1575→      if (data.success) {
+  1576→        login(data.data.user, data.data.token, data.data.vendorId, data.data.vendorStatus);
+  1577→        toast.success(data.message || 'Application submitted successfully!');
+  1578→        setAppView('vendor');
+  1579→      } else {
+  1580→        toast.error(data.error || 'Registration failed');
+  1581→      }
+  1582→    } catch { toast.error('Something went wrong'); }
+  1583→    setLoading(false);
+  1584→  };
+  1585→
+  1586→  return (
+  1587→    <div className="min-h-[80vh] flex items-center justify-center px-4 py-8">
+  1588→      <Card className="w-full max-w-lg">
+  1589→        <CardHeader className="text-center">
+  1590→          <CardTitle className="text-2xl">
+  1591→            {mode === 'login' ? 'Welcome Back' : mode === 'register' ? 'Create Account' : 'Become a Vendor'}
+  1592→          </CardTitle>
+  1593→          <CardDescription>
+  1594→            {mode === 'login' ? 'Login to your account' : mode === 'register' ? 'Join MarketHub today' : 'Start selling on MarketHub'}
+  1595→          </CardDescription>
+  1596→        </CardHeader>
+  1597→        <CardContent>
+  1598→          {/* Mode Tabs */}
+  1599→          <div className="flex mb-6 bg-muted rounded-lg p-1">
+  1600→            <button
+  1601→              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${mode === 'login' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+  1602→              onClick={() => setMode('login')}
+  1603→            >
+  1604→              Login
+  1605→            </button>
+  1606→            <button
+  1607→              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${mode === 'register' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+  1608→              onClick={() => setMode('register')}
+  1609→            >
+  1610→              Customer
+  1611→            </button>
+  1612→            <button
+  1613→              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${mode === 'vendor-register' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+  1614→              onClick={() => setMode('vendor-register')}
+  1615→            >
+  1616→              Vendor
+  1617→            </button>
+  1618→          </div>
+  1619→
+  1620→          {/* Login Form */}
+  1621→          {mode === 'login' && (
+  1622→            <form onSubmit={handleLogin} className="space-y-4">
+  1623→              <div><Label>Email</Label><Input type="email" placeholder="you@example.com" value={form.email} onChange={e => updateForm('email', e.target.value)} className="mt-1" /></div>
+  1624→              <div><Label>Password</Label><Input type="password" placeholder="••••••••" value={form.password} onChange={e => updateForm('password', e.target.value)} className="mt-1" /></div>
+  1625→              <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={isLoading}>{isLoading ? 'Please wait...' : 'Login'}</Button>
+  1626→            </form>
+  1627→          )}
+  1628→
+  1629→          {/* Customer Register Form */}
+  1630→          {mode === 'register' && (
+  1631→            <form onSubmit={handleRegister} className="space-y-4">
+  1632→              <div><Label>Full Name *</Label><Input placeholder="John Doe" value={form.name} onChange={e => updateForm('name', e.target.value)} className="mt-1" /></div>
+  1633→              <div><Label>Email *</Label><Input type="email" placeholder="you@example.com" value={form.email} onChange={e => updateForm('email', e.target.value)} className="mt-1" /></div>
+  1634→              <div><Label>Password *</Label><Input type="password" placeholder="Min 6 characters" value={form.password} onChange={e => updateForm('password', e.target.value)} className="mt-1" /></div>
+  1635→              <div><Label>Phone (optional)</Label><Input placeholder="+91 XXXXX XXXXX" value={form.phone} onChange={e => updateForm('phone', e.target.value)} className="mt-1" /></div>
+  1636→              <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={isLoading}>{isLoading ? 'Please wait...' : 'Create Account'}</Button>
+  1637→            </form>
+  1638→          )}
+  1639→
+  1640→          {/* Vendor Register Form */}
+  1641→          {mode === 'vendor-register' && (
+  1642→            <form onSubmit={handleVendorRegister} className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+  1643→              <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10 rounded-lg p-3 flex items-start gap-2">
+  1644→                <Shield size={16} className="shrink-0 mt-0.5" />
+  1645→                Your application will be reviewed by our admin team. Once approved, you can start selling products.
+  1646→              </p>
+  1647→
+  1648→              <h3 className="font-semibold text-sm text-muted-foreground mt-2">Account Details</h3>
+  1649→              <div className="grid sm:grid-cols-2 gap-3">
+  1650→                <div><Label>Full Name *</Label><Input placeholder="Your name" value={form.name} onChange={e => updateForm('name', e.target.value)} className="mt-1" /></div>
+  1651→                <div><Label>Email *</Label><Input type="email" placeholder="you@business.com" value={form.email} onChange={e => updateForm('email', e.target.value)} className="mt-1" /></div>
+  1652→              </div>
+  1653→              <div className="grid sm:grid-cols-2 gap-3">
+  1654→                <div><Label>Password *</Label><Input type="password" placeholder="Min 6 characters" value={form.password} onChange={e => updateForm('password', e.target.value)} className="mt-1" /></div>
+  1655→                <div><Label>Phone</Label><Input placeholder="+91 XXXXX XXXXX" value={form.phone} onChange={e => updateForm('phone', e.target.value)} className="mt-1" /></div>
+  1656→              </div>
+  1657→
+  1658→              <h3 className="font-semibold text-sm text-muted-foreground pt-2">Business Details</h3>
+  1659→              <div><Label>Business Name *</Label><Input placeholder="Your Store Name" value={form.businessName} onChange={e => updateForm('businessName', e.target.value)} className="mt-1" /></div>
+  1660→              <div className="grid sm:grid-cols-2 gap-3">
+  1661→                <div><Label>Business Email</Label><Input type="email" placeholder="business@email.com" value={form.businessEmail} onChange={e => updateForm('businessEmail', e.target.value)} className="mt-1" /></div>
+  1662→                <div><Label>Business Phone</Label><Input placeholder="+91 XXXXX XXXXX" value={form.businessPhone} onChange={e => updateForm('businessPhone', e.target.value)} className="mt-1" /></div>
+  1663→              </div>
+  1664→              <div><Label>Business Address</Label><Textarea placeholder="Full business address" value={form.businessAddress} onChange={e => updateForm('businessAddress', e.target.value)} className="mt-1" rows={2} /></div>
+  1665→              <div><Label>Description</Label><Textarea placeholder="Tell us about your business" value={form.description} onChange={e => updateForm('description', e.target.value)} className="mt-1" rows={2} /></div>
+  1666→
+  1667→              <h3 className="font-semibold text-sm text-muted-foreground pt-2">Tax & Bank Details (Optional)</h3>
+  1668→              <div className="grid sm:grid-cols-2 gap-3">
+  1669→                <div><Label>GST Number</Label><Input placeholder="22AAAAA0000A1Z5" value={form.gstNumber} onChange={e => updateForm('gstNumber', e.target.value)} className="mt-1" /></div>
+  1670→                <div><Label>PAN Number</Label><Input placeholder="AAAAA0000A" value={form.panNumber} onChange={e => updateForm('panNumber', e.target.value)} className="mt-1" /></div>
+  1671→              </div>
+  1672→              <div><Label>Bank Name</Label><Input placeholder="Bank name" value={form.bankName} onChange={e => updateForm('bankName', e.target.value)} className="mt-1" /></div>
+  1673→              <div className="grid sm:grid-cols-2 gap-3">
+  1674→                <div><Label>Bank Account</Label><Input placeholder="Account number" value={form.bankAccount} onChange={e => updateForm('bankAccount', e.target.value)} className="mt-1" /></div>
+  1675→                <div><Label>IFSC Code</Label><Input placeholder="IFSC code" value={form.bankIfsc} onChange={e => updateForm('bankIfsc', e.target.value)} className="mt-1" /></div>
+  1676→              </div>
+  1677→
+  1678→              <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={isLoading}>
+  1679→                {isLoading ? 'Submitting...' : 'Submit Vendor Application'}
+  1680→              </Button>
+  1681→            </form>
+  1682→          )}
+  1683→        </CardContent>
+  1684→
+  1685→        {/* Footer with demo buttons (login mode only) */}
+  1686→        <CardFooter className="flex-col gap-3">
+  1687→          {mode === 'login' && (
+  1688→            <>
+  1689→              <Separator className="w-full" />
+  1690→              <p className="text-xs text-muted-foreground text-center">Quick Demo Access</p>
+  1691→              <div className="flex gap-2 flex-wrap justify-center">
+  1692→                <Button variant="outline" size="sm" onClick={() => { setForm({ email: 'admin@markethub.com', password: 'admin123', name: '', phone: '', businessName: '', businessEmail: '', businessPhone: '', businessAddress: '', gstNumber: '', panNumber: '', bankName: '', bankAccount: '', bankIfsc: '', description: '' }); }}>Admin Demo</Button>
+  1693→                <Button variant="outline" size="sm" onClick={() => { setForm({ email: 'techstore@vendor.com', password: 'vendor123', name: '', phone: '', businessName: '', businessEmail: '', businessPhone: '', businessAddress: '', gstNumber: '', panNumber: '', bankName: '', bankAccount: '', bankIfsc: '', description: '' }); }}>Vendor Demo</Button>
+  1694→                <Button variant="outline" size="sm" onClick={() => { setForm({ email: 'rahul@example.com', password: 'customer123', name: '', phone: '', businessName: '', businessEmail: '', businessPhone: '', businessAddress: '', gstNumber: '', panNumber: '', bankName: '', bankAccount: '', bankIfsc: '', description: '' }); }}>Customer Demo</Button>
+  1695→              </div>
+  1696→              <p className="text-[10px] text-muted-foreground text-center">Admin: admin@markethub.com / admin123<br/>Vendor: techstore@vendor.com / vendor123<br/>Customer: rahul@example.com / customer123</p>
+  1697→            </>
+  1698→          )}
+  1699→          {mode === 'register' && (
+  1700→            <Button variant="ghost" size="sm" onClick={() => setMode('login')}>Already have an account? Login</Button>
+  1701→          )}
+  1702→          {mode === 'vendor-register' && (
+  1703→            <Button variant="ghost" size="sm" onClick={() => setMode('login')}>Already have an account? Login</Button>
+  1704→          )}
+  1705→        </CardFooter>
+  1706→      </Card>
+  1707→    </div>
+  1708→  );
+  1709→}
+  1710→
+  1711→// ============ PROFILE PAGE ============
+  1712→
+  1713→function ProfilePage() {
+  1714→  const { user, isAuthenticated } = useAuthStore();
+  1715→  const { navigateTo } = useNavigationStore();
+  1716→  const [editing, setEditing] = useState(false);
+  1717→  const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '' });
+  1718→
+  1719→  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  1720→  if (!isAuthenticated) return null;
+  1721→
+  1722→  return (
+  1723→    <div className="container mx-auto px-4 py-6 max-w-2xl">
+  1724→      <h1 className="text-2xl font-bold mb-6">My Profile</h1>
+  1725→      <Card className="p-6">
+  1726→        <div className="flex items-center gap-4 mb-6">
+  1727→          <Avatar className="h-16 w-16"><AvatarFallback className="text-xl bg-orange-100 text-orange-600">{user?.name?.[0]}</AvatarFallback></Avatar>
+  1728→          <div><h2 className="text-lg font-bold">{user?.name}</h2><p className="text-sm text-muted-foreground">{user?.email}</p></div>
+  1729→        </div>
+  1730→        <div className="space-y-4">
+  1731→          <div><Label>Name</Label>{editing ? <Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /> : <p className="mt-1">{user?.name}</p>}</div>
+  1732→          <div><Label>Email</Label><p className="mt-1">{user?.email}</p></div>
+  1733→          <div><Label>Phone</Label>{editing ? <Input value={form.phone} onChange={e => setForm(f => ({...f, phone: e.target.value}))} className="mt-1" /> : <p className="mt-1">{user?.phone || 'Not set'}</p>}</div>
+  1734→          <Button variant={editing ? 'default' : 'outline'} className={editing ? 'bg-orange-500 hover:bg-orange-600' : ''} onClick={() => { if (editing) toast.success('Profile updated'); setEditing(!editing); }}>
+  1735→            {editing ? 'Save Changes' : 'Edit Profile'}
+  1736→          </Button>
+  1737→        </div>
+  1738→      </Card>
+  1739→    </div>
+  1740→  );
+  1741→}
+  1742→
+  1743→// ============ WISHLIST PAGE ============
+  1744→
+  1745→function WishlistPage() {
+  1746→  const { items, removeItem } = useWishlistStore();
+  1747→  const { addItem: addCartItem } = useCartStore();
+  1748→  const { isAuthenticated, navigateTo } = useNavigationStore();
+  1749→
+  1750→  const { data: products } = useQuery({
+  1751→    queryKey: ['wishlist-products', items],
+  1752→    queryFn: async () => {
+  1753→      if (!items.length) return [];
+  1754→      const res = await fetch(`/api/products?limit=50`);
+  1755→      const data = await res.json();
+  1756→      return (data.data || []).filter((p: Product) => items.includes(p.id));
+  1757→    },
+  1758→    enabled: isAuthenticated && items.length > 0,
+  1759→  });
+  1760→
+  1761→  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  1762→  if (!isAuthenticated) return null;
+  1763→
+  1764→  return (
+  1765→    <div className="container mx-auto px-4 py-6">
+  1766→      <h1 className="text-2xl font-bold mb-6">My Wishlist ({items.length})</h1>
+  1767→      {!products?.length ? <div className="text-center py-16"><Heart size={64} className="mx-auto text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium">Your wishlist is empty</h3><Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Browse Products</Button></div> :
+  1768→      <ProductGrid products={products} />}
+  1769→    </div>
+  1770→  );
+  1771→}
+  1772→
+  1773→// ============ ADDRESSES PAGE (simplified) ============
+  1774→
+  1775→function AddressesPage() {
+  1776→  const { user, isAuthenticated } = useAuthStore();
+  1777→  const { navigateTo } = useNavigationStore();
+  1778→  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
+  1779→
+  1780→  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  1781→  if (!isAuthenticated) return null;
+  1782→
+  1783→  return (
+  1784→    <div className="container mx-auto px-4 py-6 max-w-2xl">
+  1785→      <h1 className="text-2xl font-bold mb-6">My Addresses</h1>
+  1786→      <Card className="p-6 text-center text-muted-foreground">
+  1787→        <MapPin size={48} className="mx-auto mb-4 text-muted-foreground/30" />
+  1788→        <p>No saved addresses</p>
+  1789→        <p className="text-sm mt-1">Addresses are automatically saved during checkout</p>
+  1790→      </Card>
+  1791→    </div>
+  1792→  );
+  1793→}
+  1794→
+  1795→// ============ COMPARE PAGE (simplified) ============
+  1796→
+  1797→function ComparePage() {
+  1798→  const { items, removeItem, clearAll } = useCompareStore();
+  1799→  const { navigateTo, setSelectedProductId } = useNavigationStore();
+  1800→
+  1801→  const { data: products } = useQuery({
+  1802→    queryKey: ['compare-products', items],
+  1803→    queryFn: async () => {
+  1804→      if (!items.length) return [];
+  1805→      const res = await fetch('/api/products?limit=50');
+  1806→      const data = await res.json();
+  1807→      return (data.data || []).filter((p: Product) => items.includes(p.id));
+  1808→    },
+  1809→    enabled: items.length > 0,
+  1810→  });
+  1811→
+  1812→  if (!items.length) return (
+  1813→    <div className="container mx-auto px-4 py-16 text-center">
+  1814→      <GitCompare size={64} className="mx-auto text-muted-foreground/30 mb-4" />
+  1815→      <h2 className="text-xl font-bold">Compare Products</h2>
+  1816→      <p className="text-muted-foreground mt-2">Add up to 4 products to compare</p>
+  1817→      <Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Browse Products</Button>
+  1818→    </div>
+  1819→  );
+  1820→
+  1821→  return (
+  1822→    <div className="container mx-auto px-4 py-6">
+  1823→      <div className="flex items-center justify-between mb-6">
+  1824→        <h1 className="text-2xl font-bold">Compare Products ({items.length}/4)</h1>
+  1825→        <Button variant="outline" onClick={clearAll}>Clear All</Button>
+  1826→      </div>
+  1827→      <div className="overflow-x-auto">
+  1828→        <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${products?.length || 1}, minmax(200px, 1fr))` }}>
+  1829→          {products?.map(p => (
+  1830→            <Card key={p.id} className="relative">
+  1831→              <Button variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => removeItem(p.id)}><X size={16} /></Button>
+  1832→              <CardContent className="p-4 space-y-3">
+  1833→                <div className="aspect-square rounded-lg overflow-hidden bg-muted cursor-pointer" onClick={() => { setSelectedProductId(p.id); navigateTo('product-detail'); }}>
+  1834→                  {p.images?.[0]?.url ? <img src={p.images[0].url} alt={p.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={32} /></div>}
+  1835→                </div>
+  1836→                <h3 className="font-medium text-sm line-clamp-2">{p.name}</h3>
+  1837→                <p className="text-lg font-bold text-orange-500">{formatCurrency(p.price)}</p>
+  1838→                <div className="space-y-1 text-sm">
+  1839→                  <p><span className="text-muted-foreground">Brand:</span> {p.brand?.name}</p>
+  1840→                  <p><span className="text-muted-foreground">Rating:</span> <StarRating rating={p.rating} size={12} /> {p.rating}</p>
+  1841→                  <p><span className="text-muted-foreground">Stock:</span> {p.stock}</p>
+  1842→                  <p><span className="text-muted-foreground">Sold:</span> {p.totalSold}</p>
+  1843→                </div>
+  1844→              </CardContent>
+  1845→            </Card>
+  1846→          ))}
+  1847→        </div>
+  1848→      </div>
+  1849→    </div>
+  1850→  );
+  1851→}
+  1852→
+  1853→// ============ FOOTER ============
+  1854→
+  1855→function CustomerFooter() {
+  1856→  return (
+  1857→    <footer className="bg-muted/50 border-t mt-auto">
+  1858→      <div className="container mx-auto px-4 py-10">
+  1859→        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+  1860→          <div>
+  1861→            <div className="flex items-center gap-2 mb-4"><Store size={24} className="text-orange-500" /><span className="text-lg font-bold">MarketHub</span></div>
+  1862→            <p className="text-sm text-muted-foreground">Your one-stop multi-vendor marketplace for everything you need.</p>
+  1863→          </div>
+  1864→          <div>
+  1865→            <h4 className="font-semibold mb-3">Quick Links</h4>
+  1866→            <div className="space-y-2 text-sm text-muted-foreground">
+  1867→              <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('home')}>Home</p>
+  1868→              <p className="hover:text-foreground cursor-pointer" onClick={() => { useNavigationStore.getState().setSelectedCategory(null); useNavigationStore.getState().setCustomerView('products'); }}>All Products</p>
+  1869→              <p className="hover:text-foreground cursor-pointer">About Us</p>
+  1870→              <p className="hover:text-foreground cursor-pointer">Contact</p>
+  1871→            </div>
+  1872→          </div>
+  1873→          <div>
+  1874→            <h4 className="font-semibold mb-3">Customer Service</h4>
+  1875→            <div className="space-y-2 text-sm text-muted-foreground">
+  1876→              <p>Help Center</p><p>Returns & Refunds</p><p>Shipping Info</p><p>FAQ</p>
+  1877→            </div>
+  1878→          </div>
+  1879→          <div>
+  1880→            <h4 className="font-semibold mb-3">Contact Us</h4>
+  1881→            <div className="space-y-2 text-sm text-muted-foreground">
+  1882→              <p className="flex items-center gap-2"><Mail size={14} />support@markethub.com</p>
+  1883→              <p className="flex items-center gap-2"><Phone size={14} />1800-123-4567</p>
+  1884→              <p className="flex items-center gap-2"><MapPin size={14} />Bangalore, India</p>
+  1885→            </div>
+  1886→          </div>
+  1887→        </div>
+  1888→        <Separator className="my-6" />
+  1889→        <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
+  1890→          <p>&copy; 2025 MarketHub. All rights reserved.</p>
+  1891→          <div className="flex gap-4"><p className="hover:text-foreground cursor-pointer">Privacy Policy</p><p className="hover:text-foreground cursor-pointer">Terms & Conditions</p></div>
+  1892→        </div>
+  1893→      </div>
+  1894→    </footer>
+  1895→  );
+  1896→}
+  1897→
+  1898→// ============ MAIN CUSTOMER APP ============
+  1899→
+  1900→export default function CustomerApp() {
+  1901→  const { customerView } = useNavigationStore();
+  1902→
+  1903→  const renderView = () => {
+  1904→    switch (customerView) {
+  1905→      case 'home': return <HomePage />;
+  1906→      case 'products':
+  1907→      case 'search': return <ProductsPage />;
+  1908→      case 'product-detail': return <ProductDetailPage />;
+  1909→      case 'cart': return <CartPage />;
+  1910→      case 'checkout': return <CheckoutPage />;
+  1911→      case 'orders': return <OrdersPage />;
+  1912→      case 'order-detail': return <OrderDetailPage />;
+  1913→      case 'profile': return <ProfilePage />;
+  1914→      case 'wishlist': return <WishlistPage />;
+  1915→      case 'addresses': return <AddressesPage />;
+  1916→      case 'compare': return <ComparePage />;
+  1917→      case 'login':
+  1918→      case 'register': return <LoginPage />;
+  1919→      default: return <HomePage />;
+  1920→    }
+  1921→  };
+  1922→
+  1923→  return (
+  1924→    <div className="min-h-screen flex flex-col bg-background">
+  1925→      <CustomerHeader />
+  1926→      <main className="flex-1">{renderView()}</main>
+  1927→      <CustomerFooter />
+  1928→    </div>
+  1929→  );
+
+[showing lines 1400-1929 of 1930; use offset=1930 with limit to continue reading]

@@ -105,31 +105,42 @@ export async function POST(req: NextRequest) {
     const shippingCost = subtotal >= 500 ? 0 : 99;
     const tax = subtotal * 0.18;
     const total = subtotal + shippingCost + tax;
+    const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`;
 
-    // Decrement stock
-    for (const item of items) {
-      await db.product.update({ where: { id: item.productId }, data: { stock: { decrement: item.quantity }, totalSold: { increment: item.quantity } } });
-    }
-
-    const order = await db.order.create({
-      data: {
-        userId,
-        orderNumber: `ORD-${Date.now().toString(36).toUpperCase()}`,
-        subtotal, shippingCost, tax, discount: 0, total,
-        paymentMethod: paymentMethod || 'COD',
-        shippingAddress: typeof shippingAddress === 'string' ? shippingAddress : JSON.stringify(shippingAddress),
-        items: { create: orderItems },
-      },
-      include: { items: true },
-    });
-
-    // Create activity log
-    await db.activityLog.create({ userId, action: 'ORDER_PLACE', details: `Placed order ${order.orderNumber}` });
-
-    // Update vendor totalSales
-    for (const oi of orderItems) {
-      await db.vendor.update({ where: { id: oi.vendorId }, data: { totalSales: { increment: oi.total } } });
-    }
+    // Use DB transaction to ensure atomicity of order creation,
+    // stock decrement, vendor sales update, and activity logging
+    const [order] = await db.$transaction([
+      // 1. Create the order with its items
+      db.order.create({
+        data: {
+          userId,
+          orderNumber,
+          subtotal, shippingCost, tax, discount: 0, total,
+          paymentMethod: paymentMethod || 'COD',
+          shippingAddress: typeof shippingAddress === 'string' ? shippingAddress : JSON.stringify(shippingAddress),
+          items: { create: orderItems },
+        },
+        include: { items: true },
+      }),
+      // 2. Decrement stock and increment totalSold for each product
+      ...items.map(item =>
+        db.product.update({
+          where: { id: item.productId },
+          data: { stock: { decrement: item.quantity }, totalSold: { increment: item.quantity } },
+        })
+      ),
+      // 3. Update vendor totalSales for each vendor in the order
+      ...orderItems.map(oi =>
+        db.vendor.update({
+          where: { id: oi.vendorId },
+          data: { totalSales: { increment: oi.total } },
+        })
+      ),
+      // 4. Create activity log
+      db.activityLog.create({
+        data: { userId, action: 'ORDER_PLACE', details: `Placed order ${orderNumber}` },
+      }),
+    ]);
 
     return NextResponse.json({ success: true, data: order }, { status: 201 });
   } catch (error: unknown) {

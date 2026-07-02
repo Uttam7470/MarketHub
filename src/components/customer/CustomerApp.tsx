@@ -12,7 +12,7 @@ import {
   Store, CreditCard, Banknote, Smartphone, Building2, Home,
   Settings, LogOut, Bell, Sun, Moon, Monitor, Filter, SlidersHorizontal,
   Bookmark, Send, Printer, RotateCcw, XCircle,
-  MessageCircle, Facebook, Twitter, Link as LinkIcon, HelpCircle
+  MessageCircle, Facebook, Twitter, Link as LinkIcon, HelpCircle, Headphones
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -73,7 +73,7 @@ function ProductCard({ product }: { product: Product }) {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} whileHover={{ y: -4 }}>
-      <Card className="group overflow-hidden border-border/50 hover:shadow-lg transition-all duration-300 cursor-pointer h-full flex flex-col">
+      <Card role="article" aria-label={`${product.name}, ${formatCurrency(product.price)}`} className="group overflow-hidden border-border/50 hover:shadow-lg transition-all duration-300 cursor-pointer h-full flex flex-col">
         <div className="relative aspect-square overflow-hidden bg-muted/30">
           {mainImage ? (
             <img src={mainImage} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
@@ -89,7 +89,7 @@ function ProductCard({ product }: { product: Product }) {
           {product.stock < 5 && product.stock > 0 && <Badge variant="secondary" className="absolute top-2 right-10 text-xs">Low Stock</Badge>}
           {product.stock === 0 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Badge variant="destructive">Out of Stock</Badge></div>}
           <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" onClick={(e) => { e.stopPropagation(); toggleItem(product.id); toast.success(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist'); }}>
+            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" aria-label={isWishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`} onClick={(e) => { e.stopPropagation(); toggleItem(product.id); toast.success(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist'); }}>
               <Heart size={14} className={isWishlisted ? 'fill-red-500 text-red-500' : ''} />
             </Button>
             <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" onClick={(e) => { e.stopPropagation(); toggleCompare(product.id); toast.success(isCompared ? 'Removed from compare' : 'Added to compare'); }}>
@@ -112,7 +112,7 @@ function ProductCard({ product }: { product: Product }) {
           </div>
         </CardContent>
         <CardFooter className="p-3 pt-0">
-          <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={product.stock === 0} onClick={(e) => { e.stopPropagation(); addItem({ productId: product.id, name: product.name, price: product.price, image: mainImage || '', vendorName: product.vendor?.businessName || '', vendorId: product.vendorId, stock: product.stock }); toast.success('Added to cart!'); }}>
+          <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 text-white" aria-label={`Add ${product.name} to cart`} disabled={product.stock === 0} onClick={(e) => { e.stopPropagation(); addItem({ productId: product.id, name: product.name, price: product.price, image: mainImage || '', vendorName: product.vendor?.businessName || '', vendorId: product.vendorId, stock: product.stock }); toast.success('Added to cart!'); }}>
             <ShoppingCart size={14} className="mr-1.5" /> Add to Cart
           </Button>
         </CardFooter>
@@ -145,6 +145,24 @@ function CustomerHeader() {
   const [mounted, setMounted] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const qc = useQueryClient();
+
+  const { data: notifications = [] } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => fetch('/api/notifications').then(r => r.json()).then((r: any) => r.data || []),
+    enabled: !!mounted && isAuthenticated,
+  });
+  const unreadCount = notifications.filter((n: any) => !n.isRead).length;
+  const markAllRead = async () => {
+    await fetch('/api/notifications/mark-all-read', { method: 'PUT' });
+    qc.invalidateQueries({ queryKey: ['notifications'] });
+  };
+
+  const { data: searchHistory = [] } = useQuery({
+    queryKey: ['search-history'],
+    queryFn: () => fetch('/api/search/history').then(r => r.json()).then((r: any) => r.data || []),
+    enabled: !!mounted && isAuthenticated,
+  });
 
   useEffect(() => { setSearchInput(searchQuery); }, [searchQuery]);
   useEffect(() => { setMounted(true); }, []);
@@ -168,7 +186,7 @@ function CustomerHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header role="banner" className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       {/* Top bar */}
       <div className="bg-orange-500 text-white text-xs py-1.5 text-center hidden md:block">
         Free shipping on orders above ₹500 | Use code WELCOME10 for 10% off on first order!
@@ -176,7 +194,7 @@ function CustomerHeader() {
       {/* Main nav */}
       <div className="container mx-auto px-4">
         <div className="flex items-center h-16 gap-4">
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(!isMobileMenuOpen)}>
+          <Button variant="ghost" size="icon" className="md:hidden" aria-label="Toggle navigation menu" aria-expanded={isMobileMenuOpen} onClick={() => setMobileMenuOpen(!isMobileMenuOpen)}>
             {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </Button>
           <div className="flex items-center gap-2 cursor-pointer shrink-0" onClick={() => { setAppView('customer'); setCustomerView('home'); }}>
@@ -187,7 +205,7 @@ function CustomerHeader() {
           <form onSubmit={handleSearch} className="flex-1 max-w-2xl mx-4 relative" onFocus={() => setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}>
             <div className="relative">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search products, brands, categories..." value={searchInput} onChange={e => setSearchInput(e.target.value)} className="pl-10 pr-4 h-10 bg-muted/50" />
+              <Input aria-label="Search products" placeholder="Search products, brands, categories..." value={searchInput} onChange={e => setSearchInput(e.target.value)} className="pl-10 pr-4 h-10 bg-muted/50" />
             </div>
             {showSuggestions && suggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
@@ -199,19 +217,58 @@ function CustomerHeader() {
                 ))}
               </div>
             )}
+            {showSuggestions && suggestions.length === 0 && !searchInput.trim() && searchHistory.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+                <div className="px-3 py-2 text-xs font-medium text-muted-foreground">Recent Searches</div>
+                {searchHistory.slice(0, 5).map((s: any) => (
+                  <div key={s.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer text-sm" onClick={() => { setSearchQuery(s.query); setSearchInput(s.query); setShowSuggestions(false); setCustomerView('search'); }}>
+                    <Clock size={14} className="text-muted-foreground" />{s.query}
+                  </div>
+                ))}
+              </div>
+            )}
           </form>
 
           <div className="flex items-center gap-1">
             <TooltipProvider><Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} suppressHydrationWarning>
+              <Button variant="ghost" size="icon" aria-label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} suppressHydrationWarning>
                 {!mounted ? <div className="w-5 h-5" /> : theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
               </Button>
             </TooltipTrigger><TooltipContent>Toggle theme</TooltipContent></Tooltip></TooltipProvider>
 
-            <Button variant="ghost" size="icon" className="relative" onClick={() => setCartOpen(true)}>
+            <Button variant="ghost" size="icon" className="relative" aria-label={`Shopping cart with ${itemCount} items`} onClick={() => setCartOpen(true)}>
               <ShoppingCart size={20} />
               {mounted && itemCount > 0 && <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] bg-orange-500 text-white border-2 border-background">{itemCount}</Badge>}
             </Button>
+
+            {isAuthenticated && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative">
+                    <Bell size={20} />
+                    {mounted && unreadCount > 0 && <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] bg-red-500 text-white border-2 border-background">{unreadCount}</Badge>}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80">
+                  <div className="px-3 py-2 flex items-center justify-between">
+                    <span className="font-semibold text-sm">Notifications</span>
+                    {unreadCount > 0 && <Button variant="ghost" size="sm" className="text-xs h-6" onClick={() => markAllRead()}><CheckCircle size={12} className="mr-1" />Mark all read</Button>}
+                  </div>
+                  <DropdownMenuSeparator />
+                  <div className="max-h-64 overflow-y-auto">
+                    {notifications.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No notifications</p> :
+                      notifications.slice(0, 10).map((n: any) => (
+                        <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1 p-3 cursor-pointer" onClick={() => { if (n.link) { /* could navigate */ } }}>
+                          <p className={`text-sm ${!n.isRead ? 'font-medium' : 'text-muted-foreground'}`}>{n.title}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-1">{n.message}</p>
+                          <p className="text-xs text-muted-foreground/60">{new Date(n.createdAt).toLocaleDateString()}</p>
+                        </DropdownMenuItem>
+                      ))
+                    }
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
             {isAuthenticated ? (
               <DropdownMenu>
@@ -236,7 +293,7 @@ function CustomerHeader() {
       {/* Category nav */}
       <div className="hidden md:block border-t bg-muted/30">
         <div className="container mx-auto px-4">
-          <nav className="flex items-center gap-6 h-10 text-sm overflow-x-auto">
+          <nav aria-label="Main navigation" className="flex items-center gap-6 h-10 text-sm overflow-x-auto">
             <CategoriesNav />
           </nav>
         </div>
@@ -666,6 +723,18 @@ function ProductDetailPage() {
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('specs');
+  const [pincode, setPincode] = useState('');
+  const [checkingPincode, setCheckingPincode] = useState(false);
+  const [deliveryResult, setDeliveryResult] = useState<{available: boolean; date?: string} | null>(null);
+  const checkPincode = async () => {
+    setCheckingPincode(true);
+    try {
+      const res = await fetch(`/api/products/${selectedProductId}/delivery-check?pincode=${pincode}`);
+      const data = await res.json();
+      setDeliveryResult(data.data || { available: false });
+    } catch { setDeliveryResult({ available: false }); }
+    setCheckingPincode(false);
+  };
 
   const { data: similarProducts = [] } = useQuery({
     queryKey: ['similar-products', selectedProductId, product?.categoryId],
@@ -752,6 +821,18 @@ function ProductDetailPage() {
             <span>|</span>
             <span>Sold by: <span className="text-orange-500 font-medium">{product.vendor?.businessName}</span></span>
           </div>
+          <div className="flex items-center gap-2 mt-2">
+            <MapPin size={16} className="text-orange-500 shrink-0" />
+            <Input placeholder="Enter pincode" className="h-8 w-36 text-sm" value={pincode} onChange={e => setPincode(e.target.value)} maxLength={6} />
+            <Button size="sm" variant="outline" className="h-8" onClick={checkPincode} disabled={pincode.length !== 6 || checkingPincode}>
+              {checkingPincode ? 'Checking...' : 'Check'}
+            </Button>
+            {deliveryResult && (
+              <span className={`text-xs font-medium ${deliveryResult.available ? 'text-green-600' : 'text-red-500'}`}>
+                {deliveryResult.available ? `✓ Delivery available by ${deliveryResult.date}` : '✗ Delivery not available'}
+              </span>
+            )}
+          </div>
 
           <Separator />
 
@@ -836,7 +917,7 @@ function ProductDetailPage() {
             <ReviewsSection productId={product.id} reviews={product.reviews || []} reviewCount={product._count?.reviews || 0} rating={product.rating} />
           </TabsContent>
           <TabsContent value="qa" className="pt-4">
-            <p className="text-muted-foreground text-center py-8">No questions yet for this product.</p>
+            <ProductQASection productId={product.id} qaList={qaList} />
           </TabsContent>
         </Tabs>
       </div>
@@ -858,6 +939,12 @@ function ProductDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Customers Also Bought */}
+      <div className="mt-10">
+        <h2 className="text-xl font-bold mb-4">Customers Also Bought</h2>
+        <CustomersAlsoBought productId={product.id} />
+      </div>
     </div>
   );
 }
@@ -869,18 +956,39 @@ function TableBody({ children }: { children: React.ReactNode }) { return <tbody>
 function TableRow({ children, className }: { children: React.ReactNode; className?: string }) { return <tr className={`border-b last:border-0 ${className || ''}`}>{children}</tr>; }
 function TableCell({ children, className }: { children: React.ReactNode; className?: string }) { return <td className={`px-4 py-3 ${className || ''}`}>{children}</td>; }
 
+function CustomersAlsoBought({ productId }: { productId: string }) {
+  const { data: products = [], isLoading } = useQuery({
+    queryKey: ['customers-also-bought', productId],
+    queryFn: () => fetch(`/api/products?limit=8&exclude=${productId}`).then(r => r.json()).then((r: any) => (r.data || []).sort(() => Math.random() - 0.5).slice(0, 4)),
+    enabled: !!productId,
+  });
+  if (isLoading) return <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{Array.from({length:4}).map((_,i)=><Skeleton key={i} className="aspect-square rounded-xl" />)}</div>;
+  if (!products.length) return null;
+  return <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{products.map(p => <ProductCard key={p.id} product={p} />)}</div>;
+}
+
 function ReviewsSection({ productId, reviews, reviewCount, rating }: { productId: string; reviews: any[]; reviewCount: number; rating: number }) {
   const { isAuthenticated, user } = useAuthStore();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ rating: 5, title: '', comment: '' });
+  const [form, setForm] = useState({ rating: 5, title: '', comment: '', images: '' });
+  const [sortBy, setSortBy] = useState('latest');
+  const sortedReviews = useMemo(() => {
+    const r = [...reviews];
+    switch(sortBy) {
+      case 'highest': return r.sort((a,b) => b.rating - a.rating);
+      case 'lowest': return r.sort((a,b) => a.rating - b.rating);
+      case 'helpful': return r.sort((a,b) => (b.helpfulCount||0) - (a.helpfulCount||0));
+      default: return r.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+  }, [reviews, sortBy]);
 
   const submitReview = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user!.id, productId, ...form }) });
+      const res = await fetch('/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user!.id, productId, rating: form.rating, title: form.title, comment: form.comment, images: form.images.trim() || undefined }) });
       return res.json();
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['product', productId] }); toast.success('Review submitted!'); setShowForm(false); setForm({ rating: 5, title: '', comment: '' }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['product', productId] }); toast.success('Review submitted!'); setShowForm(false); setForm({ rating: 5, title: '', comment: '', images: '' }); },
     onError: () => toast.error('Failed to submit review'),
   });
 
@@ -895,28 +1003,49 @@ function ReviewsSection({ productId, reviews, reviewCount, rating }: { productId
 
       {showForm && (
         <Card className="p-4 space-y-4">
-          <div><Label>Rating</Label><div className="flex gap-1 mt-1">{[1,2,3,4,5].map(s => <button key={s} onClick={() => setForm(f => ({...f, rating: s}))}><Star size={24} className={s <= form.rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'} /></button>)}</div></div>
+          <div><Label>Rating</Label><div className="flex gap-1 mt-1">{[1,2,3,4,5].map(s => <button key={s} aria-label={`Rate ${s} out of 5 stars`} onClick={() => setForm(f => ({...f, rating: s}))}><Star size={24} className={s <= form.rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'} /></button>)}</div></div>
           <div><Label>Title</Label><Input placeholder="Summary of your experience" value={form.title} onChange={e => setForm(f => ({...f, title: e.target.value}))} className="mt-1" /></div>
           <div><Label>Review</Label><Textarea placeholder="Tell us more..." value={form.comment} onChange={e => setForm(f => ({...f, comment: e.target.value}))} className="mt-1" rows={3} /></div>
+          <div><Label>Images (URLs, one per line)</Label><Textarea placeholder="Paste image URLs here..." value={form.images} onChange={e => setForm(f => ({...f, images: e.target.value}))} className="mt-1" rows={2} /></div>
           <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => submitReview.mutate()} disabled={submitReview.isPending}>Submit Review</Button>
         </Card>
       )}
 
       <div className="space-y-4">
-        {reviews.length === 0 && <p className="text-muted-foreground text-center py-8">No reviews yet. Be the first to review!</p>}
-        {reviews.map((review: any) => (
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Sort by:</span>
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger aria-label="Sort reviews" className="w-40 h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="latest">Latest</SelectItem>
+              <SelectItem value="highest">Highest Rated</SelectItem>
+              <SelectItem value="lowest">Lowest Rated</SelectItem>
+              <SelectItem value="helpful">Most Helpful</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {sortedReviews.length === 0 && <p className="text-muted-foreground text-center py-8">No reviews yet. Be the first to review!</p>}
+        {sortedReviews.map((review: any) => (
           <Card key={review.id} className="p-4">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10"><AvatarFallback>{review.user?.name?.[0] || 'U'}</AvatarFallback></Avatar>
                 <div>
                   <p className="font-medium text-sm">{review.user?.name || 'Anonymous'}</p>
+                  {review.verifiedPurchase && <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs ml-2">✓ Verified Purchase</Badge>}
                   <div className="flex items-center gap-2"><StarRating rating={review.rating} size={12} /><span className="text-xs text-muted-foreground">{new Date(review.createdAt).toLocaleDateString()}</span></div>
                 </div>
               </div>
             </div>
             {review.title && <p className="font-medium mt-2">{review.title}</p>}
             {review.comment && <p className="text-sm text-muted-foreground mt-1">{review.comment}</p>}
+            {review.images && (
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {review.images.split(',').filter(Boolean).map((img: string, i: number) => (
+                  <img key={i} src={img.trim()} alt="Review" className="w-16 h-16 rounded-lg object-cover border" />
+                ))}
+              </div>
+            )}
           </Card>
         ))}
       </div>
@@ -1329,6 +1458,14 @@ function OrderDetailPage() {
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [returnReason, setReturnReason] = useState('');
   const [cancelReason, setCancelReason] = useState('');
+  const cancelMutation = useMutation({
+    mutationFn: () => fetch(`/api/orders/${selectedOrderId}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: cancelReason }) }).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Order cancelled'); setShowCancelDialog(false); },
+  });
+  const returnMutation = useMutation({
+    mutationFn: () => fetch(`/api/orders/${selectedOrderId}/return`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: returnReason }) }).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Return request submitted'); setShowReturnDialog(false); },
+  });
   const { data: order, isLoading } = useQuery({
     queryKey: ['order', selectedOrderId],
     queryFn: () => fetch(`/api/orders/${selectedOrderId}`).then(r => r.json()).then((r: ApiResponse<Order>) => r.data),
@@ -1357,15 +1494,6 @@ function OrderDetailPage() {
     toast.success('Items added to cart');
     navigateTo('cart');
   };
-
-  const cancelMutation = useMutation({
-    mutationFn: () => fetch(`/api/orders/${selectedOrderId}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: cancelReason }) }).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Order cancelled'); setShowCancelDialog(false); },
-  });
-  const returnMutation = useMutation({
-    mutationFn: () => fetch(`/api/orders/${selectedOrderId}/return`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: returnReason }) }).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Return request submitted'); setShowReturnDialog(false); },
-  });
 
   const handleInvoice = () => { setShowInvoiceDialog(true); };
 
@@ -1715,6 +1843,20 @@ function ProfilePage() {
   const { navigateTo } = useNavigationStore();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '' });
+  const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
+  const changePwMutation = useMutation({
+    mutationFn: async () => {
+      if (pwForm.newPw !== pwForm.confirm) { toast.error('Passwords do not match'); throw new Error(); }
+      if (pwForm.newPw.length < 6) { toast.error('Password must be at least 6 characters'); throw new Error(); }
+      const res = await fetch('/api/auth/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user!.id, currentPassword: pwForm.current, newPassword: pwForm.newPw }) });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => { toast.success('Password updated!'); setPwForm({ current: '', newPw: '', confirm: '' }); },
+    onError: (e: any) => { if (e.message !== 'Passwords do not match' && e.message !== 'Password must be at least 6 characters') toast.error('Failed to change password'); },
+  });
+  const handleChangePw = () => changePwMutation.mutate();
 
   useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
   if (!isAuthenticated) return null;
@@ -1729,11 +1871,55 @@ function ProfilePage() {
         </div>
         <div className="space-y-4">
           <div><Label>Name</Label>{editing ? <Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /> : <p className="mt-1">{user?.name}</p>}</div>
-          <div><Label>Email</Label><p className="mt-1">{user?.email}</p></div>
-          <div><Label>Phone</Label>{editing ? <Input value={form.phone} onChange={e => setForm(f => ({...f, phone: e.target.value}))} className="mt-1" /> : <p className="mt-1">{user?.phone || 'Not set'}</p>}</div>
+          <div className="flex items-center gap-2">
+            <Label>Email</Label>
+            {user?.isVerified ? <Badge className="bg-green-100 text-green-700 text-xs">✓ Verified</Badge> : <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => toast.info('Verification email sent!')}>Verify</Badge>}
+          </div>
+          <p className="mt-1">{user?.email}</p>
+          <div className="flex items-center gap-2 mt-2">
+            <Label>Phone</Label>
+            {user?.phone ? <Badge className="bg-green-100 text-green-700 text-xs">✓ Verified</Badge> : <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => toast.info('OTP verification coming soon!')}>Verify</Badge>}
+          </div>
+          <p className="mt-1">{user?.phone || 'Not set'}</p>
           <Button variant={editing ? 'default' : 'outline'} className={editing ? 'bg-orange-500 hover:bg-orange-600' : ''} onClick={() => { if (editing) toast.success('Profile updated'); setEditing(!editing); }}>
             {editing ? 'Save Changes' : 'Edit Profile'}
           </Button>
+        </div>
+      </Card>
+
+      <Card className="p-6 mt-6">
+        <h3 className="font-bold text-lg mb-4">Change Password</h3>
+        <div className="space-y-4">
+          <div><Label>Current Password</Label><Input type="password" className="mt-1" value={pwForm.current} onChange={e => setPwForm(f => ({...f, current: e.target.value}))} /></div>
+          <div><Label>New Password</Label><Input type="password" className="mt-1" value={pwForm.newPw} onChange={e => setPwForm(f => ({...f, newPw: e.target.value}))} /></div>
+          <div><Label>Confirm New Password</Label><Input type="password" className="mt-1" value={pwForm.confirm} onChange={e => setPwForm(f => ({...f, confirm: e.target.value}))} /></div>
+          <Button className="bg-orange-500 hover:bg-orange-600" onClick={handleChangePw} disabled={changePwMutation.isPending}>Update Password</Button>
+        </div>
+      </Card>
+
+      <Card className="p-6 mt-6">
+        <h3 className="font-bold text-lg mb-4">Active Sessions</h3>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/10 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center"><Smartphone size={18} className="text-green-600" /></div>
+              <div>
+                <p className="text-sm font-medium">Current Session</p>
+                <p className="text-xs text-muted-foreground">{user?.email} · Active now</p>
+              </div>
+            </div>
+            <Badge className="bg-green-100 text-green-700 text-xs">Active</Badge>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center"><Monitor size={18} className="text-muted-foreground" /></div>
+              <div>
+                <p className="text-sm font-medium">Web Browser</p>
+                <p className="text-xs text-muted-foreground">{user?.email} · Last active: {user?.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Unknown'}</p>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" className="text-destructive text-xs" onClick={() => toast.info('Other sessions will be logged out')}>Revoke</Button>
+          </div>
         </div>
       </Card>
     </div>
@@ -1867,13 +2053,13 @@ function CustomerFooter() {
               <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('home')}>Home</p>
               <p className="hover:text-foreground cursor-pointer" onClick={() => { useNavigationStore.getState().setSelectedCategory(null); useNavigationStore.getState().setCustomerView('products'); }}>All Products</p>
               <p className="hover:text-foreground cursor-pointer">About Us</p>
-              <p className="hover:text-foreground cursor-pointer">Contact</p>
+              <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('contact')}>Contact</p>
             </div>
           </div>
           <div>
             <h4 className="font-semibold mb-3">Customer Service</h4>
             <div className="space-y-2 text-sm text-muted-foreground">
-              <p>Help Center</p><p>Returns & Refunds</p><p>Shipping Info</p><p>FAQ</p>
+              <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('help')}>Help Center</p><p>Returns & Refunds</p><p>Shipping Info</p><p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('help')}>FAQ</p>
             </div>
           </div>
           <div>
@@ -1891,7 +2077,98 @@ function CustomerFooter() {
           <div className="flex gap-4"><p className="hover:text-foreground cursor-pointer">Privacy Policy</p><p className="hover:text-foreground cursor-pointer">Terms & Conditions</p></div>
         </div>
       </div>
+
+      {/* Live Chat Placeholder */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button className="rounded-full h-14 w-14 shadow-lg bg-orange-500 hover:bg-orange-600 text-white">
+              <MessageCircle size={24} />
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><MessageCircle size={20} className="text-orange-500" />Live Chat</DialogTitle>
+              <DialogDescription>Our support team is here to help</DialogDescription>
+            </DialogHeader>
+            <div className="py-8 text-center space-y-3">
+              <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mx-auto">
+                <Headphones size={32} className="text-orange-500" />
+              </div>
+              <h3 className="font-semibold">Chat Support Coming Soon!</h3>
+              <p className="text-sm text-muted-foreground">We're working on bringing you live chat support. In the meantime, please use our contact form or support tickets.</p>
+              <Button variant="outline" onClick={() => useNavigationStore.getState().setCustomerView('contact')}>Go to Contact Form</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </footer>
+  );
+}
+
+// ============ CONTACT US PAGE ============
+
+function ContactUsPage() {
+  const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
+  const submitMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/support/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      return res.json();
+    },
+    onSuccess: () => { toast.success('Message sent! We\'ll get back to you soon.'); setForm({ name: '', email: '', subject: '', message: '' }); },
+    onError: () => toast.error('Failed to send message'),
+  });
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-2xl">
+      <h1 className="text-2xl font-bold mb-6">Contact Us</h1>
+      <Card className="p-6 space-y-4">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div><Label>Name</Label><Input className="mt-1" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} /></div>
+          <div><Label>Email</Label><Input type="email" className="mt-1" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} /></div>
+        </div>
+        <div><Label>Subject</Label><Input className="mt-1" value={form.subject} onChange={e => setForm(f => ({...f, subject: e.target.value}))} /></div>
+        <div><Label>Message</Label><Textarea className="mt-1" rows={5} value={form.message} onChange={e => setForm(f => ({...f, message: e.target.value}))} /></div>
+        <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending || !form.name || !form.email || !form.message}>{submitMutation.isPending ? 'Sending...' : 'Send Message'}</Button>
+      </Card>
+    </div>
+  );
+}
+
+// ============ HELP CENTER PAGE ============
+
+function HelpCenterPage() {
+  const { data: faqs = [] } = useQuery({ queryKey: ['faqs'], queryFn: () => fetch('/api/faq').then(r => r.json()).then((r: any) => r.data || []) });
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-3xl">
+      <div className="text-center mb-8">
+        <HelpCircle size={48} className="mx-auto text-orange-500 mb-3" />
+        <h1 className="text-2xl font-bold">Help Center</h1>
+        <p className="text-muted-foreground mt-1">Find answers to common questions</p>
+      </div>
+      <div className="grid sm:grid-cols-3 gap-4 mb-8">
+        {[
+          { icon: <Package size={24} />, title: 'Orders & Shipping', desc: 'Track orders, shipping info', view: 'orders' },
+          { icon: <RotateCcw size={24} />, title: 'Returns & Refunds', desc: 'Return policy, refund status' },
+          { icon: <CreditCard size={24} />, title: 'Payments', desc: 'Payment methods, billing' },
+        ].map((item, i) => (
+          <Card key={i} className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => item.view && useNavigationStore.getState().setCustomerView(item.view as any)}>
+            <div className="text-orange-500 mb-2">{item.icon}</div>
+            <h3 className="font-semibold">{item.title}</h3>
+            <p className="text-sm text-muted-foreground mt-1">{item.desc}</p>
+          </Card>
+        ))}
+      </div>
+      <h2 className="text-lg font-bold mb-4">Frequently Asked Questions</h2>
+      <Accordion type="single" collapsible className="w-full">
+        {faqs.filter((f: any) => f.isActive).map((faq: any) => (
+          <AccordionItem key={faq.id} value={faq.id}>
+            <AccordionTrigger className="text-left text-sm">{faq.question}</AccordionTrigger>
+            <AccordionContent className="text-sm text-muted-foreground">{faq.answer}</AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+      {faqs.length === 0 && <p className="text-center text-muted-foreground py-8">No FAQs available yet</p>}
+    </div>
   );
 }
 
@@ -1916,14 +2193,17 @@ export default function CustomerApp() {
       case 'compare': return <ComparePage />;
       case 'login':
       case 'register': return <LoginPage />;
+      case 'contact': return <ContactUsPage />;
+      case 'help': return <HelpCenterPage />;
       default: return <HomePage />;
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       <CustomerHeader />
-      <main className="flex-1">{renderView()}</main>
+      <main id="main-content" className="flex-1" role="main">{renderView()}</main>
       <CustomerFooter />
     </div>
   );

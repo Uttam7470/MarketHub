@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useMemo, useCallback } from 'react';
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→import { motion, AnimatePresence } from 'framer-motion';
+     6→import { toast } from 'sonner';
+     7→import {
+     8→  Search, ShoppingCart, Heart, User, Menu, X, ChevronDown, Star, StarHalf,
+     9→  Minus, Plus, Trash2, ChevronRight, ChevronLeft, MapPin, Phone, Mail,
+    10→  Package, Truck, CheckCircle, Clock, Shield, Gift, TrendingUp,
+    11→  BarChart3, Users, ArrowRight, Eye, Share2, GitCompare, Tag,
+    12→  Store, CreditCard, Banknote, Smartphone, Building2, Home,
+    13→  Settings, LogOut, Bell, Sun, Moon, Monitor, Filter, SlidersHorizontal,
+    14→  Bookmark, Send, Printer, RotateCcw, XCircle,
+    15→  MessageCircle, Facebook, Twitter, Link as LinkIcon, HelpCircle, Headphones
+    16→} from 'lucide-react';
+    17→
+    18→import { Button } from '@/components/ui/button';
+    19→import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+    20→import { Input } from '@/components/ui/input';
+    21→import { Label } from '@/components/ui/label';
+    22→import { Badge } from '@/components/ui/badge';
+    23→import { Separator } from '@/components/ui/separator';
+    24→import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+    25→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+    26→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    27→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    28→import { Checkbox } from '@/components/ui/checkbox';
+    29→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    30→import { Slider } from '@/components/ui/slider';
+    31→import { Textarea } from '@/components/ui/textarea';
+    32→import { Skeleton } from '@/components/ui/skeleton';
+    33→import { ScrollArea } from '@/components/ui/scroll-area';
+    34→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    35→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+    36→import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+    37→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    38→import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
+    39→import { useTheme } from 'next-themes';
+    40→import { useAuthStore, useNavigationStore, useCartStore, useWishlistStore, useCompareStore } from '@/stores';
+    41→import type { Product, Category, Brand, Order, Banner, CustomerAddress, ApiResponse } from '@/types';
+    42→
+    43→// ============ HELPERS ============
+    44→
+    45→const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    46→const discountPercent = (price: number, compare?: number | null) => compare ? Math.round(((compare - price) / compare) * 100) : 0;
+    47→const badgeColors: Record<string, string> = { BEST_SELLER: 'bg-emerald-500 text-white', NEW_ARRIVAL: 'bg-blue-500 text-white', LIMITED_TIME: 'bg-red-500 text-white', FESTIVAL_OFFER: 'bg-amber-500 text-white' };
+    48→const badgeLabels: Record<string, string> = { BEST_SELLER: 'Best Seller', NEW_ARRIVAL: 'New', LIMITED_TIME: 'Limited', FESTIVAL_OFFER: 'Festival' };
+    49→
+    50→function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
+    51→  const stars = [];
+    52→  for (let i = 1; i <= 5; i++) {
+    53→    if (i <= Math.floor(rating)) {
+    54→      stars.push(<Star key={i} className="fill-amber-400 text-amber-400" size={size} />);
+    55→    } else if (i - 0.5 <= rating) {
+    56→      stars.push(<StarHalf key={i} className="fill-amber-400 text-amber-400" size={size} />);
+    57→    } else {
+    58→      stars.push(<Star key={i} className="text-muted-foreground/30" size={size} />);
+    59→    }
+    60→  }
+    61→  return <span className="inline-flex items-center gap-0.5">{stars}</span>;
+    62→}
+    63→
+    64→function ProductCard({ product }: { product: Product }) {
+    65→  const { navigateTo, setSelectedProductId } = useNavigationStore();
+    66→  const { addItem } = useCartStore();
+    67→  const { toggleItem, hasItem } = useWishlistStore();
+    68→  const { toggleItem: toggleCompare, hasItem: hasCompare } = useCompareStore();
+    69→  const isWishlisted = hasItem(product.id);
+    70→  const isCompared = hasCompare(product.id);
+    71→  const discount = discountPercent(product.price, product.compareAtPrice);
+    72→  const mainImage = product.images?.[0]?.url;
+    73→
+    74→  return (
+    75→    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} whileHover={{ y: -4 }}>
+    76→      <Card className="group overflow-hidden border-border/50 hover:shadow-lg transition-all duration-300 cursor-pointer h-full flex flex-col">
+    77→        <div className="relative aspect-square overflow-hidden bg-muted/30">
+    78→          {mainImage ? (
+    79→            <img src={mainImage} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+    80→          ) : (
+    81→            <div className="w-full h-full flex items-center justify-center text-muted-foreground"><Package size={48} /></div>
+    82→          )}
+    83→          <div className="absolute top-2 left-2 flex flex-col gap-1">
+    84→            {discount > 0 && <Badge className="bg-red-500 text-white text-xs">{discount}% OFF</Badge>}
+    85→            {product.badge && (
+    86→              <Badge className={badgeColors[product.badge] || 'bg-gray-500 text-white'}>{badgeLabels[product.badge]}</Badge>
+    87→            )}
+    88→          </div>
+    89→          {product.stock < 5 && product.stock > 0 && <Badge variant="secondary" className="absolute top-2 right-10 text-xs">Low Stock</Badge>}
+    90→          {product.stock === 0 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Badge variant="destructive">Out of Stock</Badge></div>}
+    91→          <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+    92→            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" onClick={(e) => { e.stopPropagation(); toggleItem(product.id); toast.success(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist'); }}>
+    93→              <Heart size={14} className={isWishlisted ? 'fill-red-500 text-red-500' : ''} />
+    94→            </Button>
+    95→            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" onClick={(e) => { e.stopPropagation(); toggleCompare(product.id); toast.success(isCompared ? 'Removed from compare' : 'Added to compare'); }}>
+    96→              <GitCompare size={14} className={isCompared ? 'text-orange-500' : ''} />
+    97→            </Button>
+    98→          </div>
+    99→        </div>
+   100→        <CardContent className="p-3 flex-1 flex flex-col gap-1.5" onClick={() => { setSelectedProductId(product.id); navigateTo('product-detail'); }}>
+   101→          <p className="text-xs text-muted-foreground truncate">{product.vendor?.businessName}</p>
+   102→          <h3 className="text-sm font-medium line-clamp-2 leading-tight min-h-[2.5rem]">{product.name}</h3>
+   103→          <div className="flex items-center gap-1">
+   104→            <StarRating rating={product.rating} size={12} />
+   105→            <span className="text-xs text-muted-foreground">({product.reviewCount})</span>
+   106→          </div>
+   107→          <div className="flex items-baseline gap-2 mt-auto">
+   108→            <span className="text-lg font-bold text-foreground">{formatCurrency(product.price)}</span>
+   109→            {product.compareAtPrice && product.compareAtPrice > product.price && (
+   110→              <span className="text-sm text-muted-foreground line-through">{formatCurrency(product.compareAtPrice)}</span>
+   111→            )}
+   112→          </div>
+   113→        </CardContent>
+   114→        <CardFooter className="p-3 pt-0">
+   115→          <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={product.stock === 0} onClick={(e) => { e.stopPropagation(); addItem({ productId: product.id, name: product.name, price: product.price, image: mainImage || '', vendorName: product.vendor?.businessName || '', vendorId: product.vendorId, stock: product.stock }); toast.success('Added to cart!'); }}>
+   116→            <ShoppingCart size={14} className="mr-1.5" /> Add to Cart
+   117→          </Button>
+   118→        </CardFooter>
+   119→      </Card>
+   120→    </motion.div>
+   121→  );
+   122→}
+   123→
+   124→function ProductGrid({ products, loading }: { products: Product[]; loading?: boolean }) {
+   125→  if (loading) {
+   126→    return <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+   127→      {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="aspect-square rounded-xl" />)}
+   128→    </div>;
+   129→  }
+   130→  if (!products.length) {
+   131→    return <div className="text-center py-16"><Package size={64} className="mx-auto text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium text-muted-foreground">No products found</h3><p className="text-sm text-muted-foreground mt-1">Try adjusting your filters or search</p></div>;
+   132→  }
+   133→  return <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">{products.map(p => <ProductCard key={p.id} product={p} />)}</div>;
+   134→}
+   135→
+   136→// ============ HEADER ============
+   137→
+   138→function CustomerHeader() {
+   139→  const { user, isAuthenticated, logout } = useAuthStore();
+   140→  const { customerView, searchQuery, setSearchQuery, setCustomerView, setMobileMenuOpen, isMobileMenuOpen, isCartOpen, setCartOpen, setAppView, navigateTo, setSelectedProductId } = useNavigationStore();
+   141→  const { getItemCount } = useCartStore();
+   142→  const { setTheme, theme } = useTheme();
+   143→  const itemCount = getItemCount();
+   144→  const [searchInput, setSearchInput] = useState(searchQuery);
+   145→  const [mounted, setMounted] = useState(false);
+   146→  const [suggestions, setSuggestions] = useState<any[]>([]);
+   147→  const [showSuggestions, setShowSuggestions] = useState(false);
+   148→  const qc = useQueryClient();
+   149→
+   150→  const { data: notifications = [] } = useQuery({
+   151→    queryKey: ['notifications'],
+   152→    queryFn: () => fetch('/api/notifications').then(r => r.json()).then((r: any) => r.data || []),
+   153→    enabled: !!mounted && isAuthenticated,
+   154→  });
+   155→  const unreadCount = notifications.filter((n: any) => !n.isRead).length;
+   156→  const markAllRead = async () => {
+   157→    await fetch('/api/notifications/mark-all-read', { method: 'PUT' });
+   158→    qc.invalidateQueries({ queryKey: ['notifications'] });
+   159→  };
+   160→
+   161→  const { data: searchHistory = [] } = useQuery({
+   162→    queryKey: ['search-history'],
+   163→    queryFn: () => fetch('/api/search/history').then(r => r.json()).then((r: any) => r.data || []),
+   164→    enabled: !!mounted && isAuthenticated,
+   165→  });
+   166→
+   167→  useEffect(() => { setSearchInput(searchQuery); }, [searchQuery]);
+   168→  useEffect(() => { setMounted(true); }, []);
+   169→
+   170→  useEffect(() => {
+   171→    if (!searchInput.trim()) { setSuggestions([]); return; }
+   172→    const timer = setTimeout(async () => {
+   173→      try {
+   174→        const res = await fetch(`/api/search/suggestions?q=${encodeURIComponent(searchInput)}`);
+   175→        const data = await res.json();
+   176→        setSuggestions(data.data || []);
+   177→      } catch { setSuggestions([]); }
+   178→    }, 300);
+   179→    return () => clearTimeout(timer);
+   180→  }, [searchInput]);
+   181→
+   182→  const handleSearch = (e: React.FormEvent) => {
+   183→    e.preventDefault();
+   184→    setSearchQuery(searchInput);
+   185→    setCustomerView(searchInput ? 'search' : 'home');
+   186→  };
+   187→
+   188→  return (
+   189→    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+   190→      {/* Top bar */}
+   191→      <div className="bg-orange-500 text-white text-xs py-1.5 text-center hidden md:block">
+   192→        Free shipping on orders above ₹500 | Use code WELCOME10 for 10% off on first order!
+   193→      </div>
+   194→      {/* Main nav */}
+   195→      <div className="container mx-auto px-4">
+   196→        <div className="flex items-center h-16 gap-4">
+   197→          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(!isMobileMenuOpen)}>
+   198→            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+   199→          </Button>
+   200→          <div className="flex items-center gap-2 cursor-pointer shrink-0" onClick={() => { setAppView('customer'); setCustomerView('home'); }}>
+   201→            <Store size={28} className="text-orange-500" />
+   202→            <span className="text-xl font-bold hidden sm:block">MarketHub</span>
+   203→          </div>
+   204→
+   205→          <form onSubmit={handleSearch} className="flex-1 max-w-2xl mx-4 relative" onFocus={() => setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}>
+   206→            <div className="relative">
+   207→              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+   208→              <Input placeholder="Search products, brands, categories..." value={searchInput} onChange={e => setSearchInput(e.target.value)} className="pl-10 pr-4 h-10 bg-muted/50" />
+   209→            </div>
+   210→            {showSuggestions && suggestions.length > 0 && (
+   211→              <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+   212→                {suggestions.map((p: any) => (
+   213→                  <div key={p.id} className="flex items-center gap-3 p-2 hover:bg-muted cursor-pointer" onClick={() => { setSearchQuery(p.name); setSearchInput(p.name); setShowSuggestions(false); setSelectedProductId(p.id); navigateTo('product-detail'); }}>
+   214→                    <img src={p.images?.[0]?.url || ''} className="w-8 h-8 object-cover rounded" alt="" />
+   215→                    <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{p.name}</p><p className="text-xs text-muted-foreground">₹{p.price.toLocaleString('en-IN')}</p></div>
+   216→                  </div>
+   217→                ))}
+   218→              </div>
+   219→            )}
+   220→            {showSuggestions && suggestions.length === 0 && !searchInput.trim() && searchHistory.length > 0 && (
+   221→              <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+   222→                <div className="px-3 py-2 text-xs font-medium text-muted-foreground">Recent Searches</div>
+   223→                {searchHistory.slice(0, 5).map((s: any) => (
+   224→                  <div key={s.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer text-sm" onClick={() => { setSearchQuery(s.query); setSearchInput(s.query); setShowSuggestions(false); setCustomerView('search'); }}>
+   225→                    <Clock size={14} className="text-muted-foreground" />{s.query}
+   226→                  </div>
+   227→                ))}
+   228→              </div>
+   229→            )}
+   230→          </form>
+   231→
+   232→          <div className="flex items-center gap-1">
+   233→            <TooltipProvider><Tooltip><TooltipTrigger asChild>
+   234→              <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} suppressHydrationWarning>
+   235→                {!mounted ? <div className="w-5 h-5" /> : theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+   236→              </Button>
+   237→            </TooltipTrigger><TooltipContent>Toggle theme</TooltipContent></Tooltip></TooltipProvider>
+   238→
+   239→            <Button variant="ghost" size="icon" className="relative" onClick={() => setCartOpen(true)}>
+   240→              <ShoppingCart size={20} />
+   241→              {mounted && itemCount > 0 && <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] bg-orange-500 text-white border-2 border-background">{itemCount}</Badge>}
+   242→            </Button>
+   243→
+   244→            {isAuthenticated && (
+   245→              <DropdownMenu>
+   246→                <DropdownMenuTrigger asChild>
+   247→                  <Button variant="ghost" size="icon" className="relative">
+   248→                    <Bell size={20} />
+   249→                    {mounted && unreadCount > 0 && <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] bg-red-500 text-white border-2 border-background">{unreadCount}</Badge>}
+   250→                  </Button>
+   251→                </DropdownMenuTrigger>
+   252→                <DropdownMenuContent align="end" className="w-80">
+   253→                  <div className="px-3 py-2 flex items-center justify-between">
+   254→                    <span className="font-semibold text-sm">Notifications</span>
+   255→                    {unreadCount > 0 && <Button variant="ghost" size="sm" className="text-xs h-6" onClick={() => markAllRead()}><CheckCircle size={12} className="mr-1" />Mark all read</Button>}
+   256→                  </div>
+   257→                  <DropdownMenuSeparator />
+   258→                  <div className="max-h-64 overflow-y-auto">
+   259→                    {notifications.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No notifications</p> :
+   260→                      notifications.slice(0, 10).map((n: any) => (
+   261→                        <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1 p-3 cursor-pointer" onClick={() => { if (n.link) { /* could navigate */ } }}>
+   262→                          <p className={`text-sm ${!n.isRead ? 'font-medium' : 'text-muted-foreground'}`}>{n.title}</p>
+   263→                          <p className="text-xs text-muted-foreground line-clamp-1">{n.message}</p>
+   264→                          <p className="text-xs text-muted-foreground/60">{new Date(n.createdAt).toLocaleDateString()}</p>
+   265→                        </DropdownMenuItem>
+   266→                      ))
+   267→                    }
+   268→                  </div>
+   269→                </DropdownMenuContent>
+   270→              </DropdownMenu>
+   271→            )}
+   272→
+   273→            {isAuthenticated ? (
+   274→              <DropdownMenu>
+   275→                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><User size={20} /></Button></DropdownMenuTrigger>
+   276→                <DropdownMenuContent align="end" className="w-56">
+   277→                  <div className="px-3 py-2"><p className="text-sm font-medium">{user?.name}</p><p className="text-xs text-muted-foreground">{user?.email}</p></div>
+   278→                  <DropdownMenuSeparator />
+   279→                  <DropdownMenuItem onClick={() => navigateTo('profile')}><User size={16} className="mr-2" />My Profile</DropdownMenuItem>
+   280→                  <DropdownMenuItem onClick={() => navigateTo('orders')}><Package size={16} className="mr-2" />My Orders</DropdownMenuItem>
+   281→                  <DropdownMenuItem onClick={() => navigateTo('wishlist')}><Heart size={16} className="mr-2" />Wishlist</DropdownMenuItem>
+   282→                  <DropdownMenuItem onClick={() => navigateTo('addresses')}><MapPin size={16} className="mr-2" />Addresses</DropdownMenuItem>
+   283→                  <DropdownMenuSeparator />
+   284→                  <DropdownMenuItem onClick={() => { logout(); setCustomerView('home'); toast.success('Logged out'); }} className="text-destructive"><LogOut size={16} className="mr-2" />Logout</DropdownMenuItem>
+   285→                </DropdownMenuContent>
+   286→              </DropdownMenu>
+   287→            ) : (
+   288→              <Button variant="ghost" size="sm" onClick={() => navigateTo('login')} className="hidden sm:flex gap-1.5"><User size={16} />Login</Button>
+   289→            )}
+   290→          </div>
+   291→        </div>
+   292→      </div>
+   293→      {/* Category nav */}
+   294→      <div className="hidden md:block border-t bg-muted/30">
+   295→        <div className="container mx-auto px-4">
+   296→          <nav className="flex items-center gap-6 h-10 text-sm overflow-x-auto">
+   297→            <CategoriesNav />
+   298→          </nav>
+   299→        </div>
+   300→      </div>
+   301→      {/* Mobile menu */}
+   302→      <Sheet open={isMobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+   303→        <SheetContent side="left" className="w-80 p-0">
+   304→          <SheetHeader className="p-4 border-b"><SheetTitle className="flex items-center gap-2"><Store size={20} className="text-orange-500" />MarketHub</SheetTitle></SheetHeader>
+   305→          <ScrollArea className="h-[calc(100vh-80px)]">
+   306→            <div className="p-4 space-y-2">
+   307→              <CategoriesNav mobile />
+   308→              <Separator className="my-3" />
+   309→              {isAuthenticated ? (
+   310→                <>
+   311→                  <p className="text-sm font-medium px-2">{user?.name}</p>
+   312→                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('profile'); setMobileMenuOpen(false); }}><User size={16} className="mr-2" />Profile</Button>
+   313→                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('orders'); setMobileMenuOpen(false); }}><Package size={16} className="mr-2" />Orders</Button>
+   314→                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('wishlist'); setMobileMenuOpen(false); }}><Heart size={16} className="mr-2" />Wishlist</Button>
+   315→                  <Button variant="ghost" className="w-full justify-start text-destructive" onClick={() => { logout(); setMobileMenuOpen(false); toast.success('Logged out'); }}><LogOut size={16} className="mr-2" />Logout</Button>
+   316→                </>
+   317→              ) : (
+   318→                <Button className="w-full bg-orange-500 hover:bg-orange-600" onClick={() => { navigateTo('login'); setMobileMenuOpen(false); }}>Login / Register</Button>
+   319→              )}
+   320→            </div>
+   321→          </ScrollArea>
+   322→        </SheetContent>
+   323→      </Sheet>
+   324→      {/* Cart Sheet */}
+   325→      <CartSheet />
+   326→    </header>
+   327→  );
+   328→}
+   329→
+   330→function CategoriesNav({ mobile }: { mobile?: boolean }) {
+   331→  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: ApiResponse<Category[]>) => r.data || []) });
+   332→  const { setSelectedCategory, setCustomerView, setMobileMenuOpen } = useNavigationStore();
+   333→
+   334→  const handleCategoryClick = (slug: string) => {
+   335→    setSelectedCategory(slug);
+   336→    setCustomerView('products');
+   337→    if (mobile) setMobileMenuOpen(false);
+   338→  };
+   339→
+   340→  if (mobile) {
+   341→    return categories?.map(cat => (
+   342→      <div key={cat.id} className="space-y-1">
+   343→        <Button variant="ghost" className="w-full justify-start font-medium" onClick={() => handleCategoryClick(cat.slug)}>{cat.name}</Button>
+   344→        {cat.children?.map(child => (
+   345→          <Button key={child.id} variant="ghost" className="w-full justify-start pl-8 text-sm text-muted-foreground" onClick={() => handleCategoryClick(child.slug)}>{child.name}</Button>
+   346→        ))}
+   347→      </div>
+   348→    ));
+   349→  }
+   350→
+   351→  return <>
+   352→    <Button variant="ghost" size="sm" className="h-10 text-sm font-medium" onClick={() => { setCustomerView('products'); setSelectedCategory(null); }}>All Products</Button>
+   353→    {categories?.map(cat => (
+   354→      <DropdownMenu key={cat.id}>
+   355→        <DropdownMenuTrigger asChild>
+   356→          <Button variant="ghost" size="sm" className="h-10 text-sm font-medium hover:text-orange-500">{cat.name}{cat.children?.length ? <ChevronDown size={14} className="ml-1" /> : null}</Button>
+   357→        </DropdownMenuTrigger>
+   358→        {cat.children?.length ? (
+   359→          <DropdownMenuContent>
+   360→            {cat.children.map(child => (
+   361→              <DropdownMenuItem key={child.id} onClick={() => handleCategoryClick(child.slug)}>{child.name} <Badge variant="secondary" className="ml-auto text-xs">{child._count?.products || 0}</Badge></DropdownMenuItem>
+   362→            ))}
+   363→          </DropdownMenuContent>
+   364→        ) : null}
+   365→      </DropdownMenu>
+   366→    ))}
+   367→  </>;
+   368→}
+   369→
+   370→function CartSheet() {
+   371→  const { items, removeItem, updateQuantity, getSubtotal, getShipping } = useCartStore();
+   372→  const { isCartOpen, setCartOpen, navigateTo } = useNavigationStore();
+   373→
+   374→  return (
+   375→    <Sheet open={isCartOpen} onOpenChange={setCartOpen}>
+   376→      <SheetContent className="w-full sm:max-w-md flex flex-col">
+   377→        <SheetHeader><SheetTitle className="flex items-center gap-2"><ShoppingCart size={20} />Cart ({items.length})</SheetTitle></SheetHeader>
+   378→        {items.length === 0 ? (
+   379→          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3">
+   380→            <ShoppingCart size={48} className="text-muted-foreground/30" /><p>Your cart is empty</p>
+   381→            <Button variant="outline" onClick={() => setCartOpen(false)}>Continue Shopping</Button>
+   382→          </div>
+   383→        ) : (
+   384→          <>
+   385→            <ScrollArea className="flex-1 -mx-6 px-6">
+   386→              <div className="space-y-4 py-4">{items.map(item => (
+   387→                <div key={item.productId} className="flex gap-3 p-3 bg-muted/30 rounded-lg">
+   388→                  <div className="w-16 h-16 rounded-md overflow-hidden bg-muted shrink-0">
+   389→                    {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={20} /></div>}
+   390→                  </div>
+   391→                  <div className="flex-1 min-w-0">
+   392→                    <p className="text-sm font-medium truncate">{item.name}</p>
+   393→                    <p className="text-xs text-muted-foreground">{item.vendorName}</p>
+   394→                    <p className="text-sm font-bold mt-1">{formatCurrency(item.price)}</p>
+   395→                    <div className="flex items-center gap-2 mt-1">
+   396→                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateQuantity(item.productId, item.quantity - 1)}><Minus size={12} /></Button>
+   397→                      <span className="text-sm w-6 text-center">{item.quantity}</span>
+   398→                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateQuantity(item.productId, item.quantity + 1)}><Plus size={12} /></Button>
+   399→                      <Button size="icon" variant="ghost" className="h-6 w-6 ml-auto text-destructive" onClick={() => { removeItem(item.productId); toast.success('Removed from cart'); }}><Trash2 size={12} /></Button>
+   400→                    </div>
+   401→                  </div>
+   402→                </div>
+   403→              ))}</div>
+   404→            </ScrollArea>
+   405→            <div className="border-t pt-4 space-y-3">
+   406→              <div className="flex justify-between text-sm"><span>Subtotal</span><span>{formatCurrency(getSubtotal())}</span></div>
+   407→              <div className="flex justify-between text-sm"><span>Shipping</span><span>{getShipping() === 0 ? <span className="text-green-600">Free</span> : formatCurrency(getShipping())}</span></div>
+   408→              <Separator />
+   409→              <div className="flex justify-between font-bold"><span>Total</span><span>{formatCurrency(getSubtotal() + getShipping())}</span></div>
+   410→              <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white" onClick={() => { setCartOpen(false); navigateTo('checkout'); }}>
+   411→                Checkout ({formatCurrency(getSubtotal() + getShipping())})
+   412→              </Button>
+   413→            </div>
+   414→          </>
+   415→        )}
+   416→      </SheetContent>
+   417→    </Sheet>
+   418→  );
+   419→}
+   420→
+   421→// ============ HOME PAGE ============
+   422→
+   423→function HomePage() {
+   424→  const { data: banners } = useQuery({ queryKey: ['banners'], queryFn: () => fetch('/api/banners?position=HOME').then(r => r.json()).then((r: ApiResponse<Banner[]>) => r.data || []) });
+   425→  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: ApiResponse<Category[]>) => r.data || []) });
+   426→  const { data: featuredData } = useQuery({ queryKey: ['products', 'featured'], queryFn: () => fetch('/api/products?featured=true&limit=8').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
+   427→  const { data: newArrivals } = useQuery({ queryKey: ['products', 'new'], queryFn: () => fetch('/api/products?limit=8&sort=newest').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
+   428→  const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: ApiResponse<Brand[]>) => r.data || []) });
+   429→  const { data: popularSearches } = useQuery({ queryKey: ['popular-searches'], queryFn: () => fetch('/api/search/popular').then(r => r.json()).then((r: any) => r.data || []) });
+   430→  const { setSelectedCategory, setCustomerView, setSearchQuery } = useNavigationStore();
+   431→  const [bannerIdx, setBannerIdx] = useState(0);
+   432→
+   433→  // Recently Viewed
+   434→  const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(() => {
+   435→    if (typeof window === 'undefined') return [];
+   436→    try {
+   437→      const stored = localStorage.getItem('marketplace-recently-viewed');
+   438→      return stored ? JSON.parse(stored).slice(0, 6) : [];
+   439→    } catch { return []; }
+   440→  });
+   441→
+   442→  const { data: recentlyViewedProducts } = useQuery({
+   443→    queryKey: ['recently-viewed', recentlyViewedIds],
+   444→    queryFn: async () => {
+   445→      if (!recentlyViewedIds.length) return [];
+   446→      const res = await fetch('/api/products?limit=50');
+   447→      const data = await res.json();
+   448→      return (data.data || []).filter((p: Product) => recentlyViewedIds.includes(p.id));
+   449→    },
+   450→    enabled: recentlyViewedIds.length > 0,
+   451→  });
+   452→
+   453→  useEffect(() => {
+   454→    if ((banners?.length || 0) > 1) {
+   455→      const timer = setInterval(() => setBannerIdx(i => (i + 1) % (banners?.length || 1)), 5000);
+   456→      return () => clearInterval(timer);
+   457→    }
+   458→  }, [banners?.length]);
+   459→
+   460→  return (
+   461→    <div className="space-y-10 pb-10">
+   462→      {/* Hero Banner */}
+   463→      {banners && banners.length > 0 && (
+   464→        <div className="relative overflow-hidden rounded-xl mx-4 mt-4 md:mx-0">
+   465→          <AnimatePresence mode="wait">
+   466→            <motion.img key={bannerIdx} src={banners[bannerIdx]?.image} alt={banners[bannerIdx]?.title} className="w-full h-48 md:h-80 object-cover" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+   467→          </AnimatePresence>
+   468→          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
+   469→            {banners.map((_, i) => <button key={i} className={`w-2.5 h-2.5 rounded-full transition-all ${i === bannerIdx ? 'bg-orange-500 w-6' : 'bg-white/70'}`} onClick={() => setBannerIdx(i)} />)}
+   470→          </div>
+   471→        </div>
+   472→      )}
+   473→
+   474→      {/* Categories */}
+   475→      {categories && categories.length > 0 && (
+   476→        <section className="container mx-auto px-4">
+   477→          <div className="flex items-center justify-between mb-4">
+   478→            <h2 className="text-xl font-bold">Shop by Category</h2>
+   479→            <Button variant="ghost" size="sm" className="text-orange-500" onClick={() => { setSelectedCategory(null); setCustomerView('products'); }}>View All <ArrowRight size={14} /></Button>
+   480→          </div>
+   481→          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-3">
+   482→            {categories.slice(0, 7).map(cat => {
+   483→              const allCats = [cat, ...(cat.children || [])];
+   484→              return allCats.slice(0, 1).map(c => (
+   485→                <motion.div key={c.id} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+   486→                  <Card className="cursor-pointer hover:border-orange-300 transition-colors text-center p-4" onClick={() => { setSelectedCategory(c.slug); setCustomerView('products'); }}>
+   487→                    <div className="w-12 h-12 mx-auto rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-2 text-orange-500 font-bold text-lg">{c.name[0]}</div>
+   488→                    <p className="text-xs font-medium truncate">{c.name}</p>
+   489→                    <p className="text-[10px] text-muted-foreground">{c._count?.products || 0} items</p>
+   490→                  </Card>
+   491→                </motion.div>
+   492→              ));
+   493→            })}
+   494→          </div>
+   495→        </section>
+   496→      )}
+   497→
+   498→      {/* Featured Products */}
+   499→      {featuredData && featuredData.length > 0 && (
+   500→        <section className="container mx-auto px-4">
+   501→          <div className="flex items-center justify-between mb-4">
+   502→            <h2 className="text-xl font-bold">Featured Products</h2>
+   503→            <Button variant="ghost" size="sm" className="text-orange-500" onClick={() => { setSelectedCategory(null); setCustomerView('products'); }}>View All <ArrowRight size={14} /></Button>
+   504→          </div>
+   505→          <ProductGrid products={featuredData} />
+   506→        </section>
+   507→      )}
+   508→
+   509→      {/* Brands */}
+   510→      {brands && brands.length > 0 && (
+   511→        <section className="container mx-auto px-4">
+   512→          <h2 className="text-xl font-bold mb-4">Top Brands</h2>
+   513→          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
+   514→            {brands.map(brand => (
+   515→              <Card key={brand.id} className="flex items-center justify-center p-4 hover:border-orange-300 transition-colors cursor-pointer h-20">
+   516→                <span className="font-bold text-sm text-center">{brand.name}</span>
+   517→              </Card>
+   518→            ))}
+   519→          </div>
+   520→        </section>
+   521→      )}
+   522→
+   523→      {/* New Arrivals */}
+   524→      {newArrivals && newArrivals.length > 0 && (
+   525→        <section className="container mx-auto px-4">
+   526→          <div className="flex items-center justify-between mb-4">
+   527→            <h2 className="text-xl font-bold">New Arrivals</h2>
+   528→          </div>
+   529→          <ProductGrid products={newArrivals} />
+   530→        </section>
+   531→      )}
+   532→
+   533→      {/* Features */}
+   534→      <section className="container mx-auto px-4">
+   535→        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   536→          {[
+   537→            { icon: <Truck size={24} />, title: 'Free Shipping', desc: 'On orders above ₹500' },
+   538→            { icon: <Shield size={24} />, title: 'Secure Payment', desc: '100% secure payments' },
+   539→            { icon: <RefreshCw size={24} />, title: 'Easy Returns', desc: '7-day return policy' },
+   540→            { icon: <Gift size={24} />, title: 'Best Deals', desc: 'Unbeatable prices' },
+   541→          ].map((f, i) => (
+   542→            <Card key={i} className="p-4 text-center"><div className="mx-auto text-orange-500 mb-2">{f.icon}</div><h3 className="font-medium text-sm">{f.title}</h3><p className="text-xs text-muted-foreground">{f.desc}</p></Card>
+   543→          ))}
+   544→        </div>
+   545→      </section>
+   546→
+   547→      {/* Popular Searches */}
+   548→      {popularSearches && (popularSearches as any[]).length > 0 && (
+   549→        <section className="container mx-auto px-4">
+   550→          <h2 className="text-xl font-bold mb-4">Popular Searches</h2>
+   551→          <div className="flex flex-wrap gap-2">
+   552→            {(popularSearches as any[]).map((s: any, i: number) => (
+   553→              <Button key={i} variant="outline" size="sm" className="rounded-full" onClick={() => { setSearchQuery(s.query || s); setCustomerView('products'); }}>
+   554→                <Search size={14} className="mr-1.5" />{s.query || s}
+   555→              </Button>
+   556→            ))}
+   557→          </div>
+   558→        </section>
+   559→      )}
+   560→
+   561→      {/* Recently Viewed */}
+   562→      {recentlyViewedProducts && recentlyViewedProducts.length > 0 && (
+   563→        <section className="container mx-auto px-4">
+   564→          <div className="flex items-center justify-between mb-4">
+   565→            <h2 className="text-xl font-bold">Recently Viewed</h2>
+   566→            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { try { localStorage.removeItem('marketplace-recently-viewed'); } catch {} setRecentlyViewedIds([]); }}>
+   567→              <Trash2 size={14} className="mr-1.5" />Clear
+   568→            </Button>
+   569→          </div>
+   570→          <ProductGrid products={recentlyViewedProducts} />
+   571→        </section>
+   572→      )}
+   573→    </div>
+   574→  );
+   575→}
+   576→
+   577→// Need RefreshCw icon
+   578→function RefreshCw(props: React.SVGProps<SVGSVGElement> & { size?: number }) {
+   579→  const { size = 24, ...rest } = props;
+   580→  return (
+   581→    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...rest}>
+   582→      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" />
+   583→    </svg>
+   584→  );
+   585→}
+   586→
+   587→// ============ FILTER SIDEBAR (extracted) ============
+   588→
+   589→function FilterSidebarContent({ allCategories, allBrands }: { allCategories: Category[]; allBrands: Brand[] }) {
+   590→  const { selectedCategory, selectedBrand, priceRange, setPriceRange, setSelectedBrand } = useNavigationStore();
+   591→  const navStore = useNavigationStore();
+   592→
+   593→  return (
+   594→    <div className="space-y-6">
+   595→      <div>
+   596→        <h3 className="font-semibold mb-3 flex items-center gap-2"><Filter size={16} /> Filters</h3>
+   597→        <Accordion type="multiple" defaultValue={['category', 'brand', 'price', 'rating']}>
+   598→          <AccordionItem value="category"><AccordionTrigger>Category</AccordionTrigger>
+   599→            <AccordionContent>
+   600→              <div className="space-y-2 max-h-48 overflow-y-auto">
+   601→                <Button variant={selectedCategory === null ? 'secondary' : 'ghost'} size="sm" className="w-full justify-start" onClick={() => { navStore.setSelectedCategory(null); }}>All Categories</Button>
+   602→                {allCategories.map(cat => (
+   603→                  <Button key={cat.id} variant={selectedCategory === cat.slug ? 'secondary' : 'ghost'} size="sm" className="w-full justify-start" onClick={() => { navStore.setSelectedCategory(cat.slug); }}>
+   604→                    {cat.name} <Badge variant="secondary" className="ml-auto text-xs">{cat._count?.products || 0}</Badge>
+   605→                  </Button>
+   606→                ))}
+   607→              </div>
+   608→            </AccordionContent>
+   609→          </AccordionItem>
+   610→          <AccordionItem value="brand"><AccordionTrigger>Brand</AccordionTrigger>
+   611→            <AccordionContent>
+   612→              <div className="space-y-2 max-h-48 overflow-y-auto">
+   613→                {allBrands.map(brand => (
+   614→                  <label key={brand.id} className="flex items-center gap-2 cursor-pointer">
+   615→                    <Checkbox checked={selectedBrand === brand.slug} onCheckedChange={() => setSelectedBrand(selectedBrand === brand.slug ? null : brand.slug)} />
+   616→                    <span className="text-sm">{brand.name}</span>
+   617→                    <span className="text-xs text-muted-foreground ml-auto">({brand._count?.products || 0})</span>
+   618→                  </label>
+   619→                ))}
+   620→              </div>
+   621→            </AccordionContent>
+   622→          </AccordionItem>
+   623→          <AccordionItem value="price"><AccordionTrigger>Price Range</AccordionTrigger>
+   624→            <AccordionContent>
+   625→              <Slider min={0} max={100000} step={1000} value={priceRange} onValueChange={(v) => { setPriceRange(v as [number, number]); }} className="mt-2" />
+   626→              <div className="flex justify-between text-sm mt-2"><span>{formatCurrency(priceRange[0])}</span><span>{formatCurrency(priceRange[1])}</span></div>
+   627→            </AccordionContent>
+   628→          </AccordionItem>
+   629→        </Accordion>
+   630→      </div>
+   631→    </div>
+   632→  );
+   633→}
+   634→
+   635→// ============ PRODUCTS LIST PAGE ============
+   636→
+   637→function ProductsPage() {
+   638→  const { selectedCategory, selectedBrand, searchQuery, priceRange, sortBy, setPriceRange, setSortBy, setSelectedBrand } = useNavigationStore();
+   639→  const [page, setPage] = useState(1);
+   640→  const [mobileFilters, setMobileFilters] = useState(false);
+   641→  const [minPrice, maxPrice] = priceRange;
+   642→
+   643→  const queryParams = new URLSearchParams({ page: String(page), limit: '20', sort: sortBy, minPrice: String(minPrice), maxPrice: String(maxPrice) });
+   644→  if (selectedCategory) queryParams.set('category', selectedCategory);
+   645→  if (selectedBrand) queryParams.set('brand', selectedBrand);
+   646→  if (searchQuery) queryParams.set('search', searchQuery);
+   647→
+   648→  const { data, isLoading } = useQuery({
+   649→    queryKey: ['products', queryParams.toString()],
+   650→    queryFn: () => fetch(`/api/products?${queryParams}`).then(r => r.json()).then((r: ApiResponse<Product[]>) => r),
+   651→  });
+   652→
+   653→  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: ApiResponse<Category[]>) => r.data || []) });
+   654→  const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: ApiResponse<Brand[]>) => r.data || []) });
+   655→
+   656→  const allCategories = useMemo(() => {
+   657→    const flat: Category[] = [];
+   658→    categories?.forEach(c => { flat.push(c); c.children?.forEach(ch => flat.push(ch)); });
+   659→    return flat;
+   660→  }, [categories]);
+   661→
+   662→  return (
+   663→    <div className="container mx-auto px-4 py-6">
+   664→      <Breadcrumb className="mb-4">
+   665→        <BreadcrumbList><BreadcrumbItem><BreadcrumbLink onClick={() => useNavigationStore.getState().setCustomerView('home')} className="cursor-pointer">Home</BreadcrumbLink></BreadcrumbItem><BreadcrumbSeparator /><BreadcrumbItem><BreadcrumbLink className="text-foreground font-medium">{searchQuery ? `Search: "${searchQuery}"` : selectedCategory || 'All Products'}</BreadcrumbLink></BreadcrumbItem></BreadcrumbList>
+   666→      </Breadcrumb>
+   667→
+   668→      <div className="flex gap-6">
+   669→        {/* Desktop Filters */}
+   670→        <aside className="hidden lg:block w-64 shrink-0"><FilterSidebarContent allCategories={allCategories} allBrands={brands || []} /></aside>
+   671→
+   672→        {/* Main Content */}
+   673→        <div className="flex-1 min-w-0">
+   674→          <div className="flex items-center justify-between mb-4">
+   675→            <p className="text-sm text-muted-foreground">{data?.meta ? `${data.meta.total} products found` : ''}</p>
+   676→            <div className="flex items-center gap-2">
+   677→              <Button variant="outline" size="sm" className="lg:hidden" onClick={() => setMobileFilters(true)}><SlidersHorizontal size={16} className="mr-1.5" />Filters</Button>
+   678→              <Select value={sortBy} onValueChange={(v) => { setSortBy(v); setPage(1); }}>
+   679→                <SelectTrigger className="w-40 h-9"><SelectValue /></SelectTrigger>
+   680→                <SelectContent>
+   681→                  <SelectItem value="newest">Newest First</SelectItem>
+   682→                  <SelectItem value="price-asc">Price: Low to High</SelectItem>
+   683→                  <SelectItem value="price-desc">Price: High to Low</SelectItem>
+   684→                  <SelectItem value="rating">Highest Rated</SelectItem>
+   685→                  <SelectItem value="popular">Most Popular</SelectItem>
+   686→                </SelectContent>
+   687→              </Select>
+   688→            </div>
+   689→          </div>
+   690→          <ProductGrid products={data?.data || []} loading={isLoading} />
+   691→          {data?.meta && data.meta.totalPages > 1 && (
+   692→            <div className="flex items-center justify-center gap-2 mt-6">
+   693→              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></Button>
+   694→              {Array.from({ length: Math.min(data.meta.totalPages, 5) }, (_, i) => i + 1).map(p => (
+   695→                <Button key={p} variant={p === page ? 'default' : 'outline'} size="sm" className="bg-orange-500 hover:bg-orange-600" onClick={() => setPage(p)}>{p}</Button>
+   696→              ))}
+   697→              <Button variant="outline" size="sm" disabled={page >= data.meta.totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
+   698→            </div>
+   699→          )}
+   700→        </div>
+   701→      </div>
+   702→
+   703→      {/* Mobile Filters Sheet */}
+   704→      <Sheet open={mobileFilters} onOpenChange={setMobileFilters}>
+   705→        <SheetContent side="left" className="w-80"><SheetHeader><SheetTitle>Filters</SheetTitle></SheetHeader><div className="mt-4"><FilterSidebarContent allCategories={allCategories} allBrands={brands || []} /></div></SheetContent>
+   706→      </Sheet>
+   707→    </div>
+   708→  );
+   709→}
+   710→
+   711→// ============ PRODUCT DETAIL PAGE ============
+   712→
+   713→function ProductDetailPage() {
+   714→  const { selectedProductId } = useNavigationStore();
+   715→  const { data: product, isLoading } = useQuery({
+   716→    queryKey: ['product', selectedProductId],
+   717→    queryFn: () => fetch(`/api/products/${selectedProductId}`).then(r => r.json()).then((r: ApiResponse<Product>) => r.data),
+   718→    enabled: !!selectedProductId,
+   719→  });
+   720→  const { isAuthenticated, user } = useAuthStore();
+   721→  const { addItem } = useCartStore();
+   722→  const { toggleItem, hasItem } = useWishlistStore();
+   723→  const [selectedImage, setSelectedImage] = useState(0);
+   724→  const [quantity, setQuantity] = useState(1);
+   725→  const [activeTab, setActiveTab] = useState('specs');
+   726→  const [pincode, setPincode] = useState('');
+   727→  const [checkingPincode, setCheckingPincode] = useState(false);
+   728→  const [deliveryResult, setDeliveryResult] = useState<{available: boolean; date?: string} | null>(null);
+   729→  const checkPincode = async () => {
+   730→    setCheckingPincode(true);
+   731→    try {
+   732→      const res = await fetch(`/api/products/${selectedProductId}/delivery-check?pincode=${pincode}`);
+   733→      const data = await res.json();
+   734→      setDeliveryResult(data.data || { available: false });
+   735→    } catch { setDeliveryResult({ available: false }); }
+   736→    setCheckingPincode(false);
+   737→  };
+   738→
+   739→  const { data: similarProducts = [] } = useQuery({
+   740→    queryKey: ['similar-products', selectedProductId, product?.categoryId],
+   741→    queryFn: () => fetch(`/api/products?categoryId=${product?.categoryId}&limit=4`).then(r => r.json()).then((r: any) => (r.data || []).filter((p: any) => p.id !== selectedProductId).slice(0, 4)),
+   742→    enabled: !!product?.categoryId,
+   743→  });
+   744→
+   745→  const { data: frequentlyBought = [] } = useQuery({
+   746→    queryKey: ['frequently-bought', selectedProductId, product?.vendorId],
+   747→    queryFn: () => fetch(`/api/products?vendorId=${product?.vendorId}&limit=4`).then(r => r.json()).then((r: any) => (r.data || []).filter((p: any) => p.id !== selectedProductId).slice(0, 4)),
+   748→    enabled: !!product?.vendorId,
+   749→  });
+   750→
+   751→  const { data: qaList = [] } = useQuery({
+   752→    queryKey: ['product-qa', selectedProductId],
+   753→    queryFn: () => fetch(`/api/products/${selectedProductId}/qa`).then(r => r.json()).then((r: any) => r.data || []),
+   754→    enabled: !!selectedProductId,
+   755→  });
+   756→
+   757→  const variantsByType = useMemo(() => {
+   758→    const map: Record<string, string[]> = {};
+   759→    product?.variants?.forEach(v => { if (!map[v.name]) map[v.name] = []; if (!map[v.name].includes(v.value)) map[v.name].push(v.value); });
+   760→    return map;
+   761→  }, [product?.variants]);
+   762→
+   763→  if (isLoading) return <div className="container mx-auto px-4 py-8"><Skeleton className="h-96 rounded-xl" /></div>;
+   764→  if (!product) return <div className="container mx-auto px-4 py-16 text-center"><p className="text-muted-foreground">Product not found</p></div>;
+   765→
+   766→  const isWishlisted = hasItem(product.id);
+   767→  const discount = discountPercent(product.price, product.compareAtPrice);
+   768→  const mainImage = product.images?.[selectedImage]?.url;
+   769→
+   770→  return (
+   771→    <div className="container mx-auto px-4 py-6">
+   772→      <Breadcrumb className="mb-6">
+   773→        <BreadcrumbList>
+   774→          <BreadcrumbItem><BreadcrumbLink onClick={() => useNavigationStore.getState().setCustomerView('home')} className="cursor-pointer">Home</BreadcrumbLink></BreadcrumbItem>
+   775→          <BreadcrumbSeparator />
+   776→          <BreadcrumbItem><BreadcrumbLink onClick={() => { useNavigationStore.getState().setSelectedCategory(product.category?.slug || null); useNavigationStore.getState().setCustomerView('products'); }} className="cursor-pointer">{product.category?.name}</BreadcrumbLink></BreadcrumbItem>
+   777→          <BreadcrumbSeparator />
+   778→          <BreadcrumbItem><BreadcrumbLink className="text-foreground font-medium truncate max-w-48">{product.name}</BreadcrumbLink></BreadcrumbItem>
+   779→        </BreadcrumbList>
+   780→      </Breadcrumb>
+   781→
+   782→      <div className="grid md:grid-cols-2 gap-8">
+   783→        {/* Images */}
+   784→        <div className="space-y-3">
+   785→          <div className="aspect-square rounded-xl overflow-hidden bg-muted/30 border">
+   786→            {mainImage ? <img src={mainImage} alt={product.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={64} className="text-muted-foreground/30" /></div>}
+   787→          </div>
+   788→          {product.images && product.images.length > 1 && (
+   789→            <div className="flex gap-2 overflow-x-auto pb-1">{product.images.map((img, i) => (
+   790→              <button key={img.id} className={`w-16 h-16 rounded-lg overflow-hidden border-2 shrink-0 ${i === selectedImage ? 'border-orange-500' : 'border-transparent'}`} onClick={() => setSelectedImage(i)}>
+   791→                <img src={img.url} alt={img.alt || ''} className="w-full h-full object-cover" />
+   792→              </button>
+   793→            ))}</div>
+   794→          )}
+   795→        </div>
+   796→
+   797→        {/* Product Info */}
+   798→        <div className="space-y-4">
+   799→          <div>
+   800→            <p className="text-sm text-muted-foreground mb-1">Brand: <span className="text-foreground font-medium">{product.brand?.name}</span></p>
+   801→            <h1 className="text-2xl md:text-3xl font-bold">{product.name}</h1>
+   802→            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+   803→              <StarRating rating={product.rating} /> <span>{product.rating}</span> ({product.reviewCount} reviews) | {product.totalSold} sold
+   804→            </p>
+   805→          </div>
+   806→
+   807→          <div className="flex items-baseline gap-3">
+   808→            <span className="text-3xl font-bold text-orange-500">{formatCurrency(product.price)}</span>
+   809→            {product.compareAtPrice && product.compareAtPrice > product.price && (
+   810→              <>
+   811→                <span className="text-xl text-muted-foreground line-through">{formatCurrency(product.compareAtPrice)}</span>
+   812→                <Badge className="bg-green-600">{discount}% OFF</Badge>
+   813→              </>
+   814→            )}
+   815→          </div>
+   816→
+   817→          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+   818→            <span className={`font-medium ${product.stock > 5 ? 'text-green-600' : product.stock > 0 ? 'text-amber-600' : 'text-red-600'}`}>
+   819→              {product.stock > 5 ? 'In Stock' : product.stock > 0 ? `Only ${product.stock} left` : 'Out of Stock'}
+   820→            </span>
+   821→            <span>|</span>
+   822→            <span>Sold by: <span className="text-orange-500 font-medium">{product.vendor?.businessName}</span></span>
+   823→          </div>
+   824→          <div className="flex items-center gap-2 mt-2">
+   825→            <MapPin size={16} className="text-orange-500 shrink-0" />
+   826→            <Input placeholder="Enter pincode" className="h-8 w-36 text-sm" value={pincode} onChange={e => setPincode(e.target.value)} maxLength={6} />
+   827→            <Button size="sm" variant="outline" className="h-8" onClick={checkPincode} disabled={pincode.length !== 6 || checkingPincode}>
+   828→              {checkingPincode ? 'Checking...' : 'Check'}
+   829→            </Button>
+   830→            {deliveryResult && (
+   831→              <span className={`text-xs font-medium ${deliveryResult.available ? 'text-green-600' : 'text-red-500'}`}>
+   832→                {deliveryResult.available ? `✓ Delivery available by ${deliveryResult.date}` : '✗ Delivery not available'}
+   833→              </span>
+   834→            )}
+   835→          </div>
+   836→
+   837→          <Separator />
+   838→
+   839→          {/* Variants */}
+   840→          {Object.entries(variantsByType).map(([type, values]) => (
+   841→            <div key={type}>
+   842→              <Label className="text-sm font-medium mb-2 block">{type}</Label>
+   843→              <div className="flex gap-2 flex-wrap">
+   844→                {values.map(v => (
+   845→                  <Button key={v} variant="outline" size="sm" className={type === 'Color' ? `w-10 h-10 p-0 rounded-full` : ''}>{v}</Button>
+   846→                ))}
+   847→              </div>
+   848→            </div>
+   849→          ))}
+   850→
+   851→          {/* Quantity */}
+   852→          <div>
+   853→            <Label className="text-sm font-medium mb-2 block">Quantity</Label>
+   854→            <div className="flex items-center gap-3">
+   855→              <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.max(1, q - 1))}><Minus size={16} /></Button>
+   856→              <span className="w-10 text-center font-medium">{quantity}</span>
+   857→              <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.min(product.stock, q + 1))}><Plus size={16} /></Button>
+   858→            </div>
+   859→          </div>
+   860→
+   861→          {/* Actions */}
+   862→          <div className="flex gap-3 pt-2">
+   863→            <Button size="lg" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white h-12" disabled={product.stock === 0}
+   864→              onClick={() => { for (let i = 0; i < quantity; i++) addItem({ productId: product.id, name: product.name, price: product.price, image: mainImage || '', vendorName: product.vendor?.businessName || '', vendorId: product.vendorId, stock: product.stock }); toast.success('Added to cart!'); }}>
+   865→              <ShoppingCart size={20} className="mr-2" />Add to Cart
+   866→            </Button>
+   867→            <Button size="lg" variant="outline" className="h-12" onClick={() => { toggleItem(product.id); toast.success(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist'); }}>
+   868→              <Heart size={20} className={isWishlisted ? 'fill-red-500 text-red-500' : ''} />
+   869→            </Button>
+   870→          </div>
+   871→
+   872→          {/* Share Buttons */}
+   873→          <div className="flex items-center gap-2 mt-3">
+   874→            <span className="text-sm text-muted-foreground">Share:</span>
+   875→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(product.name + ' ' + window.location.href)}`)}><MessageCircle size={14} /></Button>
+   876→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`)}><Facebook size={14} /></Button>
+   877→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(product.name)}&url=${encodeURIComponent(window.location.href)}`)}><Twitter size={14} /></Button>
+   878→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success('Link copied!'); }}><LinkIcon size={14} /></Button>
+   879→          </div>
+   880→
+   881→          {/* Features */}
+   882→          <div className="grid grid-cols-1 gap-3 pt-2">
+   883→            <div className="flex items-center gap-2 text-sm"><Truck size={16} className="text-orange-500" /><span>Estimated delivery: {product.estimatedDeliveryDays || 5}-{(product.estimatedDeliveryDays || 5) + 3} business days</span></div>
+   884→            <div className="grid grid-cols-2 gap-3">
+   885→            {[
+   886→              { icon: <Truck size={16} />, text: 'Free delivery above ₹500' },
+   887→              { icon: <RefreshCw size={16} />, text: '7-day easy returns' },
+   888→              { icon: <Shield size={16} />, text: 'Secure transactions' },
+   889→              { icon: <Package size={16} />, text: product.warranty || 'Standard warranty' },
+   890→            ].map((f, i) => (
+   891→              <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground"><span className="text-orange-500">{f.icon}</span>{f.text}</div>
+   892→            ))}
+   893→            </div>
+   894→          </div>
+   895→        </div>
+   896→      </div>
+   897→
+   898→      {/* Tabs: Description, Specs, Reviews, Q&A */}
+   899→      <div className="mt-10">
+   900→        <Tabs value={activeTab} onValueChange={setActiveTab}>
+   901→          <TabsList className="w-full justify-start border-b rounded-none h-auto p-0">
+   902→            {['specs', 'description', 'reviews', 'qa'].map(t => (
+   903→              <TabsTrigger key={t} value={t} className="rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:shadow-none px-6 py-3 capitalize">{t === 'qa' ? 'Q&A' : t}</TabsTrigger>
+   904→            ))}
+   905→          </TabsList>
+   906→          <TabsContent value="specs" className="pt-4">
+   907→            {product.specs && product.specs.length > 0 ? (
+   908→              <div className="max-w-2xl"><Table><TableBody>{product.specs.map(s => (
+   909→                <TableRow key={s.id}><TableCell className="font-medium w-40 bg-muted/30">{s.key}</TableCell><TableCell>{s.value}</TableCell></TableRow>
+   910→              ))}</TableBody></Table></div>
+   911→            ) : <p className="text-muted-foreground">No specifications available</p>}
+   912→          </TabsContent>
+   913→          <TabsContent value="description" className="pt-4">
+   914→            <div className="max-w-3xl prose dark:prose-invert" dangerouslySetInnerHTML={{ __html: product.description || '<p>No description available</p>' }} />
+   915→          </TabsContent>
+   916→          <TabsContent value="reviews" className="pt-4">
+   917→            <ReviewsSection productId={product.id} reviews={product.reviews || []} reviewCount={product._count?.reviews || 0} rating={product.rating} />
+   918→          </TabsContent>
+   919→          <TabsContent value="qa" className="pt-4">
+   920→            <ProductQASection productId={product.id} qaList={qaList} />
+   921→          </TabsContent>
+   922→        </Tabs>
+   923→      </div>
+   924→
+   925→      {/* Similar Products */}
+   926→      {similarProducts.length > 0 && (
+   927→        <div className="mt-10">
+   928→          <h2 className="text-xl font-bold mb-4">Similar Products</h2>
+   929→          <ProductGrid products={similarProducts} />
+   930→        </div>
+   931→      )}
+   932→
+   933→      {/* Frequently Bought Together */}
+   934→      {frequentlyBought.length > 0 && (
+   935→        <div className="mt-10">
+   936→          <h2 className="text-xl font-bold mb-4">Frequently Bought Together</h2>
+   937→          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   938→            {frequentlyBought.map(p => <ProductCard key={p.id} product={p} />)}
+   939→          </div>
+   940→        </div>
+   941→      )}
+   942→
+   943→      {/* Customers Also Bought */}
+   944→      <div className="mt-10">
+   945→        <h2 className="text-xl font-bold mb-4">Customers Also Bought</h2>
+   946→        <CustomersAlsoBought productId={product.id} />
+   947→      </div>
+   948→    </div>
+   949→  );
+   950→}
+   951→
+   952→function Table({ children, className }: { children: React.ReactNode; className?: string }) {
+   953→  return <div className={`rounded-lg border overflow-hidden ${className || ''}`}><table className="w-full text-sm">{children}</table></div>;
+   954→}
+   955→function TableBody({ children }: { children: React.ReactNode }) { return <tbody>{children}</tbody>; }
+   956→function TableRow({ children, className }: { children: React.ReactNode; className?: string }) { return <tr className={`border-b last:border-0 ${className || ''}`}>{children}</tr>; }
+   957→function TableCell({ children, className }: { children: React.ReactNode; className?: string }) { return <td className={`px-4 py-3 ${className || ''}`}>{children}</td>; }
+   958→
+   959→function CustomersAlsoBought({ productId }: { productId: string }) {
+   960→  const { data: products = [], isLoading } = useQuery({
+   961→    queryKey: ['customers-also-bought', productId],
+   962→    queryFn: () => fetch(`/api/products?limit=8&exclude=${productId}`).then(r => r.json()).then((r: any) => (r.data || []).sort(() => Math.random() - 0.5).slice(0, 4)),
+   963→    enabled: !!productId,
+   964→  });
+   965→  if (isLoading) return <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{Array.from({length:4}).map((_,i)=><Skeleton key={i} className="aspect-square rounded-xl" />)}</div>;
+   966→  if (!products.length) return null;
+   967→  return <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{products.map(p => <ProductCard key={p.id} product={p} />)}</div>;
+   968→}
+   969→
+   970→function ReviewsSection({ productId, reviews, reviewCount, rating }: { productId: string; reviews: any[]; reviewCount: number; rating: number }) {
+   971→  const { isAuthenticated, user } = useAuthStore();
+   972→  const queryClient = useQueryClient();
+   973→  const [showForm, setShowForm] = useState(false);
+   974→  const [form, setForm] = useState({ rating: 5, title: '', comment: '', images: '' });
+   975→  const [sortBy, setSortBy] = useState('latest');
+   976→  const sortedReviews = useMemo(() => {
+   977→    const r = [...reviews];
+   978→    switch(sortBy) {
+   979→      case 'highest': return r.sort((a,b) => b.rating - a.rating);
+   980→      case 'lowest': return r.sort((a,b) => a.rating - b.rating);
+   981→      case 'helpful': return r.sort((a,b) => (b.helpfulCount||0) - (a.helpfulCount||0));
+   982→      default: return r.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+   983→    }
+   984→  }, [reviews, sortBy]);
+   985→
+   986→  const submitReview = useMutation({
+   987→    mutationFn: async () => {
+   988→      const res = await fetch('/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user!.id, productId, rating: form.rating, title: form.title, comment: form.comment, images: form.images.trim() || undefined }) });
+   989→      return res.json();
+   990→    },
+   991→    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['product', productId] }); toast.success('Review submitted!'); setShowForm(false); setForm({ rating: 5, title: '', comment: '', images: '' }); },
+   992→    onError: () => toast.error('Failed to submit review'),
+   993→  });
+   994→
+   995→  return (
+   996→    <div className="space-y-6">
+   997→      <div className="flex items-center justify-between">
+   998→        <div className="flex items-center gap-4">
+   999→          <div className="text-center"><div className="text-4xl font-bold">{rating}</div><StarRating rating={rating} size={16} /><p className="text-sm text-muted-foreground mt-1">{reviewCount} reviews</p></div>
+  1000→        </div>
+  1001→        {isAuthenticated && <Button variant="outline" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : 'Write a Review'}</Button>}
+  1002→      </div>
+  1003→
+  1004→      {showForm && (
+  1005→        <Card className="p-4 space-y-4">
+  1006→          <div><Label>Rating</Label><div className="flex gap-1 mt-1">{[1,2,3,4,5].map(s => <button key={s} onClick={() => setForm(f => ({...f, rating: s}))}><Star size={24} className={s <= form.rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'} /></button>)}</div></div>
+  1007→          <div><Label>Title</Label><Input placeholder="Summary of your experience" value={form.title} onChange={e => setForm(f => ({...f, title: e.target.value}))} className="mt-1" /></div>
+  1008→          <div><Label>Review</Label><Textarea placeholder="Tell us more..." value={form.comment} onChange={e => setForm(f => ({...f, comment: e.target.value}))} className="mt-1" rows={3} /></div>
+  1009→          <div><Label>Images (URLs, one per line)</Label><Textarea placeholder="Paste image URLs here..." value={form.images} onChange={e => setForm(f => ({...f, images: e.target.value}))} className="mt-1" rows={2} /></div>
+  1010→          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => submitReview.mutate()} disabled={submitReview.isPending}>Submit Review</Button>
+  1011→        </Card>
+  1012→      )}
+  1013→
+  1014→      <div className="space-y-4">
+  1015→        <div className="flex items-center justify-between">
+  1016→          <span className="text-sm text-muted-foreground">Sort by:</span>
+  1017→          <Select value={sortBy} onValueChange={setSortBy}>
+  1018→            <SelectTrigger className="w-40 h-8 text-sm"><SelectValue /></SelectTrigger>
+  1019→            <SelectContent>
+  1020→              <SelectItem value="latest">Latest</SelectItem>
+  1021→              <SelectItem value="highest">Highest Rated</SelectItem>
+  1022→              <SelectItem value="lowest">Lowest Rated</SelectItem>
+  1023→              <SelectItem value="helpful">Most Helpful</SelectItem>
+  1024→            </SelectContent>
+  1025→          </Select>
+  1026→        </div>
+  1027→        {sortedReviews.length === 0 && <p className="text-muted-foreground text-center py-8">No reviews yet. Be the first to review!</p>}
+  1028→        {sortedReviews.map((review: any) => (
+  1029→          <Card key={review.id} className="p-4">
+  1030→            <div className="flex items-start justify-between">
+  1031→              <div className="flex items-center gap-3">
+  1032→                <Avatar className="h-10 w-10"><AvatarFallback>{review.user?.name?.[0] || 'U'}</AvatarFallback></Avatar>
+  1033→                <div>
+  1034→                  <p className="font-medium text-sm">{review.user?.name || 'Anonymous'}</p>
+  1035→                  {review.verifiedPurchase && <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs ml-2">✓ Verified Purchase</Badge>}
+  1036→                  <div className="flex items-center gap-2"><StarRating rating={review.rating} size={12} /><span className="text-xs text-muted-foreground">{new Date(review.createdAt).toLocaleDateString()}</span></div>
+  1037→                </div>
+  1038→              </div>
+  1039→            </div>
+  1040→            {review.title && <p className="font-medium mt-2">{review.title}</p>}
+  1041→            {review.comment && <p className="text-sm text-muted-foreground mt-1">{review.comment}</p>}
+  1042→            {review.images && (
+  1043→              <div className="flex gap-2 mt-2 flex-wrap">
+  1044→                {review.images.split(',').filter(Boolean).map((img: string, i: number) => (
+  1045→                  <img key={i} src={img.trim()} alt="Review" className="w-16 h-16 rounded-lg object-cover border" />
+  1046→                ))}
+  1047→              </div>
+  1048→            )}
+  1049→          </Card>
+  1050→        ))}
+  1051→      </div>
+  1052→    </div>
+  1053→  );
+  1054→}
+  1055→
+  1056→function ProductQASection({ productId, qaList }: { productId: string; qaList: any[] }) {
+  1057→  const { isAuthenticated, user } = useAuthStore();
+  1058→  const queryClient = useQueryClient();
+  1059→  const [showDialog, setShowDialog] = useState(false);
+  1060→  const [question, setQuestion] = useState('');
+  1061→
+  1062→  const submitQuestion = useMutation({
+  1063→    mutationFn: async () => {
+  1064→      const res = await fetch(`/api/products/${productId}/qa`, {
+  1065→        method: 'POST',
+  1066→        headers: { 'Content-Type': 'application/json' },
+  1067→        body: JSON.stringify({ userId: user!.id, question }),
+  1068→      });
+  1069→      return res.json();
+  1070→    },
+  1071→    onSuccess: () => {
+  1072→      queryClient.invalidateQueries({ queryKey: ['product-qa', productId] });
+  1073→      toast.success('Question submitted!');
+  1074→      setShowDialog(false);
+  1075→      setQuestion('');
+  1076→    },
+  1077→    onError: () => toast.error('Failed to submit question'),
+  1078→  });
+  1079→
+  1080→  return (
+  1081→    <div className="space-y-6">
+  1082→      <div className="flex items-center justify-between">
+  1083→        <div className="flex items-center gap-2">
+  1084→          <HelpCircle size={20} className="text-orange-500" />
+  1085→          <h3 className="text-lg font-bold">Questions & Answers</h3>
+  1086→          <Badge variant="secondary">{qaList.length}</Badge>
+  1087→        </div>
+  1088→        <Button variant="outline" onClick={() => { if (!isAuthenticated) { toast.info('Please login to ask a question'); return; } setShowDialog(true); }}>
+  1089→          <Send size={14} className="mr-1.5" />Ask Question
+  1090→        </Button>
+  1091→      </div>
+  1092→
+  1093→      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+  1094→        <DialogContent>
+  1095→          <DialogHeader>
+  1096→            <DialogTitle>Ask a Question</DialogTitle>
+  1097→            <DialogDescription>Get answers from the community and seller</DialogDescription>
+  1098→          </DialogHeader>
+  1099→          <div className="space-y-4 py-2">
+  1100→            <div>
+  1101→              <Label>Your Question</Label>
+  1102→              <Textarea placeholder="What would you like to know about this product?" value={question} onChange={e => setQuestion(e.target.value)} className="mt-1" rows={3} />
+  1103→            </div>
+  1104→          </div>
+  1105→          <DialogFooter>
+  1106→            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
+  1107→            <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => submitQuestion.mutate()} disabled={!question.trim() || submitQuestion.isPending}>
+  1108→              {submitQuestion.isPending ? 'Submitting...' : 'Submit Question'}
+  1109→            </Button>
+  1110→          </DialogFooter>
+  1111→        </DialogContent>
+  1112→      </Dialog>
+  1113→
+  1114→      <div className="space-y-4">
+  1115→        {qaList.length === 0 && (
+  1116→          <p className="text-muted-foreground text-center py-8">No questions yet. Be the first to ask!</p>
+  1117→        )}
+  1118→        {qaList.map((qa: any) => (
+  1119→          <Card key={qa.id} className="p-4">
+  1120→            <div className="flex items-start gap-3">
+  1121→              <Avatar className="h-8 w-8 shrink-0"><AvatarFallback className="text-xs">{qa.user?.name?.[0] || 'U'}</AvatarFallback></Avatar>
+  1122→              <div className="flex-1 min-w-0">
+  1123→                <div className="flex items-center gap-2">
+  1124→                  <p className="font-medium text-sm">{qa.user?.name || 'Anonymous'}</p>
+  1125→                  <span className="text-xs text-muted-foreground">{new Date(qa.createdAt).toLocaleDateString()}</span>
+  1126→                </div>
+  1127→                <p className="text-sm mt-1">{qa.question}</p>
+  1128→                {qa.answer && (
+  1129→                  <div className="mt-3 ml-4 pl-4 border-l-2 border-orange-500 bg-orange-50 dark:bg-orange-900/10 rounded-r-lg p-3">
+  1130→                    <div className="flex items-center gap-2 mb-1">
+  1131→                      <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Seller Answer</span>
+  1132→                    </div>
+  1133→                    <p className="text-sm text-muted-foreground">{qa.answer}</p>
+  1134→                  </div>
+  1135→                )}
+  1136→                {!qa.answer && (
+  1137→                  <p className="text-xs text-muted-foreground mt-1 italic">No answer yet</p>
+  1138→                )}
+  1139→              </div>
+  1140→            </div>
+  1141→          </Card>
+  1142→        ))}
+  1143→      </div>
+  1144→    </div>
+  1145→  );
+  1146→}
+  1147→
+  1148→// ============ CART PAGE ============
+  1149→
+  1150→function CartPage() {
+  1151→  const { items, removeItem, updateQuantity, getSubtotal, getShipping, getTax, getTotal, couponCode, couponDiscount, applyCoupon, removeCoupon, clearCart, addItem } = useCartStore();
+  1152→  const { navigateTo, isAuthenticated } = useNavigationStore();
+  1153→  const { data: coupons } = useQuery({ queryKey: ['coupons'], queryFn: () => fetch('/api/coupons').then(r => r.json()).then((r: ApiResponse<any[]>) => r.data || []) });
+  1154→  const [couponInput, setCouponInput] = useState('');
+  1155→  const [savedForLater, setSavedForLater] = useState<any[]>([]);
+  1156→  const qc = useQueryClient();
+  1157→
+  1158→  const handleApplyCoupon = () => {
+  1159→    const coupon = coupons?.find(c => c.code.toUpperCase() === couponInput.toUpperCase());
+  1160→    if (!coupon) { toast.error('Invalid coupon code'); return; }
+  1161→    const subtotal = getSubtotal();
+  1162→    if (coupon.minOrder && subtotal < coupon.minOrder) { toast.error(`Minimum order ₹${coupon.minOrder} required`); return; }
+  1163→    let discount = 0;
+  1164→    if (coupon.discountType === 'PERCENTAGE') discount = (subtotal * coupon.discountValue) / 100;
+  1165→    else discount = coupon.discountValue;
+  1166→    if (coupon.maxDiscount) discount = Math.min(discount, coupon.maxDiscount);
+  1167→    applyCoupon(coupon.code, discount);
+  1168→    toast.success(`Coupon applied! You save ${formatCurrency(discount)}`);
+  1169→  };
+  1170→
+  1171→  if (items.length === 0) {
+  1172→    return (
+  1173→      <div className="container mx-auto px-4 py-16 text-center">
+  1174→        <ShoppingCart size={64} className="mx-auto text-muted-foreground/30 mb-4" />
+  1175→        <h2 className="text-xl font-bold">Your cart is empty</h2>
+  1176→        <p className="text-muted-foreground mt-2">Add items to your cart to see them here</p>
+  1177→        <Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Continue Shopping</Button>
+  1178→      </div>
+  1179→    );
+  1180→  }
+  1181→
+  1182→  return (
+  1183→    <div className="container mx-auto px-4 py-6">
+  1184→      <h1 className="text-2xl font-bold mb-6">Shopping Cart ({items.length} items)</h1>
+  1185→      <div className="grid lg:grid-cols-3 gap-6">
+  1186→        <div className="lg:col-span-2 space-y-4">
+  1187→          {items.map(item => (
+  1188→            <Card key={item.productId} className="flex gap-4 p-4">
+  1189→              <div className="w-24 h-24 rounded-lg overflow-hidden bg-muted shrink-0">
+  1190→                {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={24} /></div>}
+  1191→              </div>
+  1192→              <div className="flex-1 min-w-0">
+  1193→                <h3 className="font-medium">{item.name}</h3>
+  1194→                <p className="text-sm text-muted-foreground">{item.vendorName}</p>
+  1195→                <p className="text-lg font-bold text-orange-500 mt-1">{formatCurrency(item.price)}</p>
+  1196→                <div className="flex items-center gap-3 mt-2">
+  1197→                  <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.productId, item.quantity - 1)}><Minus size={14} /></Button>
+  1198→                  <span className="w-8 text-center">{item.quantity}</span>
+  1199→                  <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.productId, Math.min(item.stock, item.quantity + 1))}><Plus size={14} /></Button>
+  1200→                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { removeItem(item.productId); toast.success('Removed'); }}><Trash2 size={16} className="mr-1" />Remove</Button>
+  1201→                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => { setSavedForLater(prev => [...prev, item]); removeItem(item.productId); toast.success('Saved for later'); }}>
+  1202→                    <Bookmark size={14} className="mr-1" />Save for Later
+  1203→                  </Button>
+  1204→                </div>
+  1205→              </div>
+  1206→              <div className="text-right shrink-0"><p className="font-bold">{formatCurrency(item.price * item.quantity)}</p></div>
+  1207→            </Card>
+  1208→          ))}
+  1209→        </div>
+  1210→        {savedForLater.length > 0 && (
+  1211→          <Card className="p-4 mt-4">
+  1212→            <h3 className="font-bold mb-3">Saved for Later ({savedForLater.length})</h3>
+  1213→            <div className="space-y-2">
+  1214→              {savedForLater.map(item => (
+  1215→                <div key={item.productId} className="flex items-center gap-3 p-2 border rounded-lg">
+  1216→                  {item.image && <img src={item.image} className="w-12 h-12 object-cover rounded" alt="" />}
+  1217→                  <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{item.name}</p><p className="text-sm text-orange-500 font-bold">₹{item.price.toLocaleString('en-IN')}</p></div>
+  1218→                  <Button size="sm" onClick={() => { setSavedForLater(prev => prev.filter(i => i.productId !== item.productId)); addItem(item); toast.success('Moved to cart'); }}>Move to Cart</Button>
+  1219→                </div>
+  1220→              ))}
+  1221→            </div>
+  1222→          </Card>
+  1223→        )}
+  1224→        <div>
+  1225→          <Card className="p-6 sticky top-24 space-y-4">
+  1226→            <h3 className="font-bold text-lg">Order Summary</h3>
+  1227→            <div className="space-y-2 text-sm">
+  1228→              <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(getSubtotal())}</span></div>
+  1229→              <div className="flex justify-between"><span>Shipping</span><span>{getShipping() === 0 ? <span className="text-green-600 font-medium">FREE</span> : formatCurrency(getShipping())}</span></div>
+  1230→              <div className="flex justify-between"><span>Tax (GST 18%)</span><span>{formatCurrency(getTax())}</span></div>
+  1231→              {couponDiscount > 0 && <div className="flex justify-between text-green-600"><span>Coupon Discount</span><span>-{formatCurrency(couponDiscount)}</span></div>}
+  1232→              <Separator />
+  1233→              <div className="flex justify-between text-lg font-bold"><span>Total</span><span className="text-orange-500">{formatCurrency(getTotal())}</span></div>
+  1234→            </div>
+  1235→            {!couponCode ? (
+  1236→              <div className="flex gap-2"><Input placeholder="Coupon code" value={couponInput} onChange={e => setCouponInput(e.target.value)} className="uppercase" /><Button variant="outline" onClick={handleApplyCoupon}>Apply</Button></div>
+  1237→            ) : (
+  1238→              <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 p-2 rounded"><span className="text-sm text-green-600">Code: {couponCode}</span><Button variant="ghost" size="sm" className="text-destructive h-6" onClick={removeCoupon}>Remove</Button></div>
+  1239→            )}
+  1240→            <div className="mt-3">
+  1241→              <p className="text-xs text-muted-foreground mb-2">Available Coupons:</p>
+  1242→              <div className="flex flex-wrap gap-2">
+  1243→                {coupons?.filter((c: any) => c.isActive).slice(0, 3).map((c: any) => (
+  1244→                  <Badge key={c.id} variant="outline" className="cursor-pointer hover:bg-orange-50 text-xs" onClick={() => setCouponInput(c.code)}>
+  1245→                    {c.code} - {c.discountType === 'PERCENTAGE' ? `${c.discountValue}% off` : `₹${c.discountValue} off`}
+  1246→                  </Badge>
+  1247→                ))}
+  1248→              </div>
+  1249→            </div>
+  1250→            <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 text-lg" onClick={() => { if (!isAuthenticated) { navigateTo('login'); toast.info('Please login first'); return; } navigateTo('checkout'); }}>
+  1251→              Proceed to Checkout
+  1252→            </Button>
+  1253→            <Button variant="ghost" className="w-full" onClick={() => navigateTo('home')}>Continue Shopping</Button>
+  1254→          </Card>
+  1255→        </div>
+  1256→      </div>
+  1257→    </div>
+  1258→  );
+  1259→}
+  1260→
+  1261→// ============ CHECKOUT PAGE ============
+  1262→
+  1263→function CheckoutPage() {
+  1264→  const { user, isAuthenticated } = useAuthStore();
+  1265→  const { items, getSubtotal, getShipping, getTax, getTotal, clearCart, couponDiscount } = useCartStore();
+  1266→  const { navigateTo } = useNavigationStore();
+  1267→  const [paymentMethod, setPaymentMethod] = useState('COD');
+  1268→  const [address, setAddress] = useState({ fullName: user?.name || '', phone: user?.phone || '', addressLine1: '', city: '', state: '', pincode: '' });
+  1269→  const [placing, setPlacing] = useState(false);
+  1270→  const [isGuest, setIsGuest] = useState(!isAuthenticated);
+  1271→  const [guestInfo, setGuestInfo] = useState({ email: '', phone: '' });
+  1272→  const [sameAddress, setSameAddress] = useState(true);
+  1273→  const [billingForm, setBillingForm] = useState({ fullName: '', phone: '', address: '', city: '', state: '', pincode: '' });
+  1274→  const qc = useQueryClient();
+  1275→
+  1276→  useEffect(() => { if (items.length === 0) navigateTo('cart'); }, [items.length, navigateTo]);
+  1277→  if (items.length === 0) return null;
+  1278→  if (!isAuthenticated && !isGuest) {
+  1279→    return (
+  1280→      <div className="container mx-auto px-4 py-16 max-w-lg text-center space-y-4">
+  1281→        <Package size={64} className="mx-auto text-muted-foreground/30" />
+  1282→        <h2 className="text-xl font-bold">Continue to Checkout</h2>
+  1283→        <p className="text-muted-foreground">Log in for a faster experience, or continue as guest.</p>
+  1284→        <div className="flex gap-3 justify-center">
+  1285→          <Button variant="outline" onClick={() => navigateTo('login')}>Login</Button>
+  1286→          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setIsGuest(true)}>Continue as Guest</Button>
+  1287→        </div>
+  1288→      </div>
+  1289→    );
+  1290→  }
+  1291→
+  1292→  const handlePlaceOrder = async () => {
+  1293→    if (!address.fullName || !address.phone || !address.addressLine1 || !address.city || !address.pincode) {
+  1294→      toast.error('Please fill all address fields'); return;
+  1295→    }
+  1296→    if (!isAuthenticated && (!guestInfo.email || !guestInfo.phone)) {
+  1297→      toast.error('Please fill guest email and phone'); return;
+  1298→    }
+  1299→    setPlacing(true);
+  1300→    try {
+  1301→      const res = await fetch('/api/orders', {
+  1302→        method: 'POST',
+  1303→        headers: { 'Content-Type': 'application/json' },
+  1304→        body: JSON.stringify({
+  1305→          ...(isAuthenticated ? { userId: user!.id } : { guestEmail: guestInfo.email, guestPhone: guestInfo.phone }),
+  1306→          items: items.map(i => ({ productId: i.productId, quantity: i.quantity })),
+  1307→          shippingAddress: `${address.fullName}, ${address.addressLine1}, ${address.city}, ${address.state} - ${address.pincode}, Phone: ${address.phone}`,
+  1308→          paymentMethod,
+  1309→        }),
+  1310→      });
+  1311→      const data = await res.json();
+  1312→      if (data.success) {
+  1313→        clearCart();
+  1314→        toast.success('Order placed successfully!');
+  1315→        navigateTo('orders');
+  1316→        qc.invalidateQueries({ queryKey: ['orders'] });
+  1317→      } else { toast.error(data.error || 'Failed to place order'); }
+  1318→    } catch { toast.error('Something went wrong'); }
+  1319→    setPlacing(false);
+  1320→  };
+  1321→
+  1322→  return (
+  1323→    <div className="container mx-auto px-4 py-6">
+  1324→      <h1 className="text-2xl font-bold mb-6">Checkout</h1>
+  1325→      {isGuest && !isAuthenticated && (
+  1326→        <Card className="p-4 mb-4">
+  1327→          <h3 className="font-semibold mb-3">Guest Information</h3>
+  1328→          <div className="grid sm:grid-cols-2 gap-3">
+  1329→            <div><Label>Email *</Label><Input className="mt-1" type="email" value={guestInfo.email} onChange={e => setGuestInfo(g => ({...g, email: e.target.value}))} /></div>
+  1330→            <div><Label>Phone *</Label><Input className="mt-1" value={guestInfo.phone} onChange={e => setGuestInfo(g => ({...g, phone: e.target.value}))} /></div>
+  1331→          </div>
+  1332→        </Card>
+  1333→      )}
+  1334→      <div className="grid lg:grid-cols-3 gap-6">
+  1335→        <div className="lg:col-span-2 space-y-6">
+  1336→          <Card className="p-6">
+  1337→            <h2 className="font-bold text-lg mb-4 flex items-center gap-2"><MapPin size={20} className="text-orange-500" />Shipping Address</h2>
+  1338→            <div className="grid sm:grid-cols-2 gap-4">
+  1339→              <div><Label>Full Name</Label><Input value={address.fullName} onChange={e => setAddress(a => ({...a, fullName: e.target.value}))} className="mt-1" /></div>
+  1340→              <div><Label>Phone</Label><Input value={address.phone} onChange={e => setAddress(a => ({...a, phone: e.target.value}))} className="mt-1" /></div>
+  1341→              <div className="sm:col-span-2"><Label>Address</Label><Textarea value={address.addressLine1} onChange={e => setAddress(a => ({...a, addressLine1: e.target.value}))} className="mt-1" /></div>
+  1342→              <div><Label>City</Label><Input value={address.city} onChange={e => setAddress(a => ({...a, city: e.target.value}))} className="mt-1" /></div>
+  1343→              <div><Label>State</Label><Input value={address.state} onChange={e => setAddress(a => ({...a, state: e.target.value}))} className="mt-1" /></div>
+  1344→              <div><Label>Pincode</Label><Input value={address.pincode} onChange={e => setAddress(a => ({...a, pincode: e.target.value}))} className="mt-1" /></div>
+  1345→            </div>
+  1346→          </Card>
+  1347→
+  1348→          <div className="flex items-center gap-2 mb-4">
+  1349→            <Checkbox id="same-billing" checked={sameAddress} onCheckedChange={(v) => setSameAddress(v === true)} />
+  1350→            <Label htmlFor="same-billing" className="text-sm">Billing address same as shipping</Label>
+  1351→          </div>
+  1352→          {!sameAddress && (
+  1353→            <Card className="p-4 mb-4 border-dashed">
+  1354→              <h3 className="font-semibold mb-3">Billing Address</h3>
+  1355→              <div className="grid sm:grid-cols-2 gap-3">
+  1356→                <div><Label>Full Name</Label><Input className="mt-1" value={billingForm.fullName} onChange={e => setBillingForm(f => ({...f, fullName: e.target.value}))} /></div>
+  1357→                <div><Label>Phone</Label><Input className="mt-1" value={billingForm.phone} onChange={e => setBillingForm(f => ({...f, phone: e.target.value}))} /></div>
+  1358→                <div className="sm:col-span-2"><Label>Address</Label><Textarea className="mt-1" rows={2} value={billingForm.address} onChange={e => setBillingForm(f => ({...f, address: e.target.value}))} /></div>
+  1359→                <div><Label>City</Label><Input className="mt-1" value={billingForm.city} onChange={e => setBillingForm(f => ({...f, city: e.target.value}))} /></div>
+  1360→                <div><Label>State</Label><Input className="mt-1" value={billingForm.state} onChange={e => setBillingForm(f => ({...f, state: e.target.value}))} /></div>
+  1361→                <div><Label>Pincode</Label><Input className="mt-1" value={billingForm.pincode} onChange={e => setBillingForm(f => ({...f, pincode: e.target.value}))} /></div>
+  1362→              </div>
+  1363→            </Card>
+  1364→          )}
+  1365→
+  1366→          <Card className="p-6">
+  1367→            <h2 className="font-bold text-lg mb-4 flex items-center gap-2"><CreditCard size={20} className="text-orange-500" />Payment Method</h2>
+  1368→            <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-3">
+  1369→              {[
+  1370→                { value: 'COD', label: 'Cash on Delivery', icon: <Banknote size={20} />, desc: 'Pay when you receive' },
+  1371→                { value: 'UPI', label: 'UPI Payment', icon: <Smartphone size={20} />, desc: 'GPay, PhonePe, Paytm' },
+  1372→                { value: 'Credit Card', label: 'Credit Card', icon: <CreditCard size={20} />, desc: 'Visa, Mastercard' },
+  1373→                { value: 'Debit Card', label: 'Debit Card', icon: <CreditCard size={20} />, desc: 'All banks supported' },
+  1374→                { value: 'Net Banking', label: 'Net Banking', icon: <Building2 size={20} />, desc: 'All major banks' },
+  1375→              ].map(pm => (
+  1376→                <Label key={pm.value} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/50 ${paymentMethod === pm.value ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/10' : ''}`}>
+  1377→                  <RadioGroupItem value={pm.value} />
+  1378→                  <span className="text-orange-500">{pm.icon}</span>
+  1379→                  <div><p className="font-medium text-sm">{pm.label}</p><p className="text-xs text-muted-foreground">{pm.desc}</p></div>
+  1380→                </Label>
+  1381→              ))}
+  1382→            </RadioGroup>
+  1383→          </Card>
+  1384→        </div>
+  1385→
+  1386→        <Card className="p-6 h-fit sticky top-24 space-y-4">
+  1387→          <h3 className="font-bold text-lg">Order Summary</h3>
+  1388→          <ScrollArea className="max-h-48"><div className="space-y-3">{items.map(item => (
+  1389→            <div key={item.productId} className="flex gap-3"><div className="w-12 h-12 rounded bg-muted shrink-0 overflow-hidden">{item.image && <img src={item.image} alt="" className="w-full h-full object-cover" />}</div><div className="flex-1 min-w-0"><p className="text-sm truncate">{item.name}</p><p className="text-xs text-muted-foreground">Qty: {item.quantity}</p></div><p className="text-sm font-medium shrink-0">{formatCurrency(item.price * item.quantity)}</p></div>
+  1390→          ))}</div></ScrollArea>
+  1391→          <Separator />
+  1392→          <div className="space-y-2 text-sm">
+  1393→            <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(getSubtotal())}</span></div>
+  1394→            <div className="flex justify-between"><span>Shipping</span><span>{getShipping() === 0 ? 'FREE' : formatCurrency(getShipping())}</span></div>
+  1395→            <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(getTax())}</span></div>
+  1396→            {couponDiscount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(couponDiscount)}</span></div>}
+  1397→            <Separator />
+  1398→            <div className="flex justify-between text-lg font-bold"><span>Total</span><span className="text-orange-500">{formatCurrency(getTotal())}</span></div>
+  1399→          </div>
+  1400→          <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 text-lg" onClick={handlePlaceOrder} disabled={placing}>
+  1401→            {placing ? 'Placing Order...' : `Place Order • ${formatCurrency(getTotal())}`}
+  1402→          </Button>
+  1403→        </Card>
+  1404→      </div>
+  1405→    </div>
+  1406→  );
+  1407→}
+  1408→
+  1409→// ============ ORDERS PAGE ============
+  1410→
+  1411→function OrdersPage() {
+  1412→  const { user, isAuthenticated } = useAuthStore();
+  1413→  const { navigateTo, setSelectedOrderId } = useNavigationStore();
+  1414→  const { data, isLoading } = useQuery({
+  1415→    queryKey: ['orders', user?.id],
+  1416→    queryFn: () => fetch(`/api/orders?userId=${user?.id}`).then(r => r.json()).then((r: ApiResponse<Order[]>) => r.data || []),
+  1417→    enabled: !!user?.id,
+  1418→  });
+  1419→
+  1420→  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  1421→  if (!isAuthenticated) return null;
+  1422→
+  1423→  const statusColor: Record<string, string> = {
+  1424→    NEW: 'bg-blue-100 text-blue-700', PROCESSING: 'bg-amber-100 text-amber-700', PACKED: 'bg-purple-100 text-purple-700',
+  1425→    SHIPPED: 'bg-orange-100 text-orange-700', DELIVERED: 'bg-green-100 text-green-700', CANCELLED: 'bg-red-100 text-red-700',
+  1426→    RETURNED: 'bg-gray-100 text-gray-700', REFUNDED: 'bg-teal-100 text-teal-700',
+  1427→  };
+  1428→
+  1429→  return (
+  1430→    <div className="container mx-auto px-4 py-6">
+  1431→      <h1 className="text-2xl font-bold mb-6">My Orders</h1>
+  1432→      {isLoading ? <div className="space-y-4">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div> :
+  1433→      !data?.length ? <div className="text-center py-16"><Package size={64} className="mx-auto text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium">No orders yet</h3><Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Start Shopping</Button></div> :
+  1434→      <div className="space-y-4">{data.map(order => (
+  1435→        <Card key={order.id} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setSelectedOrderId(order.id); navigateTo('order-detail'); }}>
+  1436→          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+  1437→            <div><p className="font-medium">Order #{order.orderNumber}</p><p className="text-sm text-muted-foreground">{new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+  1438→            <Badge className={statusColor[order.status] || ''}>{order.status}</Badge>
+  1439→          </div>
+  1440→          <div className="flex gap-3 overflow-x-auto pb-1">{order.items?.slice(0, 3).map(item => (
+  1441→            <div key={item.id} className="flex items-center gap-2 shrink-0"><div className="w-12 h-12 rounded bg-muted shrink-0 overflow-hidden">{item.productImage && <img src={item.productImage} alt="" className="w-full h-full object-cover" />}</div><div><p className="text-sm truncate max-w-32">{item.productName}</p><p className="text-xs text-muted-foreground">Qty: {item.quantity}</p></div></div>
+  1442→          ))}</div>
+  1443→          <Separator className="my-3" />
+  1444→          <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">{order.items?.length || 0} items</span><span className="font-bold">{formatCurrency(order.total)}</span></div>
+  1445→        </Card>
+  1446→      ))}</div>}
+  1447→    </div>
+  1448→  );
+  1449→}
+  1450→
+  1451→function OrderDetailPage() {
+  1452→  const { user, isAuthenticated } = useAuthStore();
+  1453→  const { selectedOrderId, navigateTo } = useNavigationStore();
+  1454→  const { addItem } = useCartStore();
+  1455→  const qc = useQueryClient();
+  1456→  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  1457→  const [showReturnDialog, setShowReturnDialog] = useState(false);
+  1458→  const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  1459→  const [returnReason, setReturnReason] = useState('');
+  1460→  const [cancelReason, setCancelReason] = useState('');
+  1461→  const cancelMutation = useMutation({
+  1462→    mutationFn: () => fetch(`/api/orders/${selectedOrderId}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: cancelReason }) }).then(r => r.json()),
+  1463→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Order cancelled'); setShowCancelDialog(false); },
+  1464→  });
+  1465→  const returnMutation = useMutation({
+  1466→    mutationFn: () => fetch(`/api/orders/${selectedOrderId}/return`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: returnReason }) }).then(r => r.json()),
+  1467→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Return request submitted'); setShowReturnDialog(false); },
+  1468→  });
+  1469→  const { data: order, isLoading } = useQuery({
+  1470→    queryKey: ['order', selectedOrderId],
+  1471→    queryFn: () => fetch(`/api/orders/${selectedOrderId}`).then(r => r.json()).then((r: ApiResponse<Order>) => r.data),
+  1472→    enabled: !!selectedOrderId,
+  1473→  });
+  1474→
+  1475→  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  1476→  if (!isAuthenticated) return null;
+  1477→  if (isLoading) return <div className="container mx-auto px-4 py-8"><Skeleton className="h-64 rounded-xl" /></div>;
+  1478→  if (!order) return <div className="container mx-auto px-4 py-16 text-center"><p>Order not found</p></div>;
+  1479→
+  1480→  const steps = ['NEW', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED'];
+  1481→  const currentIdx = steps.indexOf(order.status);
+  1482→  const statusColor: Record<string, string> = {
+  1483→    NEW: 'bg-blue-100 text-blue-700', PROCESSING: 'bg-amber-100 text-amber-700', PACKED: 'bg-purple-100 text-purple-700',
+  1484→    SHIPPED: 'bg-orange-100 text-orange-700', DELIVERED: 'bg-green-100 text-green-700', CANCELLED: 'bg-red-100 text-red-700',
+  1485→  };
+  1486→
+  1487→  const handleReorder = async () => {
+  1488→    if (!order.items) return;
+  1489→    order.items.forEach(item => {
+  1490→      for (let i = 0; i < item.quantity; i++) {
+  1491→        addItem({ productId: item.productId, name: item.productName, price: item.price, image: item.productImage || '', vendorName: item.vendorName || '', vendorId: item.vendorId, stock: 999 });
+  1492→      }
+  1493→    });
+  1494→    toast.success('Items added to cart');
+  1495→    navigateTo('cart');
+  1496→  };
+  1497→
+  1498→  const handleInvoice = () => { setShowInvoiceDialog(true); };
+  1499→
+  1500→  return (
+  1501→    <div className="container mx-auto px-4 py-6">
+  1502→      <Button variant="ghost" onClick={() => navigateTo('orders')} className="mb-4"><ChevronLeft size={16} className="mr-1" />Back to Orders</Button>
+  1503→      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+  1504→        <div><h1 className="text-2xl font-bold">Order #{order.orderNumber}</h1><p className="text-sm text-muted-foreground">{new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
+  1505→        <Badge className={`${statusColor[order.status] || ''} text-sm px-3 py-1`}>{order.status}</Badge>
+  1506→      </div>
+  1507→
+  1508→      {/* Status Timeline */}
+  1509→      {order.status !== 'CANCELLED' && order.status !== 'RETURNED' && order.status !== 'REFUNDED' && (
+  1510→        <Card className="p-6 mb-6">
+  1511→          <div className="flex items-center justify-between relative">
+  1512→            <div className="absolute top-4 left-8 right-8 h-0.5 bg-muted" />
+  1513→            {steps.map((step, i) => (
+  1514→              <div key={step} className="flex flex-col items-center relative z-10">
+  1515→                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${i <= currentIdx ? 'bg-orange-500 text-white' : 'bg-muted text-muted-foreground'}`}>{i <= currentIdx ? <CheckCircle size={16} /> : i + 1}</div>
+  1516→                <span className="text-xs mt-2 text-center hidden sm:block">{step}</span>
+  1517→              </div>
+  1518→            ))}
+  1519→          </div>
+  1520→        </Card>
+  1521→      )}
+  1522→
+  1523→      <div className="grid lg:grid-cols-3 gap-6">
+  1524→        <div className="lg:col-span-2 space-y-6">
+  1525→          <Card className="p-6"><h2 className="font-bold mb-4">Items Ordered</h2>
+  1526→            <div className="space-y-4">{order.items?.map(item => (
+  1527→              <div key={item.id} className="flex gap-4"><div className="w-16 h-16 rounded bg-muted shrink-0 overflow-hidden">{item.productImage && <img src={item.productImage} alt="" className="w-full h-full object-cover" />}</div><div className="flex-1"><p className="font-medium">{item.productName}</p><p className="text-sm text-muted-foreground">Seller: {item.vendorName} | Qty: {item.quantity}</p></div><p className="font-medium">{formatCurrency(item.total)}</p></div>
+  1528→            ))}</div>
+  1529→          </Card>
+  1530→          {order.trackingId && <Card className="p-4"><p className="text-sm text-muted-foreground">Tracking ID</p><p className="font-medium">{order.trackingId}</p>{order.courierName && <p className="text-sm text-muted-foreground">Courier: {order.courierName}</p>}</Card>}
+  1531→          {/* Actions */}
+  1532→          <div className="flex flex-wrap gap-2 mt-4">
+  1533→            {order?.status === 'NEW' && <Button variant="destructive" size="sm" onClick={() => setShowCancelDialog(true)}><XCircle size={14} className="mr-1" />Cancel Order</Button>}
+  1534→            {order?.status === 'DELIVERED' && <Button variant="outline" size="sm" onClick={() => setShowReturnDialog(true)}><RotateCcw size={14} className="mr-1" />Request Return</Button>}
+  1535→            <Button variant="outline" size="sm" onClick={handleReorder}><ShoppingCart size={14} className="mr-1" />Reorder</Button>
+  1536→            <Button variant="outline" size="sm" onClick={handleInvoice}><Printer size={14} className="mr-1" />Download Invoice</Button>
+  1537→          </div>
+  1538→        </div>
+  1539→        <Card className="p-6 h-fit space-y-3">
+  1540→          <h3 className="font-bold">Order Summary</h3>
+  1541→          <div className="space-y-2 text-sm">
+  1542→            <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(order.subtotal)}</span></div>
+  1543→            <div className="flex justify-between"><span>Shipping</span><span>{order.shippingCost === 0 ? 'FREE' : formatCurrency(order.shippingCost)}</span></div>
+  1544→            <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(order.tax)}</span></div>
+  1545→            {order.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(order.discount)}</span></div>}
+  1546→            <Separator />
+  1547→            <div className="flex justify-between font-bold text-lg"><span>Total</span><span className="text-orange-500">{formatCurrency(order.total)}</span></div>
+  1548→          </div>
+  1549→          <Separator />
+  1550→          <div className="text-sm space-y-1">
+  1551→            <p><span className="text-muted-foreground">Payment:</span> {order.paymentMethod}</p>
+  1552→            <p><span className="text-muted-foreground">Status:</span> <Badge variant={order.paymentStatus === 'PAID' ? 'default' : 'secondary'}>{order.paymentStatus}</Badge></p>
+  1553→          </div>
+  1554→          <Separator />
+  1555→          <div className="text-sm"><p className="text-muted-foreground mb-1">Shipping Address</p><p>{order.shippingAddress}</p></div>
+  1556→        </Card>
+  1557→      </div>
+  1558→
+  1559→      {/* Cancel Order Dialog */}
+  1560→      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+  1561→        <DialogContent><DialogHeader><DialogTitle>Cancel Order</DialogTitle></DialogHeader>
+  1562→        <p className="text-sm text-muted-foreground">Are you sure? This action cannot be undone.</p>
+  1563→        <Textarea placeholder="Reason for cancellation (optional)" value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
+  1564→        <DialogFooter><Button variant="outline" onClick={() => setShowCancelDialog(false)}>Keep Order</Button><Button variant="destructive" onClick={() => cancelMutation.mutate()} disabled={cancelMutation.isPending}>Cancel Order</Button></DialogFooter>
+  1565→        </DialogContent>
+  1566→      </Dialog>
+  1567→
+  1568→      {/* Return Order Dialog */}
+  1569→      <Dialog open={showReturnDialog} onOpenChange={setShowReturnDialog}>
+  1570→        <DialogContent><DialogHeader><DialogTitle>Request Return</DialogTitle></DialogHeader>
+  1571→        <Select value={returnReason} onValueChange={setReturnReason}><SelectTrigger><SelectValue placeholder="Select reason" /></SelectTrigger>
+  1572→          <SelectContent><SelectItem value="defective">Defective Product</SelectItem><SelectItem value="wrong">Wrong Item Received</SelectItem><SelectItem value="not_as_described">Not as Described</SelectItem><SelectItem value="changed_mind">Changed My Mind</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select>
+  1573→        <DialogFooter><Button variant="outline" onClick={() => setShowReturnDialog(false)}>Cancel</Button><Button onClick={() => returnMutation.mutate()} disabled={!returnReason || returnMutation.isPending}>Submit Request</Button></DialogFooter>
+  1574→        </DialogContent>
+  1575→      </Dialog>
+  1576→
+  1577→      {/* Invoice Dialog */}
+  1578→      <Dialog open={showInvoiceDialog} onOpenChange={setShowInvoiceDialog}>
+  1579→        <DialogContent className="max-w-2xl">
+  1580→          <DialogHeader>
+  1581→            <DialogTitle className="flex items-center gap-2"><Printer size={18} />Invoice - Order #{order.orderNumber}</DialogTitle>
+  1582→          </DialogHeader>
+  1583→          <div id="invoice-content" className="border rounded-lg p-6 space-y-4 bg-white text-black dark:bg-white dark:text-black">
+  1584→            <div className="flex justify-between items-start">
+  1585→              <div><h2 className="text-xl font-bold text-orange-600">MarketHub</h2><p className="text-sm text-gray-500">Your one-stop marketplace</p></div>
+  1586→              <div className="text-right"><p className="font-bold">INVOICE</p><p className="text-sm text-gray-500">#{order.orderNumber}</p><p className="text-sm text-gray-500">{new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
+  1587→            </div>
+  1588→            <Separator />
+  1589→            <div className="grid grid-cols-2 gap-4 text-sm">
+  1590→              <div><p className="font-medium text-gray-500">Bill To</p><p className="font-medium">{user?.name}</p><p>{user?.email}</p></div>
+  1591→              <div className="text-right"><p className="font-medium text-gray-500">Ship To</p><p>{order.shippingAddress}</p></div>
+  1592→            </div>
+  1593→            <Separator />
+  1594→            <table className="w-full text-sm">
+  1595→              <thead><tr className="border-b"><th className="text-left py-2">Item</th><th className="text-center py-2">Qty</th><th className="text-right py-2">Price</th><th className="text-right py-2">Total</th></tr></thead>
+  1596→              <tbody>
+  1597→                {order.items?.map(item => (
+  1598→                  <tr key={item.id} className="border-b"><td className="py-2">{item.productName}</td><td className="text-center py-2">{item.quantity}</td><td className="text-right py-2">{formatCurrency(item.price)}</td><td className="text-right py-2">{formatCurrency(item.total)}</td></tr>
+  1599→                ))}
+  1600→              </tbody>
+  1601→            </table>
+  1602→            <div className="flex justify-end">
+  1603→              <div className="w-48 space-y-1 text-sm">
+  1604→                <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(order.subtotal)}</span></div>
+  1605→                <div className="flex justify-between"><span>Shipping</span><span>{order.shippingCost === 0 ? 'FREE' : formatCurrency(order.shippingCost)}</span></div>
+  1606→                <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(order.tax)}</span></div>
+  1607→                {order.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(order.discount)}</span></div>}
+  1608→                <Separator />
+  1609→                <div className="flex justify-between font-bold text-base"><span>Total</span><span className="text-orange-600">{formatCurrency(order.total)}</span></div>
+  1610→              </div>
+  1611→            </div>
+  1612→            <p className="text-xs text-gray-400 text-center">Thank you for shopping with MarketHub!</p>
+  1613→          </div>
+  1614→          <DialogFooter>
+  1615→            <Button variant="outline" onClick={() => setShowInvoiceDialog(false)}>Close</Button>
+  1616→            <Button variant="outline" onClick={() => { window.print(); }}><Printer size={14} className="mr-1" />Print</Button>
+  1617→          </DialogFooter>
+  1618→        </DialogContent>
+  1619→      </Dialog>
+  1620→    </div>
+  1621→  );
+  1622→}
+  1623→
+  1624→// ============ LOGIN / REGISTER / VENDOR REGISTER ============
+  1625→
+  1626→function LoginPage() {
+  1627→  const { login, setLoading, isLoading } = useAuthStore();
+  1628→  const { navigateTo, setAppView } = useNavigationStore();
+  1629→  const [mode, setMode] = useState<'login' | 'register' | 'vendor-register'>('login');
+  1630→  const [form, setForm] = useState({
+  1631→    email: '', password: '', name: '', phone: '',
+  1632→    businessName: '', businessEmail: '', businessPhone: '',
+  1633→    businessAddress: '', gstNumber: '', panNumber: '',
+  1634→    bankName: '', bankAccount: '', bankIfsc: '', description: '',
+  1635→  });
+  1636→
+  1637→  const updateForm = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }));
+  1638→
+  1639→  const handleLogin = async (e: React.FormEvent) => {
+  1640→    e.preventDefault();
+  1641→    if (!form.email || !form.password) { toast.error('Please fill all fields'); return; }
+  1642→    setLoading(true);
+  1643→    try {
+  1644→      const res = await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.email, password: form.password }) });
+  1645→      const data = await res.json();
+  1646→      if (data.success) {
+  1647→        login(data.data.user, data.data.token, data.data.vendorId, data.data.vendorStatus);
+  1648→        toast.success(`Welcome back, ${data.data.user.name}!`);
+  1649→        if (data.data.user.role === 'ADMIN') { useNavigationStore.getState().setAppView('admin'); }
+  1650→        else if (data.data.user.role === 'VENDOR') { useNavigationStore.getState().setAppView('vendor'); }
+  1651→        else { navigateTo('home'); }
+  1652→      } else { toast.error(data.error || 'Login failed'); }
+  1653→    } catch { toast.error('Something went wrong'); }
+  1654→    setLoading(false);
+  1655→  };
+  1656→
+  1657→  const handleRegister = async (e: React.FormEvent) => {
+  1658→    e.preventDefault();
+  1659→    if (!form.name || !form.email || !form.password) { toast.error('Please fill all required fields'); return; }
+  1660→    setLoading(true);
+  1661→    try {
+  1662→      const res = await fetch('/api/auth', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, email: form.email, password: form.password, phone: form.phone }) });
+  1663→      const data = await res.json();
+  1664→      if (data.success) { login(data.data.user, data.data.token); toast.success('Account created!'); navigateTo('home'); }
+  1665→      else { toast.error(data.error || 'Registration failed'); }
+  1666→    } catch { toast.error('Something went wrong'); }
+  1667→    setLoading(false);
+  1668→  };
+  1669→
+  1670→  const handleVendorRegister = async (e: React.FormEvent) => {
+  1671→    e.preventDefault();
+  1672→    if (!form.name || !form.email || !form.password || !form.businessName) {
+  1673→      toast.error('Please fill all required fields');
+  1674→      return;
+  1675→    }
+  1676→    if (form.password.length < 6) {
+  1677→      toast.error('Password must be at least 6 characters');
+  1678→      return;
+  1679→    }
+  1680→    setLoading(true);
+  1681→    try {
+  1682→      const res = await fetch('/api/auth/vendor-register', {
+  1683→        method: 'POST',
+  1684→        headers: { 'Content-Type': 'application/json' },
+  1685→        body: JSON.stringify({
+  1686→          name: form.name,
+  1687→          email: form.email,
+  1688→          password: form.password,
+  1689→          phone: form.phone,
+  1690→          businessName: form.businessName,
+  1691→          businessEmail: form.businessEmail || form.email,
+  1692→          businessPhone: form.businessPhone,
+  1693→          businessAddress: form.businessAddress,
+  1694→          gstNumber: form.gstNumber,
+  1695→          panNumber: form.panNumber,
+  1696→          bankName: form.bankName,
+  1697→          bankAccount: form.bankAccount,
+  1698→          bankIfsc: form.bankIfsc,
+  1699→          description: form.description,
+  1700→        }),
+  1701→      });
+  1702→      const data = await res.json();
+  1703→      if (data.success) {
+  1704→        login(data.data.user, data.data.token, data.data.vendorId, data.data.vendorStatus);
+  1705→        toast.success(data.message || 'Application submitted successfully!');
+  1706→        setAppView('vendor');
+  1707→      } else {
+  1708→        toast.error(data.error || 'Registration failed');
+  1709→      }
+  1710→    } catch { toast.error('Something went wrong'); }
+  1711→    setLoading(false);
+  1712→  };
+  1713→
+  1714→  return (
+  1715→    <div className="min-h-[80vh] flex items-center justify-center px-4 py-8">
+  1716→      <Card className="w-full max-w-lg">
+  1717→        <CardHeader className="text-center">
+  1718→          <CardTitle className="text-2xl">
+  1719→            {mode === 'login' ? 'Welcome Back' : mode === 'register' ? 'Create Account' : 'Become a Vendor'}
+  1720→          </CardTitle>
+  1721→          <CardDescription>
+  1722→            {mode === 'login' ? 'Login to your account' : mode === 'register' ? 'Join MarketHub today' : 'Start selling on MarketHub'}
+  1723→          </CardDescription>
+  1724→        </CardHeader>
+  1725→        <CardContent>
+  1726→          {/* Mode Tabs */}
+  1727→          <div className="flex mb-6 bg-muted rounded-lg p-1">
+  1728→            <button
+  1729→              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${mode === 'login' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+  1730→              onClick={() => setMode('login')}
+  1731→            >
+  1732→              Login
+  1733→            </button>
+  1734→            <button
+  1735→              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${mode === 'register' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+  1736→              onClick={() => setMode('register')}
+  1737→            >
+  1738→              Customer
+  1739→            </button>
+  1740→            <button
+  1741→              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${mode === 'vendor-register' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+  1742→              onClick={() => setMode('vendor-register')}
+  1743→            >
+  1744→              Vendor
+  1745→            </button>
+  1746→          </div>
+  1747→
+  1748→          {/* Login Form */}
+  1749→          {mode === 'login' && (
+  1750→            <form onSubmit={handleLogin} className="space-y-4">
+  1751→              <div><Label>Email</Label><Input type="email" placeholder="you@example.com" value={form.email} onChange={e => updateForm('email', e.target.value)} className="mt-1" /></div>
+  1752→              <div><Label>Password</Label><Input type="password" placeholder="••••••••" value={form.password} onChange={e => updateForm('password', e.target.value)} className="mt-1" /></div>
+  1753→              <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={isLoading}>{isLoading ? 'Please wait...' : 'Login'}</Button>
+  1754→            </form>
+  1755→          )}
+  1756→
+  1757→          {/* Customer Register Form */}
+  1758→          {mode === 'register' && (
+  1759→            <form onSubmit={handleRegister} className="space-y-4">
+  1760→              <div><Label>Full Name *</Label><Input placeholder="John Doe" value={form.name} onChange={e => updateForm('name', e.target.value)} className="mt-1" /></div>
+  1761→              <div><Label>Email *</Label><Input type="email" placeholder="you@example.com" value={form.email} onChange={e => updateForm('email', e.target.value)} className="mt-1" /></div>
+  1762→              <div><Label>Password *</Label><Input type="password" placeholder="Min 6 characters" value={form.password} onChange={e => updateForm('password', e.target.value)} className="mt-1" /></div>
+  1763→              <div><Label>Phone (optional)</Label><Input placeholder="+91 XXXXX XXXXX" value={form.phone} onChange={e => updateForm('phone', e.target.value)} className="mt-1" /></div>
+  1764→              <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={isLoading}>{isLoading ? 'Please wait...' : 'Create Account'}</Button>
+  1765→            </form>
+  1766→          )}
+  1767→
+  1768→          {/* Vendor Register Form */}
+  1769→          {mode === 'vendor-register' && (
+  1770→            <form onSubmit={handleVendorRegister} className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+  1771→              <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10 rounded-lg p-3 flex items-start gap-2">
+  1772→                <Shield size={16} className="shrink-0 mt-0.5" />
+  1773→                Your application will be reviewed by our admin team. Once approved, you can start selling products.
+  1774→              </p>
+  1775→
+  1776→              <h3 className="font-semibold text-sm text-muted-foreground mt-2">Account Details</h3>
+  1777→              <div className="grid sm:grid-cols-2 gap-3">
+  1778→                <div><Label>Full Name *</Label><Input placeholder="Your name" value={form.name} onChange={e => updateForm('name', e.target.value)} className="mt-1" /></div>
+  1779→                <div><Label>Email *</Label><Input type="email" placeholder="you@business.com" value={form.email} onChange={e => updateForm('email', e.target.value)} className="mt-1" /></div>
+  1780→              </div>
+  1781→              <div className="grid sm:grid-cols-2 gap-3">
+  1782→                <div><Label>Password *</Label><Input type="password" placeholder="Min 6 characters" value={form.password} onChange={e => updateForm('password', e.target.value)} className="mt-1" /></div>
+  1783→                <div><Label>Phone</Label><Input placeholder="+91 XXXXX XXXXX" value={form.phone} onChange={e => updateForm('phone', e.target.value)} className="mt-1" /></div>
+  1784→              </div>
+  1785→
+  1786→              <h3 className="font-semibold text-sm text-muted-foreground pt-2">Business Details</h3>
+  1787→              <div><Label>Business Name *</Label><Input placeholder="Your Store Name" value={form.businessName} onChange={e => updateForm('businessName', e.target.value)} className="mt-1" /></div>
+  1788→              <div className="grid sm:grid-cols-2 gap-3">
+  1789→                <div><Label>Business Email</Label><Input type="email" placeholder="business@email.com" value={form.businessEmail} onChange={e => updateForm('businessEmail', e.target.value)} className="mt-1" /></div>
+  1790→                <div><Label>Business Phone</Label><Input placeholder="+91 XXXXX XXXXX" value={form.businessPhone} onChange={e => updateForm('businessPhone', e.target.value)} className="mt-1" /></div>
+  1791→              </div>
+  1792→              <div><Label>Business Address</Label><Textarea placeholder="Full business address" value={form.businessAddress} onChange={e => updateForm('businessAddress', e.target.value)} className="mt-1" rows={2} /></div>
+  1793→              <div><Label>Description</Label><Textarea placeholder="Tell us about your business" value={form.description} onChange={e => updateForm('description', e.target.value)} className="mt-1" rows={2} /></div>
+  1794→
+  1795→              <h3 className="font-semibold text-sm text-muted-foreground pt-2">Tax & Bank Details (Optional)</h3>
+  1796→              <div className="grid sm:grid-cols-2 gap-3">
+  1797→                <div><Label>GST Number</Label><Input placeholder="22AAAAA0000A1Z5" value={form.gstNumber} onChange={e => updateForm('gstNumber', e.target.value)} className="mt-1" /></div>
+  1798→                <div><Label>PAN Number</Label><Input placeholder="AAAAA0000A" value={form.panNumber} onChange={e => updateForm('panNumber', e.target.value)} className="mt-1" /></div>
+  1799→              </div>
+  1800→              <div><Label>Bank Name</Label><Input placeholder="Bank name" value={form.bankName} onChange={e => updateForm('bankName', e.target.value)} className="mt-1" /></div>
+  1801→              <div className="grid sm:grid-cols-2 gap-3">
+  1802→                <div><Label>Bank Account</Label><Input placeholder="Account number" value={form.bankAccount} onChange={e => updateForm('bankAccount', e.target.value)} className="mt-1" /></div>
+  1803→                <div><Label>IFSC Code</Label><Input placeholder="IFSC code" value={form.bankIfsc} onChange={e => updateForm('bankIfsc', e.target.value)} className="mt-1" /></div>
+  1804→              </div>
+  1805→
+  1806→              <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={isLoading}>
+  1807→                {isLoading ? 'Submitting...' : 'Submit Vendor Application'}
+  1808→              </Button>
+  1809→            </form>
+  1810→          )}
+  1811→        </CardContent>
+  1812→
+  1813→        {/* Footer with demo buttons (login mode only) */}
+  1814→        <CardFooter className="flex-col gap-3">
+  1815→          {mode === 'login' && (
+  1816→            <>
+  1817→              <Separator className="w-full" />
+  1818→              <p className="text-xs text-muted-foreground text-center">Quick Demo Access</p>
+  1819→              <div className="flex gap-2 flex-wrap justify-center">
+  1820→                <Button variant="outline" size="sm" onClick={() => { setForm({ email: 'admin@markethub.com', password: 'admin123', name: '', phone: '', businessName: '', businessEmail: '', businessPhone: '', businessAddress: '', gstNumber: '', panNumber: '', bankName: '', bankAccount: '', bankIfsc: '', description: '' }); }}>Admin Demo</Button>
+  1821→                <Button variant="outline" size="sm" onClick={() => { setForm({ email: 'techstore@vendor.com', password: 'vendor123', name: '', phone: '', businessName: '', businessEmail: '', businessPhone: '', businessAddress: '', gstNumber: '', panNumber: '', bankName: '', bankAccount: '', bankIfsc: '', description: '' }); }}>Vendor Demo</Button>
+  1822→                <Button variant="outline" size="sm" onClick={() => { setForm({ email: 'rahul@example.com', password: 'customer123', name: '', phone: '', businessName: '', businessEmail: '', businessPhone: '', businessAddress: '', gstNumber: '', panNumber: '', bankName: '', bankAccount: '', bankIfsc: '', description: '' }); }}>Customer Demo</Button>
+  1823→              </div>
+  1824→              <p className="text-[10px] text-muted-foreground text-center">Admin: admin@markethub.com / admin123<br/>Vendor: techstore@vendor.com / vendor123<br/>Customer: rahul@example.com / customer123</p>
+  1825→            </>
+  1826→          )}
+  1827→          {mode === 'register' && (
+  1828→            <Button variant="ghost" size="sm" onClick={() => setMode('login')}>Already have an account? Login</Button>
+  1829→          )}
+  1830→          {mode === 'vendor-register' && (
+  1831→            <Button variant="ghost" size="sm" onClick={() => setMode('login')}>Already have an account? Login</Button>
+  1832→          )}
+  1833→        </CardFooter>
+  1834→      </Card>
+  1835→    </div>
+  1836→  );
+  1837→}
+  1838→
+  1839→// ============ PROFILE PAGE ============
+  1840→
+  1841→function ProfilePage() {
+  1842→  const { user, isAuthenticated } = useAuthStore();
+  1843→  const { navigateTo } = useNavigationStore();
+  1844→  const [editing, setEditing] = useState(false);
+  1845→  const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '' });
+  1846→  const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
+  1847→  const changePwMutation = useMutation({
+  1848→    mutationFn: async () => {
+  1849→      if (pwForm.newPw !== pwForm.confirm) { toast.error('Passwords do not match'); throw new Error(); }
+  1850→      if (pwForm.newPw.length < 6) { toast.error('Password must be at least 6 characters'); throw new Error(); }
+  1851→      const res = await fetch('/api/auth/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user!.id, currentPassword: pwForm.current, newPassword: pwForm.newPw }) });
+  1852→      const data = await res.json();
+  1853→      if (!data.success) throw new Error(data.error);
+  1854→      return data;
+  1855→    },
+  1856→    onSuccess: () => { toast.success('Password updated!'); setPwForm({ current: '', newPw: '', confirm: '' }); },
+  1857→    onError: (e: any) => { if (e.message !== 'Passwords do not match' && e.message !== 'Password must be at least 6 characters') toast.error('Failed to change password'); },
+  1858→  });
+  1859→  const handleChangePw = () => changePwMutation.mutate();
+  1860→
+  1861→  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  1862→  if (!isAuthenticated) return null;
+  1863→
+  1864→  return (
+  1865→    <div className="container mx-auto px-4 py-6 max-w-2xl">
+  1866→      <h1 className="text-2xl font-bold mb-6">My Profile</h1>
+  1867→      <Card className="p-6">
+  1868→        <div className="flex items-center gap-4 mb-6">
+  1869→          <Avatar className="h-16 w-16"><AvatarFallback className="text-xl bg-orange-100 text-orange-600">{user?.name?.[0]}</AvatarFallback></Avatar>
+  1870→          <div><h2 className="text-lg font-bold">{user?.name}</h2><p className="text-sm text-muted-foreground">{user?.email}</p></div>
+  1871→        </div>
+  1872→        <div className="space-y-4">
+  1873→          <div><Label>Name</Label>{editing ? <Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /> : <p className="mt-1">{user?.name}</p>}</div>
+  1874→          <div className="flex items-center gap-2">
+  1875→            <Label>Email</Label>
+  1876→            {user?.isVerified ? <Badge className="bg-green-100 text-green-700 text-xs">✓ Verified</Badge> : <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => toast.info('Verification email sent!')}>Verify</Badge>}
+  1877→          </div>
+  1878→          <p className="mt-1">{user?.email}</p>
+  1879→          <div className="flex items-center gap-2 mt-2">
+  1880→            <Label>Phone</Label>
+  1881→            {user?.phone ? <Badge className="bg-green-100 text-green-700 text-xs">✓ Verified</Badge> : <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => toast.info('OTP verification coming soon!')}>Verify</Badge>}
+  1882→          </div>
+  1883→          <p className="mt-1">{user?.phone || 'Not set'}</p>
+  1884→          <Button variant={editing ? 'default' : 'outline'} className={editing ? 'bg-orange-500 hover:bg-orange-600' : ''} onClick={() => { if (editing) toast.success('Profile updated'); setEditing(!editing); }}>
+  1885→            {editing ? 'Save Changes' : 'Edit Profile'}
+  1886→          </Button>
+  1887→        </div>
+  1888→      </Card>
+  1889→
+  1890→      <Card className="p-6 mt-6">
+  1891→        <h3 className="font-bold text-lg mb-4">Change Password</h3>
+  1892→        <div className="space-y-4">
+  1893→          <div><Label>Current Password</Label><Input type="password" className="mt-1" value={pwForm.current} onChange={e => setPwForm(f => ({...f, current: e.target.value}))} /></div>
+  1894→          <div><Label>New Password</Label><Input type="password" className="mt-1" value={pwForm.newPw} onChange={e => setPwForm(f => ({...f, newPw: e.target.value}))} /></div>
+  1895→          <div><Label>Confirm New Password</Label><Input type="password" className="mt-1" value={pwForm.confirm} onChange={e => setPwForm(f => ({...f, confirm: e.target.value}))} /></div>
+  1896→          <Button className="bg-orange-500 hover:bg-orange-600" onClick={handleChangePw} disabled={changePwMutation.isPending}>Update Password</Button>
+  1897→        </div>
+  1898→      </Card>
+  1899→
+  1900→      <Card className="p-6 mt-6">
+  1901→        <h3 className="font-bold text-lg mb-4">Active Sessions</h3>
+  1902→        <div className="space-y-3">
+  1903→          <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/10 rounded-lg">
+  1904→            <div className="flex items-center gap-3">
+  1905→              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center"><Smartphone size={18} className="text-green-600" /></div>
+  1906→              <div>
+  1907→                <p className="text-sm font-medium">Current Session</p>
+  1908→                <p className="text-xs text-muted-foreground">{user?.email} · Active now</p>
+  1909→              </div>
+  1910→            </div>
+  1911→            <Badge className="bg-green-100 text-green-700 text-xs">Active</Badge>
+  1912→          </div>
+  1913→          <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+  1914→            <div className="flex items-center gap-3">
+  1915→              <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center"><Monitor size={18} className="text-muted-foreground" /></div>
+  1916→              <div>
+  1917→                <p className="text-sm font-medium">Web Browser</p>
+  1918→                <p className="text-xs text-muted-foreground">{user?.email} · Last active: {user?.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Unknown'}</p>
+  1919→              </div>
+  1920→            </div>
+  1921→            <Button variant="ghost" size="sm" className="text-destructive text-xs" onClick={() => toast.info('Other sessions will be logged out')}>Revoke</Button>
+  1922→          </div>
+  1923→        </div>
+  1924→      </Card>
+  1925→    </div>
+  1926→  );
+  1927→}
+  1928→
+  1929→// ============ WISHLIST PAGE ============
+  1930→
+  1931→function WishlistPage() {
+  1932→  const { items, removeItem } = useWishlistStore();
+  1933→  const { addItem: addCartItem } = useCartStore();
+  1934→  const { isAuthenticated, navigateTo } = useNavigationStore();
+  1935→
+  1936→  const { data: products } = useQuery({
+  1937→    queryKey: ['wishlist-products', items],
+  1938→    queryFn: async () => {
+  1939→      if (!items.length) return [];
+  1940→      const res = await fetch(`/api/products?limit=50`);
+  1941→      const data = await res.json();
+  1942→      return (data.data || []).filter((p: Product) => items.includes(p.id));
+  1943→    },
+  1944→    enabled: isAuthenticated && items.length > 0,
+  1945→  });
+  1946→
+  1947→  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  1948→  if (!isAuthenticated) return null;
+  1949→
+  1950→  return (
+  1951→    <div className="container mx-auto px-4 py-6">
+  1952→      <h1 className="text-2xl font-bold mb-6">My Wishlist ({items.length})</h1>
+  1953→      {!products?.length ? <div className="text-center py-16"><Heart size={64} className="mx-auto text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium">Your wishlist is empty</h3><Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Browse Products</Button></div> :
+  1954→      <ProductGrid products={products} />}
+  1955→    </div>
+  1956→  );
+  1957→}
+  1958→
+  1959→// ============ ADDRESSES PAGE (simplified) ============
+  1960→
+  1961→function AddressesPage() {
+  1962→  const { user, isAuthenticated } = useAuthStore();
+  1963→  const { navigateTo } = useNavigationStore();
+  1964→  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
+  1965→
+  1966→  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  1967→  if (!isAuthenticated) return null;
+  1968→
+  1969→  return (
+  1970→    <div className="container mx-auto px-4 py-6 max-w-2xl">
+  1971→      <h1 className="text-2xl font-bold mb-6">My Addresses</h1>
+  1972→      <Card className="p-6 text-center text-muted-foreground">
+  1973→        <MapPin size={48} className="mx-auto mb-4 text-muted-foreground/30" />
+  1974→        <p>No saved addresses</p>
+  1975→        <p className="text-sm mt-1">Addresses are automatically saved during checkout</p>
+  1976→      </Card>
+  1977→    </div>
+  1978→  );
+  1979→}
+  1980→
+  1981→// ============ COMPARE PAGE (simplified) ============
+  1982→
+  1983→function ComparePage() {
+  1984→  const { items, removeItem, clearAll } = useCompareStore();
+  1985→  const { navigateTo, setSelectedProductId } = useNavigationStore();
+  1986→
+  1987→  const { data: products } = useQuery({
+  1988→    queryKey: ['compare-products', items],
+  1989→    queryFn: async () => {
+  1990→      if (!items.length) return [];
+  1991→      const res = await fetch('/api/products?limit=50');
+  1992→      const data = await res.json();
+  1993→      return (data.data || []).filter((p: Product) => items.includes(p.id));
+  1994→    },
+  1995→    enabled: items.length > 0,
+  1996→  });
+  1997→
+  1998→  if (!items.length) return (
+  1999→    <div className="container mx-auto px-4 py-16 text-center">
+  2000→      <GitCompare size={64} className="mx-auto text-muted-foreground/30 mb-4" />
+
+[showing lines 1-2000 of 2209; use offset=2001 with limit to continue reading]

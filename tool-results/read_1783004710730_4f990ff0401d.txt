@@ -1,0 +1,1905 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useState } from 'react';
+     4→     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→     5→import { motion } from 'framer-motion';
+     6→     6→import { toast } from 'sonner';
+     7→     7→import {
+     8→     8→  BarChart3, Users, Package, ShoppingCart, Store, DollarSign, TrendingUp,
+     9→     9→  Settings, LogOut, Menu, X, ChevronLeft, ChevronRight, Search, Eye,
+    10→    10→  Plus, Pencil, Trash2, CheckCircle, XCircle, AlertTriangle, Shield,
+    11→    11→  Tag, Image, Bell, FileText, UserCog, CreditCard, PieChart, LineChart, Clock,
+    12→    12→  RotateCcw, Wallet, Headphones, Megaphone, HelpCircle, Copy, ArrowUpRight,
+    13→    13→  ArrowDownRight, CheckCircle2, Send, MessageSquare, Zap, CalendarDays, Star,
+    14→    14→  ShieldCheck, FolderOpen, Sparkles
+    15→    15→} from 'lucide-react';
+    16→    16→
+    17→    17→import { Button } from '@/components/ui/button';
+    18→    18→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    19→    19→import { Input } from '@/components/ui/input';
+    20→    20→import { Label } from '@/components/ui/label';
+    21→    21→import { Badge } from '@/components/ui/badge';
+    22→    22→import { Separator } from '@/components/ui/separator';
+    23→    23→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    24→    24→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    25→    25→import { Textarea } from '@/components/ui/textarea';
+    26→    26→import { Skeleton } from '@/components/ui/skeleton';
+    27→    27→import { ScrollArea } from '@/components/ui/scroll-area';
+    28→    28→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    29→    29→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+    30→    30→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+    31→    31→import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+    32→    32→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    33→    33→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    34→    34→import { Switch } from '@/components/ui/switch';
+    35→    35→import { useAuthStore, useNavigationStore } from '@/stores';
+    36→    36→import type { Product, Category, Brand, Vendor, Order, Coupon, Banner, AdminDashboardStats } from '@/types';
+    37→    37→
+    38→    38→const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    39→    39→
+    40→    40→// ============ ADMIN NAV ============
+    41→    41→
+    42→    42→const ADMIN_NAV = [
+    43→    43→  { key: 'admin-dashboard', label: 'Dashboard', icon: BarChart3 },
+    44→    44→  { key: 'admin-vendors', label: 'Vendors', icon: Store },
+    45→    45→  { key: 'admin-categories', label: 'Categories', icon: Tag },
+    46→    46→  { key: 'admin-brands', label: 'Brands', icon: Shield },
+    47→    47→  { key: 'admin-products', label: 'Products', icon: Package },
+    48→    48→  { key: 'admin-orders', label: 'Orders', icon: ShoppingCart },
+    49→    49→  { key: 'admin-customers', label: 'Customers', icon: Users },
+    50→    50→  { key: 'admin-coupons', label: 'Coupons', icon: CreditCard },
+    51→    51→  { key: 'admin-banners', label: 'Banners', icon: Image },
+    52→    52→  { key: 'admin-reports', label: 'Reports', icon: TrendingUp },
+    53→    53→  { key: 'admin-returns', label: 'Returns', icon: RotateCcw },
+    54→    54→  { key: 'admin-payouts', label: 'Payouts', icon: Wallet },
+    55→    55→  { key: 'admin-analytics', label: 'Analytics', icon: BarChart3 },
+    56→    56→  { key: 'admin-support', label: 'Support', icon: Headphones },
+    57→    57→  { key: 'admin-marketing', label: 'Marketing', icon: Megaphone },
+    58→    58→  { key: 'admin-faq', label: 'FAQ', icon: HelpCircle },
+    59→    59→  { key: 'admin-roles', label: 'Roles', icon: UserCog },
+    60→    60→  { key: 'admin-settings', label: 'Settings', icon: Settings },
+    61→    61→];
+    62→    62→
+    63→    63→// ============ ADMIN SIDEBAR ============
+    64→    64→
+    65→    65→function AdminSidebar() {
+    66→    66→  const { adminView, setAdminView, setAppView } = useNavigationStore();
+    67→    67→  const { user, logout } = useAuthStore();
+    68→    68→  const [collapsed, setCollapsed] = useState(false);
+    69→    69→
+    70→    70→  return (
+    71→    71→    <aside className={`${collapsed ? 'w-16' : 'w-64'} border-r bg-card flex flex-col transition-all duration-300 hidden lg:flex`}>
+    72→    72→      <div className="p-4 border-b flex items-center gap-3">
+    73→    73→        <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 font-bold shrink-0">
+    74→    74→          <Shield size={20} />
+    75→    75→        </div>
+    76→    76→        {!collapsed && <div className="min-w-0"><p className="font-semibold text-sm truncate">Super Admin</p><p className="text-xs text-muted-foreground truncate">{user?.email}</p></div>}
+    77→    77→      </div>
+    78→    78→      <ScrollArea className="flex-1 py-2">
+    79→    79→        <nav className="px-2 space-y-1">
+    80→    80→          {ADMIN_NAV.map(item => (
+    81→    81→            <TooltipProvider key={item.key} delayDuration={0}>
+    82→    82→              <Tooltip>
+    83→    83→                <TooltipTrigger asChild>
+    84→    84→                  <Button variant={adminView === item.key ? 'secondary' : 'ghost'} size="sm" className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => setAdminView(item.key as any)}>
+    85→    85→                    <item.icon size={18} />
+    86→    86→                    {!collapsed && <span>{item.label}</span>}
+    87→    87→                  </Button>
+    88→    88→                </TooltipTrigger>
+    89→    89→                {collapsed && <TooltipContent side="right">{item.label}</TooltipContent>}
+    90→    90→              </Tooltip>
+    91→    91→            </TooltipProvider>
+    92→    92→          ))}
+    93→    93→        </nav>
+    94→    94→      </ScrollArea>
+    95→    95→      <div className="p-3 border-t space-y-1">
+    96→    96→        <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 text-muted-foreground ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => { logout(); setAppView('customer'); toast.success('Logged out'); }}>
+    97→    97→          <LogOut size={18} />{!collapsed && <span>Logout</span>}
+    98→    98→        </Button>
+    99→    99→      </div>
+   100→   100→    </aside>
+   101→   101→  );
+   102→   102→}
+   103→   103→
+   104→   104→function AdminMobileHeader() {
+   105→   105→  const { user, logout } = useAuthStore();
+   106→   106→  const { adminView, setAdminView, setAppView } = useNavigationStore();
+   107→   107→  const [open, setOpen] = useState(false);
+   108→   108→
+   109→   109→  return (
+   110→   110→    <header className="lg:hidden sticky top-0 z-50 bg-background border-b px-4 h-14 flex items-center justify-between">
+   111→   111→      <div className="flex items-center gap-2">
+   112→   112→        <Button variant="ghost" size="icon" onClick={() => setOpen(true)}><Menu size={20} /></Button>
+   113→   113→        <Shield size={20} className="text-amber-600" />
+   114→   114→        <span className="font-bold">Admin Panel</span>
+   115→   115→      </div>
+   116→   116→      <Avatar className="h-8 w-8"><AvatarFallback className="text-xs bg-amber-100 text-amber-600">{user?.name?.[0]}</AvatarFallback></Avatar>
+   117→   117→      {open && (
+   118→   118→        <div className="fixed inset-0 z-50">
+   119→   119→          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
+   120→   120→          <div className="absolute left-0 top-0 bottom-0 w-72 bg-background border-r p-4 space-y-2 overflow-y-auto">
+   121→   121→            <div className="flex items-center justify-between mb-4"><span className="font-bold">Admin Menu</span><Button variant="ghost" size="icon" onClick={() => setOpen(false)}><X size={20} /></Button></div>
+   122→   122→            {ADMIN_NAV.map(item => (
+   123→   123→              <Button key={item.key} variant={adminView === item.key ? 'secondary' : 'ghost'} className="w-full justify-start gap-3" onClick={() => { setAdminView(item.key as any); setOpen(false); }}>
+   124→   124→                <item.icon size={18} />{item.label}
+   125→   125→              </Button>
+   126→   126→            ))}
+   127→   127→            <Separator />
+   128→   128→            <Button variant="ghost" className="w-full justify-start gap-3 text-destructive" onClick={() => { logout(); setAppView('customer'); }}><LogOut size={18} />Logout</Button>
+   129→   129→          </div>
+   130→   130→        </div>
+   131→   131→      )}
+   132→   132→    </header>
+   133→   133→  );
+   134→   134→}
+   135→   135→
+   136→   136→// ============ ADMIN DASHBOARD ============
+   137→   137→
+   138→   138→function AdminDashboard() {
+   139→   139→  const { data, isLoading } = useQuery({
+   140→   140→    queryKey: ['admin-dashboard'],
+   141→   141→    queryFn: () => fetch('/api/admin/dashboard').then(r => r.json()).then((r: any) => r.data),
+   142→   142→  });
+   143→   143→
+   144→   144→  if (isLoading) return <div className="p-6 space-y-4">{Array.from({length: 6}).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>;
+   145→   145→
+   146→   146→  const stats = [
+   147→   147→    { label: 'Total Revenue', value: formatCurrency(data?.totalRevenue || 0), icon: DollarSign, color: 'text-green-600 bg-green-100 dark:bg-green-900/30' },
+   148→   148→    { label: 'Platform Earnings', value: formatCurrency(data?.platformEarnings || 0), icon: TrendingUp, color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30' },
+   149→   149→    { label: 'Total Orders', value: String(data?.totalOrders || 0), icon: ShoppingCart, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30' },
+   150→   150→    { label: 'Total Products', value: String(data?.totalProducts || 0), icon: Package, color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30' },
+   151→   151→    { label: 'Customers', value: String(data?.totalCustomers || 0), icon: Users, color: 'text-pink-600 bg-pink-100 dark:bg-pink-900/30' },
+   152→   152→    { label: 'Active Vendors', value: String(data?.totalVendors || 0), icon: Store, color: 'text-amber-600 bg-amber-100 dark:bg-amber-900/30' },
+   153→   153→  ];
+   154→   154→
+   155→   155→  return (
+   156→   156→    <div className="p-6 space-y-6">
+   157→   157→      <div className="flex items-center justify-between">
+   158→   158→        <div><h1 className="text-2xl font-bold">Admin Dashboard</h1><p className="text-muted-foreground">Platform overview and analytics</p></div>
+   159→   159→        {data?.pendingVendors > 0 && (
+   160→   160→          <Badge variant="outline" className="text-amber-600 border-amber-500 cursor-pointer" onClick={() => useNavigationStore.getState().setAdminView('admin-vendors')}>
+   161→   161→            <AlertTriangle size={14} className="mr-1" />{data.pendingVendors} Pending Vendors
+   162→   162→          </Badge>
+   163→   163→        )}
+   164→   164→      </div>
+   165→   165→
+   166→   166→      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+   167→   167→        {stats.map((s, i) => (
+   168→   168→          <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: i * 0.05 }}>
+   169→   169→            <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">{s.label}</p><p className="text-2xl font-bold mt-1">{s.value}</p></div><div className={`w-10 h-10 rounded-lg flex items-center justify-center ${s.color}`}><s.icon size={20} /></div></div></Card>
+   170→   170→          </motion.div>
+   171→   171→        ))}
+   172→   172→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+   173→   173→          <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Today's Revenue</p><p className="text-2xl font-bold">{formatCurrency(data?.todayRevenue || 0)}</p></div><DollarSign className="h-8 w-8 text-green-500 bg-green-100 dark:bg-green-900/30 rounded-lg p-2" /></div></Card>
+   174→   174→        </motion.div>
+   175→   175→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+   176→   176→          <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Today's Orders</p><p className="text-2xl font-bold">{data?.todayOrders || 0}</p></div><ShoppingCart className="h-8 w-8 text-blue-500 bg-blue-100 dark:bg-blue-900/30 rounded-lg p-2" /></div></Card>
+   177→   177→        </motion.div>
+   178→   178→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+   179→   179→          <Card className="p-4 cursor-pointer" onClick={() => useNavigationStore.getState().setAdminView('admin-returns')}><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Pending Returns</p><p className="text-2xl font-bold text-red-500">{data?.pendingReturns || 0}</p></div><RotateCcw className="h-8 w-8 text-red-500 bg-red-100 dark:bg-red-900/30 rounded-lg p-2" /></div></Card>
+   180→   180→        </motion.div>
+   181→   181→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
+   182→   182→          <Card className="p-4 cursor-pointer" onClick={() => useNavigationStore.getState().setAdminView('admin-products')}><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Low Stock Products</p><p className="text-2xl font-bold text-amber-500">{data?.lowStockProducts || 0}</p></div><AlertTriangle className="h-8 w-8 text-amber-500 bg-amber-100 dark:bg-amber-900/30 rounded-lg p-2" /></div></Card>
+   183→   183→        </motion.div>
+   184→   184→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+   185→   185→          <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Conversion Rate</p><p className="text-2xl font-bold text-green-500">{data?.conversionRate || 2.4}%</p></div><TrendingUp className="h-8 w-8 text-green-500 bg-green-100 dark:bg-green-900/30 rounded-lg p-2" /></div></Card>
+   186→   186→        </motion.div>
+   187→   187→      </div>
+   188→   188→
+   189→   189→      {/* Sales Chart */}
+   190→   190→      {data?.monthlySales && (
+   191→   191→        <Card className="p-6">
+   192→   192→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Monthly Revenue</CardTitle></CardHeader>
+   193→   193→          <div className="h-56 flex items-end gap-3">
+   194→   194→            {data.monthlySales.map((ms: any, i: number) => {
+   195→   195→              const maxSale = Math.max(...data.monthlySales.map((m: any) => m.sales), 1);
+   196→   196→              const height = (ms.sales / maxSale) * 100;
+   197→   197→              return (
+   198→   198→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+   199→   199→                  <span className="text-xs font-medium">{formatCurrency(ms.sales)}</span>
+   200→   200→                  <div className="w-full rounded-t-md bg-gradient-to-t from-amber-600 to-amber-400 transition-all duration-500" style={{ height: `${Math.max(height, 4)}%` }} />
+   201→   201→                  <span className="text-xs text-muted-foreground">{ms.month}</span>
+   202→   202→                </div>
+   203→   203→              );
+   204→   204→            })}
+   205→   205→          </div>
+   206→   206→        </Card>
+   207→   207→      )}
+   208→   208→
+   209→   209→      <div className="grid lg:grid-cols-2 gap-6">
+   210→   210→        {/* Top Categories */}
+   211→   211→        {data?.topCategories && data.topCategories.length > 0 && (
+   212→   212→          <Card className="p-4 col-span-full lg:col-span-2">
+   213→   213→            <h3 className="font-semibold mb-3">Top Categories</h3>
+   214→   214→            <div className="space-y-2">
+   215→   215→              {data.topCategories.map((cat: any, i: number) => (
+   216→   216→                <div key={i} className="flex items-center gap-3">
+   217→   217→                  <span className="text-sm font-medium w-32 truncate">{cat.name}</span>
+   218→   218→                  <div className="flex-1 bg-muted rounded-full h-2"><div className="bg-amber-500 h-2 rounded-full" style={{ width: `${Math.min(100, (cat.count / (data.topCategories[0]?.count || 1)) * 100)}%` }} /></div>
+   219→   219→                  <span className="text-sm text-muted-foreground">{cat.count} orders</span>
+   220→   220→                </div>
+   221→   221→              ))}
+   222→   222→            </div>
+   223→   223→          </Card>
+   224→   224→        )}
+   225→   225→
+   226→   226→        {/* Recent Orders */}
+   227→   227→        <Card className="p-6">
+   228→   228→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Recent Orders</CardTitle></CardHeader>
+   229→   229→          <div className="space-y-3">
+   230→   230→            {data?.recentOrders?.slice(0, 8).map((order: any) => (
+   231→   231→              <div key={order.id} className="flex items-center justify-between py-2 border-b last:border-0">
+   232→   232→                <div><p className="text-sm font-medium">#{order.orderNumber}</p><p className="text-xs text-muted-foreground">{order.user?.name} • {new Date(order.createdAt).toLocaleDateString()}</p></div>
+   233→   233→                <div className="text-right"><p className="text-sm font-bold">{formatCurrency(order.total)}</p><Badge variant="secondary" className="text-xs">{order.status}</Badge></div>
+   234→   234→              </div>
+   235→   235→            ))}
+   236→   236→          </div>
+   237→   237→        </Card>
+   238→   238→
+   239→   239→        {/* Top Products */}
+   240→   240→        <Card className="p-6">
+   241→   241→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Top Products</CardTitle></CardHeader>
+   242→   242→          <div className="space-y-3">
+   243→   243→            {data?.topProducts?.map((p: any, i: number) => (
+   244→   244→              <div key={p.id} className="flex items-center gap-3 py-2 border-b last:border-0">
+   245→   245→                <span className="text-lg font-bold text-muted-foreground w-6">#{i + 1}</span>
+   246→   246→                <div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">{p.images?.[0]?.url && <img src={p.images[0].url} alt="" className="w-full h-full object-cover" />}</div>
+   247→   247→                <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{p.name}</p><p className="text-xs text-muted-foreground">{p.vendor?.businessName} • {p.totalSold} sold</p></div>
+   248→   248→                <p className="text-sm font-bold">{formatCurrency(p.price)}</p>
+   249→   249→              </div>
+   250→   250→            ))}
+   251→   251→          </div>
+   252→   252→        </Card>
+   253→   253→      </div>
+   254→   254→    </div>
+   255→   255→  );
+   256→   256→}
+   257→   257→
+   258→   258→// ============ VENDOR MANAGEMENT ============
+   259→   259→
+   260→   260→function AdminVendors() {
+   261→   261→  const [statusFilter, setStatusFilter] = useState('all');
+   262→   262→  const qc = useQueryClient();
+   263→   263→  const [detailVendor, setDetailVendor] = useState<Vendor | null>(null);
+   264→   264→  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+   265→   265→  const [rejectVendorId, setRejectVendorId] = useState<string | null>(null);
+   266→   266→  const [rejectionReason, setRejectionReason] = useState('');
+   267→   267→  const [showWallet, setShowWallet] = useState(false);
+   268→   268→
+   269→   269→  const { data: walletData } = useQuery({
+   270→   270→    queryKey: ['admin-vendor-wallets'],
+   271→   271→    queryFn: () => fetch('/api/admin/vendors/wallets').then(r => r.json()).then((r: any) => r.data || []),
+   272→   272→  });
+   273→   273→
+   274→   274→  const params = new URLSearchParams({ limit: '50' });
+   275→   275→  if (statusFilter !== 'all') params.set('status', statusFilter);
+   276→   276→
+   277→   277→  const { data, isLoading } = useQuery({
+   278→   278→    queryKey: ['admin-vendors', statusFilter],
+   279→   279→    queryFn: () => fetch(`/api/vendors?${params}`).then(r => r.json()).then((r: any) => r),
+   280→   280→  });
+   281→   281→
+   282→   282→  const updateVendor = useMutation({
+   283→   283→    mutationFn: ({ id, status, rejectionReason: reason }: { id: string; status: string; rejectionReason?: string }) =>
+   284→   284→      fetch(`/api/vendors/${id}`, {
+   285→   285→        method: 'PUT',
+   286→   286→        headers: { 'Content-Type': 'application/json' },
+   287→   287→        body: JSON.stringify({ status, ...(reason ? { rejectionReason: reason } : {}) }),
+   288→   288→      }).then(r => r.json()),
+   289→   289→    onSuccess: () => {
+   290→   290→      qc.invalidateQueries({ queryKey: ['admin-vendors'] });
+   291→   291→      qc.invalidateQueries({ queryKey: ['admin-dashboard'] });
+   292→   292→      toast.success('Vendor updated');
+   293→   293→    },
+   294→   294→    onError: () => toast.error('Failed to update vendor'),
+   295→   295→  });
+   296→   296→
+   297→   297→  const handleReject = () => {
+   298→   298→    if (!rejectVendorId) return;
+   299→   299→    updateVendor.mutate({ id: rejectVendorId, status: 'REJECTED', rejectionReason: rejectionReason || 'Application does not meet our requirements.' });
+   300→   300→    setRejectDialogOpen(false);
+   301→   301→    setRejectVendorId(null);
+   302→   302→    setRejectionReason('');
+   303→   303→    setDetailVendor(null);
+   304→   304→  };
+   305→   305→
+   306→   306→  const openRejectDialog = (vendorId: string) => {
+   307→   307→    setRejectVendorId(vendorId);
+   308→   308→    setRejectionReason('');
+   309→   309→    setRejectDialogOpen(true);
+   310→   310→  };
+   311→   311→
+   312→   312→  const statusColor: Record<string, string> = {
+   313→   313→    PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+   314→   314→    APPROVED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+   315→   315→    SUSPENDED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+   316→   316→    REJECTED: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+   317→   317→  };
+   318→   318→
+   319→   319→  const pendingCount = data?.data?.filter((v: Vendor) => v.status === 'PENDING').length || 0;
+   320→   320→
+   321→   321→  return (
+   322→   322→    <div className="p-6 space-y-6">
+   323→   323→      <div className="flex items-center justify-between flex-wrap gap-3">
+   324→   324→        <div>
+   325→   325→          <h1 className="text-2xl font-bold">Vendor Management</h1>
+   326→   326→          <p className="text-muted-foreground text-sm">Manage vendor accounts and applications</p>
+   327→   327→        </div>
+   328→   328→        {pendingCount > 0 && (
+   329→   329→          <Badge className="bg-amber-500 text-white px-3 py-1 text-sm cursor-pointer" onClick={() => setStatusFilter('PENDING')}>
+   330→   330→            <Clock size={14} className="mr-1.5" />{pendingCount} Pending Review
+   331→   331→          </Badge>
+   332→   332→        )}
+   333→   333→      </div>
+   334→   334→
+   335→   335→      <div className="flex gap-2 flex-wrap">
+   336→   336→        {['all', 'PENDING', 'APPROVED', 'SUSPENDED', 'REJECTED'].map(s => (
+   337→   337→          <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-amber-600' : ''} onClick={() => setStatusFilter(s)}>
+   338→   338→            {s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}
+   339→   339→            {s === 'PENDING' && pendingCount > 0 ? ` (${pendingCount})` : ''}
+   340→   340→          </Button>
+   341→   341→        ))}
+   342→   342→      </div>
+   343→   343→
+   344→   344→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+   345→   345→        <Card>
+   346→   346→          <div className="overflow-x-auto">
+   347→   347→            <Table>
+   348→   348→              <TableHeader>
+   349→   349→                <TableRow>
+   350→   350→                  <TableHead>Vendor</TableHead>
+   351→   351→                  <TableHead className="hidden md:table-cell">Email</TableHead>
+   352→   352→                  <TableHead className="hidden lg:table-cell">GST/PAN</TableHead>
+   353→   353→                  <TableHead>Products</TableHead>
+   354→   354→                  <TableHead className="hidden sm:table-cell">Revenue</TableHead>
+   355→   355→                  <TableHead>Status</TableHead>
+   356→   356→                  <TableHead className="text-right">Actions</TableHead>
+   357→   357→                </TableRow>
+   358→   358→              </TableHeader>
+   359→   359→              <TableBody>
+   360→   360→                {!data?.data?.length && <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No vendors found</TableCell></TableRow>}
+   361→   361→                {data?.data?.map((vendor: Vendor) => (
+   362→   362→                  <TableRow key={vendor.id} className={vendor.status === 'PENDING' ? 'bg-amber-50/50 dark:bg-amber-900/5' : ''}>
+   363→   363→                    <TableCell>
+   364→   364→                      <div className="flex items-center gap-3">
+   365→   365→                        <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 font-bold text-sm shrink-0">{vendor.businessName[0]}</div>
+   366→   366→                        <div>
+   367→   367→                          <p className="font-medium text-sm">{vendor.businessName}</p>
+   368→   368→                          <p className="text-xs text-muted-foreground">Joined {new Date(vendor.createdAt).toLocaleDateString()}</p>
+   369→   369→                        </div>
+   370→   370→                      </div>
+   371→   371→                    </TableCell>
+   372→   372→                    <TableCell className="hidden md:table-cell text-sm">{vendor.user?.email}</TableCell>
+   373→   373→                    <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+   374→   374→                      {vendor.gstNumber || vendor.panNumber || '—'}
+   375→   375→                    </TableCell>
+   376→   376→                    <TableCell className="font-medium">{vendor._count?.products || 0}</TableCell>
+   377→   377→                    <TableCell className="hidden sm:table-cell font-medium">{formatCurrency(vendor.totalRevenue)}</TableCell>
+   378→   378→                    <TableCell>
+   379→   379→                      <Badge className={statusColor[vendor.status] || ''}>
+   380→   380→                        {vendor.status === 'PENDING' && <Clock size={12} className="mr-1" />}
+   381→   381→                        {vendor.status}
+   382→   382→                      </Badge>
+   383→   383→                    </TableCell>
+   384→   384→                    <TableCell className="text-right">
+   385→   385→                      <div className="flex items-center justify-end gap-1">
+   386→   386→                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailVendor(vendor)}><Eye size={14} /></Button>
+   387→   387→                        {vendor.status === 'PENDING' && (
+   388→   388→                          <>
+   389→   389→                            <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20" onClick={() => { updateVendor.mutate({ id: vendor.id, status: 'APPROVED' }); toast.success(`${vendor.businessName} approved!`); }}><CheckCircle size={16} /></Button>
+   390→   390→                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => openRejectDialog(vendor.id)}><XCircle size={16} /></Button>
+   391→   391→                          </>
+   392→   392→                        )}
+   393→   393→                        {vendor.status === 'APPROVED' && (
+   394→   394→                          <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600" onClick={() => updateVendor.mutate({ id: vendor.id, status: 'SUSPENDED' })}><XCircle size={14} /></Button>
+   395→   395→                        )}
+   396→   396→                        {vendor.status === 'SUSPENDED' && (
+   397→   397→                          <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600" onClick={() => updateVendor.mutate({ id: vendor.id, status: 'APPROVED' })}><CheckCircle size={14} /></Button>
+   398→   398→                        )}
+   399→   399→                      </div>
+   400→   400→                    </TableCell>
+   401→   401→                  </TableRow>
+   402→   402→                ))}
+   403→   403→              </TableBody>
+   404→   404→            </Table>
+   405→   405→          </div>
+   406→   406→        </Card>}
+   407→   407→
+   408→   408→      {/* Vendor Detail Modal */}
+   409→   409→      <Dialog open={!!detailVendor} onOpenChange={() => setDetailVendor(null)}>
+   410→   410→        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+   411→   411→          <DialogHeader><DialogTitle>Vendor Details</DialogTitle></DialogHeader>
+   412→   412→          {detailVendor && (
+   413→   413→            <div className="space-y-4">
+   414→   414→              <div className="flex items-center gap-4">
+   415→   415→                <div className="w-16 h-16 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 text-2xl font-bold shrink-0">{detailVendor.businessName[0]}</div>
+   416→   416→                <div className="min-w-0">
+   417→   417→                  <h3 className="text-xl font-bold">{detailVendor.businessName}</h3>
+   418→   418→                  <div className="flex items-center gap-2 mt-1">
+   419→   419→                    <Badge className={statusColor[detailVendor.status] || ''}>
+   420→   420→                      {detailVendor.status === 'PENDING' && <Clock size={12} className="mr-1" />}
+   421→   421→                      {detailVendor.status}
+   422→   422→                    </Badge>
+   423→   423→                    {detailVendor._count && <span className="text-sm text-muted-foreground">{detailVendor._count.products} products</span>}
+   424→   424→                  </div>
+   425→   425→                  <p className="text-sm text-muted-foreground mt-1">{detailVendor.description || 'No description provided'}</p>
+   426→   426→                </div>
+   427→   427→              </div>
+   428→   428→              <Separator />
+   429→   429→
+   430→   430→              {/* Business Details */}
+   431→   431→              <div>
+   432→   432→                <h4 className="font-semibold text-sm mb-2">Business Information</h4>
+   433→   433→                <div className="grid sm:grid-cols-2 gap-3 text-sm">
+   434→   434→                  <div><span className="text-muted-foreground">Contact Email:</span> <span className="ml-2">{detailVendor.user?.email}</span></div>
+   435→   435→                  <div><span className="text-muted-foreground">Phone:</span> <span className="ml-2">{detailVendor.user?.phone || 'N/A'}</span></div>
+   436→   436→                  <div><span className="text-muted-foreground">Business Email:</span> <span className="ml-2">{detailVendor.businessEmail || 'N/A'}</span></div>
+   437→   437→                  <div><span className="text-muted-foreground">Business Phone:</span> <span className="ml-2">{detailVendor.businessPhone || 'N/A'}</span></div>
+   438→   438→                  <div className="sm:col-span-2"><span className="text-muted-foreground">Business Address:</span> <span className="ml-2">{detailVendor.businessAddress || 'N/A'}</span></div>
+   439→   439→                </div>
+   440→   440→              </div>
+   441→   441→
+   442→   442→              <Separator />
+   443→   443→
+   444→   444→              {/* Tax & Bank Details */}
+   445→   445→              <div>
+   446→   446→                <h4 className="font-semibold text-sm mb-2">Tax & Bank Details</h4>
+   447→   447→                <div className="grid sm:grid-cols-2 gap-3 text-sm">
+   448→   448→                  <div><span className="text-muted-foreground">GST Number:</span> <span className="ml-2">{detailVendor.gstNumber || 'N/A'}</span></div>
+   449→   449→                  <div><span className="text-muted-foreground">PAN Number:</span> <span className="ml-2">{detailVendor.panNumber || 'N/A'}</span></div>
+   450→   450→                  <div><span className="text-muted-foreground">Bank Name:</span> <span className="ml-2">{detailVendor.bankName || 'N/A'}</span></div>
+   451→   451→                  <div><span className="text-muted-foreground">Bank Account:</span> <span className="ml-2">{detailVendor.bankAccount ? '••••' + detailVendor.bankAccount.slice(-4) : 'N/A'}</span></div>
+   452→   452→                  <div><span className="text-muted-foreground">IFSC:</span> <span className="ml-2">{detailVendor.bankIfsc || 'N/A'}</span></div>
+   453→   453→                  <div><span className="text-muted-foreground">Commission:</span> <span className="ml-2 font-medium">{detailVendor.commissionRate}%</span></div>
+   454→   454→                </div>
+   455→   455→              </div>
+   456→   456→
+   457→   457→              <Separator />
+   458→   458→
+   459→   459→              {/* Stats */}
+   460→   460→              <div>
+   461→   461→                <h4 className="font-semibold text-sm mb-2">Performance</h4>
+   462→   462→                <div className="grid grid-cols-3 gap-3">
+   463→   463→                  <div className="text-center p-3 rounded-lg bg-muted/50">
+   464→   464→                    <p className="text-lg font-bold text-green-600">{formatCurrency(detailVendor.totalSales)}</p>
+   465→   465→                    <p className="text-xs text-muted-foreground">Total Sales</p>
+   466→   466→                  </div>
+   467→   467→                  <div className="text-center p-3 rounded-lg bg-muted/50">
+   468→   468→                    <p className="text-lg font-bold">{formatCurrency(detailVendor.totalRevenue)}</p>
+   469→   469→                    <p className="text-xs text-muted-foreground">Revenue</p>
+   470→   470→                  </div>
+   471→   471→                  <div className="text-center p-3 rounded-lg bg-muted/50">
+   472→   472→                    <p className="text-lg font-bold">{detailVendor.rating?.toFixed(1) || 'N/A'}</p>
+   473→   473→                    <p className="text-xs text-muted-foreground">Rating</p>
+   474→   474→                  </div>
+   475→   475→                </div>
+   476→   476→              </div>
+   477→   477→
+   478→   478→              {/* Rejection reason if previously rejected */}
+   479→   479→              {detailVendor.rejectionReason && (
+   480→   480→                <>
+   481→   481→                  <Separator />
+   482→   482→                  <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
+   483→   483→                    <p className="text-sm font-medium text-red-700 dark:text-red-400">Previous Rejection Reason:</p>
+   484→   484→                    <p className="text-sm text-red-600 dark:text-red-300 mt-1">{detailVendor.rejectionReason}</p>
+   485→   485→                  </div>
+   486→   486→                </>
+   487→   487→              )}
+   488→   488→
+   489→   489→              {/* Vendor Wallet Section */}
+   490→   490→              {(() => {
+   491→   491→                const vw = walletData?.find((w: any) => w.id === detailVendor.id);
+   492→   492→                if (!vw) return null;
+   493→   493→                return (
+   494→   494→                  <>
+   495→   495→                    <Separator />
+   496→   496→                    <div>
+   497→   497→                      <div className="flex items-center justify-between mb-3">
+   498→   498→                        <h4 className="font-semibold text-sm flex items-center gap-2"><Wallet size={14} className="text-green-600" />Vendor Wallet</h4>
+   499→   499→                        <Button variant="outline" size="sm" className="text-xs" onClick={() => setShowWallet(!showWallet)}>
+   500→   500→                          {showWallet ? 'Hide Transactions' : 'View Transactions'}
+   501→   501→                        </Button>
+   502→   502→                      </div>
+   503→   503→                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   504→   504→                        <div className="text-center p-3 rounded-lg bg-green-50 dark:bg-green-900/10">
+   505→   505→                          <p className="text-lg font-bold text-green-600">{formatCurrency(vw.wallet.availableBalance)}</p>
+   506→   506→                          <p className="text-xs text-muted-foreground">Available</p>
+   507→   507→                        </div>
+   508→   508→                        <div className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10">
+   509→   509→                          <p className="text-lg font-bold text-amber-600">{formatCurrency(vw.wallet.pendingBalance)}</p>
+   510→   510→                          <p className="text-xs text-muted-foreground">Pending</p>
+   511→   511→                        </div>
+   512→   512→                        <div className="text-center p-3 rounded-lg bg-muted/50">
+   513→   513→                          <p className="text-lg font-bold">{formatCurrency(vw.wallet.totalEarned)}</p>
+   514→   514→                          <p className="text-xs text-muted-foreground">Total Earned</p>
+   515→   515→                        </div>
+   516→   516→                        <div className="text-center p-3 rounded-lg bg-muted/50">
+   517→   517→                          <p className="text-lg font-bold">{formatCurrency(vw.wallet.totalWithdrawn)}</p>
+   518→   518→                          <p className="text-xs text-muted-foreground">Withdrawn</p>
+   519→   519→                        </div>
+   520→   520→                      </div>
+   521→   521→                      {showWallet && vw.transactions.length > 0 && (
+   522→   522→                        <div className="mt-3 border rounded-lg overflow-hidden">
+   523→   523→                          <Table>
+   524→   524→                            <TableHeader><TableRow><TableHead>Type</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right">Balance</TableHead><TableHead className="hidden sm:table-cell">Description</TableHead><TableHead className="text-right">Date</TableHead></TableRow></TableHeader>
+   525→   525→                            <TableBody>
+   526→   526→                              {vw.transactions.map((t: any) => (
+   527→   527→                                <TableRow key={t.id}>
+   528→   528→                                  <TableCell><Badge variant="outline" className="text-xs">{t.type}</Badge></TableCell>
+   529→   529→                                  <TableCell className={`text-right font-medium ${t.type === 'WITHDRAWAL' || t.type === 'COMMISSION_DEDUCTION' ? 'text-red-600' : 'text-green-600'}`}>{t.type === 'WITHDRAWAL' || t.type === 'COMMISSION_DEDUCTION' ? '-' : '+'}{formatCurrency(t.amount)}</TableCell>
+   530→   530→                                  <TableCell className="text-right">{formatCurrency(t.balance)}</TableCell>
+   531→   531→                                  <TableCell className="hidden sm:table-cell text-xs text-muted-foreground max-w-[200px] truncate">{t.description || '—'}</TableCell>
+   532→   532→                                  <TableCell className="text-right text-xs text-muted-foreground">{new Date(t.createdAt).toLocaleDateString('en-IN')}</TableCell>
+   533→   533→                                </TableRow>
+   534→   534→                              ))}
+   535→   535→                            </TableBody>
+   536→   536→                          </Table>
+   537→   537→                        </div>
+   538→   538→                      )}
+   539→   539→                      {showWallet && vw.transactions.length === 0 && (
+   540→   540→                        <p className="text-sm text-muted-foreground text-center mt-3">No transactions yet</p>
+   541→   541→                      )}
+   542→   542→                    </div>
+   543→   543→                  </>
+   544→   544→                );
+   545→   545→              })()}
+   546→   546→
+   547→   547→              <Separator />
+   548→   548→              <div className="flex gap-2 flex-wrap">
+   549→   549→                {detailVendor.status === 'PENDING' && (
+   550→   550→                  <>
+   551→   551→                    <Button className="bg-green-600 hover:bg-green-700" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); toast.success(`${detailVendor.businessName} has been approved!`); }}>
+   552→   552→                      <CheckCircle size={16} className="mr-1.5" />Approve Vendor
+   553→   553→                    </Button>
+   554→   554→                    <Button variant="destructive" onClick={() => { openRejectDialog(detailVendor.id); }}>
+   555→   555→                      <XCircle size={16} className="mr-1.5" />Reject Application
+   556→   556→                    </Button>
+   557→   557→                  </>
+   558→   558→                )}
+   559→   559→                {detailVendor.status === 'APPROVED' && (
+   560→   560→                  <Button variant="destructive" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'SUSPENDED' }); setDetailVendor(null); }}>
+   561→   561→                    <XCircle size={16} className="mr-1.5" />Suspend Vendor
+   562→   562→                  </Button>
+   563→   563→                )}
+   564→   564→                {detailVendor.status === 'SUSPENDED' && (
+   565→   565→                  <Button className="bg-green-600 hover:bg-green-700" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); }}>
+   566→   566→                    <CheckCircle size={16} className="mr-1.5" />Re-activate Vendor
+   567→   567→                  </Button>
+   568→   568→                )}
+   569→   569→                {detailVendor.status === 'REJECTED' && (
+   570→   570→                  <Button className="bg-green-600 hover:bg-green-700" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); toast.success(`${detailVendor.businessName} has been approved!`); }}>
+   571→   571→                    <CheckCircle size={16} className="mr-1.5" />Approve Now
+   572→   572→                  </Button>
+   573→   573→                )}
+   574→   574→              </div>
+   575→   575→            </div>
+   576→   576→          )}
+   577→   577→        </DialogContent>
+   578→   578→      </Dialog>
+   579→   579→
+   580→   580→      {/* Rejection Reason Dialog */}
+   581→   581→      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+   582→   582→        <DialogContent className="max-w-md">
+   583→   583→          <DialogHeader>
+   584→   584→            <DialogTitle>Reject Vendor Application</DialogTitle>
+   585→   585→            <DialogDescription>Please provide a reason for rejecting this application. This will be shown to the vendor.</DialogDescription>
+   586→   586→          </DialogHeader>
+   587→   587→          <div className="space-y-4">
+   588→   588→            <div>
+   589→   589→              <Label>Rejection Reason *</Label>
+   590→   590→              <Textarea
+   591→   591→                className="mt-1"
+   592→   592→                rows={4}
+   593→   593→                placeholder="e.g., Incomplete business information, invalid GST number, etc."
+   594→   594→                value={rejectionReason}
+   595→   595→                onChange={e => setRejectionReason(e.target.value)}
+   596→   596→              />
+   597→   597→            </div>
+   598→   598→            <div className="flex gap-2 justify-end">
+   599→   599→              <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
+   600→   600→              <Button variant="destructive" onClick={handleReject} disabled={!rejectionReason.trim()}>
+   601→   601→                <XCircle size={16} className="mr-1.5" />Confirm Rejection
+   602→   602→              </Button>
+   603→   603→            </div>
+   604→   604→          </div>
+   605→   605→        </DialogContent>
+   606→   606→      </Dialog>
+   607→   607→    </div>
+   608→   608→  );
+   609→   609→}
+   610→   610→
+   611→   611→// ============ CATEGORY MANAGEMENT ============
+   612→   612→
+   613→   613→function AdminCategories() {
+   614→   614→  const qc = useQueryClient();
+   615→   615→  const { data: categories, isLoading } = useQuery({
+   616→   616→    queryKey: ['categories'],
+   617→   617→    queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: any) => r.data || []),
+   618→   618→  });
+   619→   619→
+   620→   620→  const [showAdd, setShowAdd] = useState(false);
+   621→   621→  const [editId, setEditId] = useState<string | null>(null);
+   622→   622→  const [form, setForm] = useState({ name: '', description: '', parentId: '', sortOrder: '0' });
+   623→   623→
+   624→   624→  const saveMutation = useMutation({
+   625→   625→    mutationFn: async () => {
+   626→   626→      if (editId) {
+   627→   627→        return fetch('/api/categories', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editId, name: form.name, description: form.description, parentId: form.parentId || null, sortOrder: parseInt(form.sortOrder) }) }).then(r => r.json());
+   628→   628→      }
+   629→   629→      return fetch('/api/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, description: form.description, parentId: form.parentId || null, sortOrder: parseInt(form.sortOrder) }) }).then(r => r.json());
+   630→   630→    },
+   631→   631→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success(editId ? 'Category updated' : 'Category created'); setShowAdd(false); setEditId(null); setForm({ name: '', description: '', parentId: '', sortOrder: '0' }); },
+   632→   632→    onError: () => toast.error('Failed to save category'),
+   633→   633→  });
+   634→   634→
+   635→   635→  const deleteMutation = useMutation({
+   636→   636→    mutationFn: (id: string) => fetch(`/api/categories?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+   637→   637→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success('Category deleted'); },
+   638→   638→    onError: () => toast.error('Failed to delete'),
+   639→   639→  });
+   640→   640→
+   641→   641→  const handleEdit = (cat: any) => { setForm({ name: cat.name, description: cat.description || '', parentId: cat.parentId || '', sortOrder: String(cat.sortOrder) }); setEditId(cat.id); setShowAdd(true); };
+   642→   642→
+   643→   643→  return (
+   644→   644→    <div className="p-6 space-y-6">
+   645→   645→      <div className="flex items-center justify-between">
+   646→   646→        <div><h1 className="text-2xl font-bold">Categories</h1><p className="text-muted-foreground text-sm">Manage product categories and subcategories</p></div>
+   647→   647→        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => { setForm({ name: '', description: '', parentId: '', sortOrder: '0' }); setEditId(null); setShowAdd(true); }}><Plus size={16} className="mr-1.5" />Add Category</Button>
+   648→   648→      </div>
+   649→   649→
+   650→   650→      {isLoading ? <div className="space-y-3">{Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div> :
+   651→   651→      <div className="space-y-2">
+   652→   652→        {categories?.map((cat: any) => (
+   653→   653→          <div key={cat.id}>
+   654→   654→            <Card className="p-4 flex items-center justify-between">
+   655→   655→              <div className="flex items-center gap-3">
+   656→   656→                <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-sm font-bold">{cat.name[0]}</div>
+   657→   657→                <div><p className="font-medium">{cat.name}</p><p className="text-sm text-muted-foreground">{cat._count?.products || 0} products</p></div>
+   658→   658→              </div>
+   659→   659→              <div className="flex items-center gap-1">
+   660→   660→                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(cat)}><Pencil size={14} /></Button>
+   661→   661→                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(cat.id)}><Trash2 size={14} /></Button>
+   662→   662→              </div>
+   663→   663→            </Card>
+   664→   664→            {cat.children?.map((child: any) => (
+   665→   665→              <Card key={child.id} className="p-4 flex items-center justify-between ml-8 mt-1">
+   666→   666→                <div className="flex items-center gap-3">
+   667→   667→                  <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-xs font-bold">{child.name[0]}</div>
+   668→   668→                  <div><p className="font-medium text-sm">{child.name}</p><p className="text-xs text-muted-foreground">{child._count?.products || 0} products</p></div>
+   669→   669→                </div>
+   670→   670→                <div className="flex items-center gap-1">
+   671→   671→                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(child)}><Pencil size={12} /></Button>
+   672→   672→                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(child.id)}><Trash2 size={12} /></Button>
+   673→   673→                </div>
+   674→   674→              </Card>
+   675→   675→            ))}
+   676→   676→          </div>
+   677→   677→        ))}
+   678→   678→      </div>}
+   679→   679→
+   680→   680→      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+   681→   681→        <DialogContent><DialogHeader><DialogTitle>{editId ? 'Edit Category' : 'Add Category'}</DialogTitle></DialogHeader>
+   682→   682→          <div className="space-y-4">
+   683→   683→            <div><Label>Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /></div>
+   684→   684→            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} className="mt-1" /></div>
+   685→   685→            <div><Label>Parent Category</Label><Select value={form.parentId} onValueChange={v => setForm(f => ({...f, parentId: v}))}><SelectTrigger className="mt-1"><SelectValue placeholder="None (Root Category)" /></SelectTrigger><SelectContent><SelectItem value="none">None (Root Category)</SelectItem>{categories?.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+   686→   686→            <div><Label>Sort Order</Label><Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({...f, sortOrder: e.target.value}))} className="mt-1" /></div>
+   687→   687→          </div>
+   688→   688→          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.name}>{saveMutation.isPending ? 'Saving...' : editId ? 'Update' : 'Create'}</Button></DialogFooter>
+   689→   689→        </DialogContent>
+   690→   690→      </Dialog>
+   691→   691→    </div>
+   692→   692→  );
+   693→   693→}
+   694→   694→
+   695→   695→// ============ BRAND MANAGEMENT ============
+   696→   696→
+   697→   697→function AdminBrands() {
+   698→   698→  const qc = useQueryClient();
+   699→   699→  const { data: brands, isLoading } = useQuery({
+   700→   700→    queryKey: ['brands'],
+   701→   701→    queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: any) => r.data || []),
+   702→   702→  });
+   703→   703→
+   704→   704→  const [showAdd, setShowAdd] = useState(false);
+   705→   705→  const [form, setForm] = useState({ name: '', description: '' });
+   706→   706→
+   707→   707→  const addMutation = useMutation({
+   708→   708→    mutationFn: () => fetch('/api/brands', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).then(r => r.json()),
+   709→   709→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['brands'] }); toast.success('Brand created'); setShowAdd(false); setForm({ name: '', description: '' }); },
+   710→   710→    onError: () => toast.error('Failed to create brand'),
+   711→   711→  });
+   712→   712→
+   713→   713→  const deleteMutation = useMutation({
+   714→   714→    mutationFn: (id: string) => fetch(`/api/brands?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+   715→   715→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['brands'] }); toast.success('Brand deleted'); },
+   716→   716→    onError: () => toast.error('Failed to delete'),
+   717→   717→  });
+   718→   718→
+   719→   719→  return (
+   720→   720→    <div className="p-6 space-y-6">
+   721→   721→      <div className="flex items-center justify-between">
+   722→   722→        <div><h1 className="text-2xl font-bold">Brands</h1><p className="text-muted-foreground text-sm">Manage product brands</p></div>
+   723→   723→        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => setShowAdd(true)}><Plus size={16} className="mr-1.5" />Add Brand</Button>
+   724→   724→      </div>
+   725→   725→
+   726→   726→      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   727→   727→        {isLoading ? Array.from({length: 8}).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />) :
+   728→   728→        brands?.map((brand: any) => (
+   729→   729→          <Card key={brand.id} className="p-4 flex items-center justify-between">
+   730→   730→            <div><p className="font-medium">{brand.name}</p><p className="text-sm text-muted-foreground">{brand._count?.products || 0} products</p></div>
+   731→   731→            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive shrink-0" onClick={() => deleteMutation.mutate(brand.id)}><Trash2 size={14} /></Button>
+   732→   732→          </Card>
+   733→   733→        ))}
+   734→   734→      </div>
+   735→   735→
+   736→   736→      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+   737→   737→        <DialogContent><DialogHeader><DialogTitle>Add Brand</DialogTitle></DialogHeader>
+   738→   738→          <div className="space-y-4">
+   739→   739→            <div><Label>Brand Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /></div>
+   740→   740→            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} className="mt-1" /></div>
+   741→   741→          </div>
+   742→   742→          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => addMutation.mutate()} disabled={addMutation.isPending || !form.name}>Create</Button></DialogFooter>
+   743→   743→        </DialogContent>
+   744→   744→      </Dialog>
+   745→   745→    </div>
+   746→   746→  );
+   747→   747→}
+   748→   748→
+   749→   749→// ============ ADMIN PRODUCTS ============
+   750→   750→
+   751→   751→function AdminProducts() {
+   752→   752→  const [page, setPage] = useState(1);
+   753→   753→  const [search, setSearch] = useState('');
+   754→   754→
+   755→   755→  const { data, isLoading } = useQuery({
+   756→   756→    queryKey: ['admin-products', page, search],
+   757→   757→    queryFn: () => fetch(`/api/products?page=${page}&limit=15&search=${search}`).then(r => r.json()).then((r: any) => r),
+   758→   758→  });
+   759→   759→
+   760→   760→  return (
+   761→   761→    <div className="p-6 space-y-6">
+   762→   762→      <div><h1 className="text-2xl font-bold">All Products</h1><p className="text-muted-foreground text-sm">Manage products across all vendors</p></div>
+   763→   763→      <div className="max-w-md"><div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search products..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" /></div></div>
+   764→   764→      <Card>
+   765→   765→        <Table>
+   766→   766→          <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="hidden md:table-cell">Vendor</TableHead><TableHead>Price</TableHead><TableHead>Stock</TableHead><TableHead className="hidden sm:table-cell">Sold</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+   767→   767→          <TableBody>
+   768→   768→            {data?.data?.map((p: any) => (
+   769→   769→              <TableRow key={p.id}>
+   770→   770→                <TableCell><div className="flex items-center gap-3"><div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">{p.images?.[0]?.url && <img src={p.images[0].url} alt="" className="w-full h-full object-cover" />}</div><div className="min-w-0"><p className="font-medium text-sm truncate max-w-48">{p.name}</p><p className="text-xs text-muted-foreground">{p.category?.name}</p></div></div></TableCell>
+   771→   771→                <TableCell className="hidden md:table-cell text-sm">{p.vendor?.businessName}</TableCell>
+   772→   772→                <TableCell className="font-medium">{formatCurrency(p.price)}</TableCell>
+   773→   773→                <TableCell><span className={p.stock < 5 ? 'text-red-600 font-medium' : ''}>{p.stock}</span></TableCell>
+   774→   774→                <TableCell className="hidden sm:table-cell">{p.totalSold}</TableCell>
+   775→   775→                <TableCell><Badge variant={p.isActive ? 'default' : 'secondary'}>{p.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+   776→   776→              </TableRow>
+   777→   777→            ))}
+   778→   778→          </TableBody>
+   779→   779→        </Table>
+   780→   780→        {data?.meta?.totalPages > 1 && (
+   781→   781→          <div className="flex items-center justify-center gap-2 p-4">
+   782→   782→            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></Button>
+   783→   783→            {Array.from({length: Math.min(data.meta.totalPages, 5)}, (_, i) => i + 1).map(p => (
+   784→   784→              <Button key={p} variant={p === page ? 'default' : 'outline'} size="sm" className={p === page ? 'bg-amber-600' : ''} onClick={() => setPage(p)}>{p}</Button>
+   785→   785→            ))}
+   786→   786→            <Button variant="outline" size="sm" disabled={page >= data.meta.totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
+   787→   787→          </div>
+   788→   788→        )}
+   789→   789→      </Card>
+   790→   790→    </div>
+   791→   791→  );
+   792→   792→}
+   793→   793→
+   794→   794→// ============ ADMIN ORDERS ============
+   795→   795→
+   796→   796→function AdminOrders() {
+   797→   797→  const qc = useQueryClient();
+   798→   798→  const [statusFilter, setStatusFilter] = useState('all');
+   799→   799→  const [page, setPage] = useState(1);
+   800→   800→  const params = new URLSearchParams({ page: String(page), limit: '15' });
+   801→   801→  if (statusFilter !== 'all') params.set('status', statusFilter);
+   802→   802→
+   803→   803→  const { data, isLoading } = useQuery({
+   804→   804→    queryKey: ['admin-orders', params.toString()],
+   805→   805→    queryFn: () => fetch(`/api/orders?${params}`).then(r => r.json()).then((r: any) => r),
+   806→   806→  });
+   807→   807→
+   808→   808→  const updateMutation = useMutation({
+   809→   809→    mutationFn: ({ id, status }: { id: string; status: string }) => fetch(`/api/orders/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }).then(r => r.json()),
+   810→   810→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-orders'] }); toast.success('Order updated'); },
+   811→   811→    onError: () => toast.error('Failed to update'),
+   812→   812→  });
+   813→   813→
+   814→   814→  const statusColor: Record<string, string> = { NEW: 'bg-blue-100 text-blue-700', PROCESSING: 'bg-amber-100 text-amber-700', SHIPPED: 'bg-orange-100 text-orange-700', DELIVERED: 'bg-green-100 text-green-700', CANCELLED: 'bg-red-100 text-red-700' };
+   815→   815→
+   816→   816→  return (
+   817→   817→    <div className="p-6 space-y-6">
+   818→   818→      <div><h1 className="text-2xl font-bold">All Orders</h1><p className="text-muted-foreground text-sm">Manage all platform orders</p></div>
+   819→   819→      <div className="flex gap-2 flex-wrap">
+   820→   820→        {['all', 'NEW', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED', 'REFUNDED'].map(s => (
+   821→   821→          <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-amber-600' : ''} onClick={() => { setStatusFilter(s); setPage(1); }}>{s === 'all' ? 'All' : s}</Button>
+   822→   822→        ))}
+   823→   823→      </div>
+   824→   824→      {isLoading ? <div className="space-y-3">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+   825→   825→      <Card>
+   826→   826→        <Table>
+   827→   827→          <TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Customer</TableHead><TableHead>Items</TableHead><TableHead>Total</TableHead><TableHead>Payment</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+   828→   828→          <TableBody>
+   829→   829→            {data?.data?.map((order: any) => (
+   830→   830→              <TableRow key={order.id}>
+   831→   831→                <TableCell><p className="font-medium text-sm">#{order.orderNumber}</p></TableCell>
+   832→   832→                <TableCell className="text-sm">{order.user?.name}</TableCell>
+   833→   833→                <TableCell className="text-sm">{order.items?.length || 0} items</TableCell>
+   834→   834→                <TableCell className="font-medium">{formatCurrency(order.total)}</TableCell>
+   835→   835→                <TableCell><Badge variant={order.paymentStatus === 'PAID' ? 'default' : 'secondary'} className="text-xs">{order.paymentStatus}</Badge></TableCell>
+   836→   836→                <TableCell><Badge className={statusColor[order.status] || ''}>{order.status}</Badge></TableCell>
+   837→   837→                <TableCell className="text-sm">{new Date(order.createdAt).toLocaleDateString()}</TableCell>
+   838→   838→                <TableCell className="text-right">
+   839→   839→                  <Select value={order.status} onValueChange={(v) => updateMutation.mutate({ id: order.id, status: v })}>
+   840→   840→                    <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+   841→   841→                    <SelectContent>{['NEW', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+   842→   842→                  </Select>
+   843→   843→                </TableCell>
+   844→   844→              </TableRow>
+   845→   845→            ))}
+   846→   846→          </TableBody>
+   847→   847→        </Table>
+   848→   848→        {data?.meta?.totalPages > 1 && (
+   849→   849→          <div className="flex items-center justify-center gap-2 p-4">
+   850→   850→            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></Button>
+   851→   851→            <Button variant="outline" size="sm" disabled={page >= data.meta.totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
+   852→   852→          </div>
+   853→   853→        )}
+   854→   854→      </Card>}
+   855→   855→    </div>
+   856→   856→  );
+   857→   857→}
+   858→   858→
+   859→   859→// ============ ADMIN CUSTOMERS ============
+   860→   860→
+   861→   861→function AdminCustomers() {
+   862→   862→  const [search, setSearch] = useState('');
+   863→   863→  const [page, setPage] = useState(1);
+   864→   864→
+   865→   865→  const { data, isLoading } = useQuery({
+   866→   866→    queryKey: ['admin-customers', search, page],
+   867→   867→    queryFn: () => fetch(`/api/admin/users?role=CUSTOMER&search=${search}&page=${page}&limit=15`).then(r => r.json()).then((r: any) => r),
+   868→   868→  });
+   869→   869→
+   870→   870→  return (
+   871→   871→    <div className="p-6 space-y-6">
+   872→   872→      <div><h1 className="text-2xl font-bold">Customers</h1><p className="text-muted-foreground text-sm">Manage platform customers</p></div>
+   873→   873→      <div className="max-w-md"><div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search customers..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" /></div></div>
+   874→   874→      <Card>
+   875→   875→        <Table>
+   876→   876→          <TableHeader><TableRow><TableHead>Customer</TableHead><TableHead>Email</TableHead><TableHead className="hidden sm:table-cell">Phone</TableHead><TableHead>Joined</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+   877→   877→          <TableBody>
+   878→   878→            {data?.data?.map((u: any) => (
+   879→   879→              <TableRow key={u.id}>
+   880→   880→                <TableCell><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarFallback className="text-xs">{u.name[0]}</AvatarFallback></Avatar><span className="font-medium text-sm">{u.name}</span></div></TableCell>
+   881→   881→                <TableCell className="text-sm">{u.email}</TableCell>
+   882→   882→                <TableCell className="hidden sm:table-cell text-sm">{u.phone || 'N/A'}</TableCell>
+   883→   883→                <TableCell className="text-sm">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+   884→   884→                <TableCell><Badge variant={u.isActive ? 'default' : 'secondary'}>{u.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+   885→   885→              </TableRow>
+   886→   886→            ))}
+   887→   887→          </TableBody>
+   888→   888→        </Table>
+   889→   889→      </Card>
+   890→   890→    </div>
+   891→   891→  );
+   892→   892→}
+   893→   893→
+   894→   894→// ============ ADMIN COUPONS ============
+   895→   895→
+   896→   896→function AdminCoupons() {
+   897→   897→  const qc = useQueryClient();
+   898→   898→  const { data: coupons, isLoading } = useQuery({ queryKey: ['coupons'], queryFn: () => fetch('/api/coupons').then(r => r.json()).then((r: any) => r.data || []) });
+   899→   899→  const [showAdd, setShowAdd] = useState(false);
+   900→   900→  const [form, setForm] = useState({ code: '', discountType: 'PERCENTAGE', discountValue: '10', minOrder: '500', maxDiscount: '1000', usageLimit: '100', startDate: '', endDate: '' });
+   901→   901→
+   902→   902→  const addMutation = useMutation({
+   903→   903→    mutationFn: () => fetch('/api/coupons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, discountValue: parseFloat(form.discountValue), minOrder: parseFloat(form.minOrder) || null, maxDiscount: parseFloat(form.maxDiscount) || null, usageLimit: parseInt(form.usageLimit) || null, startDate: form.startDate || new Date().toISOString(), endDate: form.endDate || new Date(Date.now() + 86400000 * 30).toISOString() }) }).then(r => r.json()),
+   904→   904→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['coupons'] }); toast.success('Coupon created'); setShowAdd(false); },
+   905→   905→    onError: () => toast.error('Failed'),
+   906→   906→  });
+   907→   907→
+   908→   908→  const deleteMutation = useMutation({
+   909→   909→    mutationFn: (id: string) => fetch(`/api/coupons?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+   910→   910→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['coupons'] }); toast.success('Coupon deleted'); },
+   911→   911→  });
+   912→   912→
+   913→   913→  return (
+   914→   914→    <div className="p-6 space-y-6">
+   915→   915→      <div className="flex items-center justify-between">
+   916→   916→        <div><h1 className="text-2xl font-bold">Coupons</h1><p className="text-muted-foreground text-sm">Manage discount coupons</p></div>
+   917→   917→        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => setShowAdd(true)}><Plus size={16} className="mr-1.5" />Add Coupon</Button>
+   918→   918→      </div>
+   919→   919→      <Card>
+   920→   920→        <Table>
+   921→   921→          <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Discount</TableHead><TableHead>Min Order</TableHead><TableHead>Usage</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+   922→   922→          <TableBody>
+   923→   923→            {isLoading ? Array.from({length: 3}).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8" /></TableCell></TableRow>) :
+   924→   924→            coupons?.map((c: any) => (
+   925→   925→              <TableRow key={c.id}>
+   926→   926→                <TableCell className="font-mono font-bold">{c.code}</TableCell>
+   927→   927→                <TableCell>{c.discountType === 'PERCENTAGE' ? `${c.discountValue}%` : formatCurrency(c.discountValue)}{c.maxDiscount ? ` (max ${formatCurrency(c.maxDiscount)})` : ''}</TableCell>
+   928→   928→                <TableCell>{c.minOrder ? formatCurrency(c.minOrder) : 'N/A'}</TableCell>
+   929→   929→                <TableCell>{c.usedCount}/{c.usageLimit || '∞'}</TableCell>
+   930→   930→                <TableCell><Badge variant={c.isActive ? 'default' : 'secondary'}>{c.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+   931→   931→                <TableCell className="text-right"><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(c.id)}><Trash2 size={14} /></Button></TableCell>
+   932→   932→              </TableRow>
+   933→   933→            ))}
+   934→   934→          </TableBody>
+   935→   935→        </Table>
+   936→   936→      </Card>
+   937→   937→
+   938→   938→      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+   939→   939→        <DialogContent><DialogHeader><DialogTitle>Create Coupon</DialogTitle></DialogHeader>
+   940→   940→          <div className="space-y-4">
+   941→   941→            <div><Label>Code *</Label><Input value={form.code} onChange={e => setForm(f => ({...f, code: e.target.value.toUpperCase()}))} className="mt-1 uppercase" /></div>
+   942→   942→            <div className="grid grid-cols-2 gap-4">
+   943→   943→              <div><Label>Discount Type</Label><Select value={form.discountType} onValueChange={v => setForm(f => ({...f, discountType: v}))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PERCENTAGE">Percentage</SelectItem><SelectItem value="FIXED">Fixed Amount</SelectItem></SelectContent></Select></div>
+   944→   944→              <div><Label>Discount Value *</Label><Input type="number" value={form.discountValue} onChange={e => setForm(f => ({...f, discountValue: e.target.value}))} className="mt-1" /></div>
+   945→   945→              <div><Label>Min Order (₹)</Label><Input type="number" value={form.minOrder} onChange={e => setForm(f => ({...f, minOrder: e.target.value}))} className="mt-1" /></div>
+   946→   946→              <div><Label>Max Discount (₹)</Label><Input type="number" value={form.maxDiscount} onChange={e => setForm(f => ({...f, maxDiscount: e.target.value}))} className="mt-1" /></div>
+   947→   947→              <div><Label>Usage Limit</Label><Input type="number" value={form.usageLimit} onChange={e => setForm(f => ({...f, usageLimit: e.target.value}))} className="mt-1" /></div>
+   948→   948→            </div>
+   949→   949→          </div>
+   950→   950→          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => addMutation.mutate()} disabled={addMutation.isPending || !form.code}>Create</Button></DialogFooter>
+   951→   951→        </DialogContent>
+   952→   952→      </Dialog>
+   953→   953→    </div>
+   954→   954→  );
+   955→   955→}
+   956→   956→
+   957→   957→// ============ ADMIN BANNERS ============
+   958→   958→
+   959→   959→function AdminBanners() {
+   960→   960→  const qc = useQueryClient();
+   961→   961→  const { data: banners, isLoading } = useQuery({ queryKey: ['banners'], queryFn: () => fetch('/api/banners?position=HOME').then(r => r.json()).then((r: any) => r.data || []) });
+   962→   962→  const [form, setForm] = useState({ title: '', image: '', link: '', position: 'HOME', sortOrder: '0' });
+   963→   963→
+   964→   964→  const addMutation = useMutation({
+   965→   965→    mutationFn: () => fetch('/api/banners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, sortOrder: parseInt(form.sortOrder) }) }).then(r => r.json()),
+   966→   966→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['banners'] }); toast.success('Banner added'); setForm({ title: '', image: '', link: '', position: 'HOME', sortOrder: '0' }); },
+   967→   967→    onError: () => toast.error('Failed'),
+   968→   968→  });
+   969→   969→
+   970→   970→  const deleteMutation = useMutation({
+   971→   971→    mutationFn: (id: string) => fetch(`/api/banners?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+   972→   972→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['banners'] }); toast.success('Banner deleted'); },
+   973→   973→  });
+   974→   974→
+   975→   975→  return (
+   976→   976→    <div className="p-6 space-y-6">
+   977→   977→      <div><h1 className="text-2xl font-bold">Banners</h1><p className="text-muted-foreground text-sm">Manage homepage banners and advertisements</p></div>
+   978→   978→
+   979→   979→      <Card className="p-6"><h3 className="font-semibold mb-4">Add New Banner</h3>
+   980→   980→        <div className="grid sm:grid-cols-2 gap-4">
+   981→   981→          <div><Label>Title</Label><Input value={form.title} onChange={e => setForm(f => ({...f, title: e.target.value}))} className="mt-1" /></div>
+   982→   982→          <div><Label>Image URL</Label><Input value={form.image} onChange={e => setForm(f => ({...f, image: e.target.value}))} className="mt-1" placeholder="https://..." /></div>
+   983→   983→          <div><Label>Link (optional)</Label><Input value={form.link} onChange={e => setForm(f => ({...f, link: e.target.value}))} className="mt-1" /></div>
+   984→   984→          <div><Label>Sort Order</Label><Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({...f, sortOrder: e.target.value}))} className="mt-1" /></div>
+   985→   985→        </div>
+   986→   986→        <Button className="mt-4 bg-amber-600 hover:bg-amber-700" onClick={() => addMutation.mutate()} disabled={addMutation.isPending || !form.title || !form.image}>Add Banner</Button>
+   987→   987→      </Card>
+   988→   988→
+   989→   989→      <div className="space-y-4">
+   990→   990→        {isLoading ? Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />) :
+   991→   991→        banners?.map((banner: any) => (
+   992→   992→          <Card key={banner.id} className="overflow-hidden">
+   993→   993→            <img src={banner.image} alt={banner.title} className="w-full h-32 md:h-48 object-cover" />
+   994→   994→            <div className="p-4 flex items-center justify-between">
+   995→   995→              <div><p className="font-medium">{banner.title}</p><p className="text-sm text-muted-foreground">Position: {banner.position} • Sort: {banner.sortOrder}</p></div>
+   996→   996→              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteMutation.mutate(banner.id)}><Trash2 size={16} /></Button>
+   997→   997→            </div>
+   998→   998→          </Card>
+   999→   999→        ))}
+  1000→  1000→      </div>
+  1001→  1001→    </div>
+  1002→  1002→  );
+  1003→  1003→}
+  1004→  1004→
+  1005→  1005→// ============ ADMIN REPORTS ============
+  1006→  1006→
+  1007→  1007→function AdminReports() {
+  1008→  1008→  const { data } = useQuery({ queryKey: ['admin-dashboard'], queryFn: () => fetch('/api/admin/dashboard').then(r => r.json()).then((r: any) => r.data) });
+  1009→  1009→
+  1010→  1010→  return (
+  1011→  1011→    <div className="p-6 space-y-6">
+  1012→  1012→      <div><h1 className="text-2xl font-bold">Reports & Analytics</h1><p className="text-muted-foreground text-sm">Platform performance insights</p></div>
+  1013→  1013→
+  1014→  1014→      <div className="grid sm:grid-cols-3 gap-4">
+  1015→  1015→        <Card className="p-4"><p className="text-sm text-muted-foreground">Total Revenue</p><p className="text-2xl font-bold text-green-600">{formatCurrency(data?.totalRevenue || 0)}</p></Card>
+  1016→  1016→        <Card className="p-4"><p className="text-sm text-muted-foreground">Platform Earnings (Commission)</p><p className="text-2xl font-bold text-emerald-600">{formatCurrency(data?.platformEarnings || 0)}</p></Card>
+  1017→  1017→        <Card className="p-4"><p className="text-sm text-muted-foreground">Total Tax Collected</p><p className="text-2xl font-bold">{formatCurrency((data?.totalRevenue || 0) * 0.18)}</p></Card>
+  1018→  1018→      </div>
+  1019→  1019→
+  1020→  1020→      {data?.monthlySales && (
+  1021→  1021→        <Card className="p-6">
+  1022→  1022→          <CardHeader className="p-0 mb-4"><CardTitle>Revenue Breakdown</CardTitle></CardHeader>
+  1023→  1023→          <div className="h-64 flex items-end gap-3">
+  1024→  1024→            {data.monthlySales.map((ms: any, i: number) => {
+  1025→  1025→              const maxSale = Math.max(...data.monthlySales.map((m: any) => m.sales), 1);
+  1026→  1026→              return (
+  1027→  1027→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+  1028→  1028→                  <span className="text-xs font-medium">{formatCurrency(ms.sales)}</span>
+  1029→  1029→                  <div className="w-full rounded-t-md bg-gradient-to-t from-amber-700 to-amber-400" style={{ height: `${Math.max((ms.sales / maxSale) * 100, 4)}%` }} />
+  1030→  1030→                  <span className="text-xs text-muted-foreground">{ms.month}</span>
+  1031→  1031→                </div>
+  1032→  1032→              );
+  1033→  1033→            })}
+  1034→  1034→          </div>
+  1035→  1035→        </Card>
+  1036→  1036→      )}
+  1037→  1037→    </div>
+  1038→  1038→  );
+  1039→  1039→}
+  1040→  1040→
+  1041→  1041→// ============ ADMIN SETTINGS ============
+  1042→  1042→
+  1043→  1043→function AdminSettings() {
+  1044→  1044→  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: () => fetch('/api/settings').then(r => r.json()).then((r: any) => r.data) });
+  1045→  1045→  const [form, setForm] = useState<any>({});
+  1046→  1046→
+  1047→  1047→  React.useEffect(() => { if (settings) setForm(settings); }, [settings]);
+  1048→  1048→
+  1049→  1049→  const saveMutation = useMutation({
+  1050→  1050→    mutationFn: () => fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).then(r => r.json()),
+  1051→  1051→    onSuccess: () => toast.success('Settings saved'),
+  1052→  1052→    onError: () => toast.error('Failed to save'),
+  1053→  1053→  });
+  1054→  1054→
+  1055→  1055→  return (
+  1056→  1056→    <div className="p-6 space-y-6">
+  1057→  1057→      <div><h1 className="text-2xl font-bold">Platform Settings</h1><p className="text-muted-foreground text-sm">Configure marketplace settings</p></div>
+  1058→  1058→      <Card className="p-6">
+  1059→  1059→        <div className="grid sm:grid-cols-2 gap-4">
+  1060→  1060→          <div><Label>Site Name</Label><Input value={form.siteName || ''} onChange={e => setForm(f => ({...f, siteName: e.target.value}))} className="mt-1" /></div>
+  1061→  1061→          <div><Label>Site Description</Label><Input value={form.siteDescription || ''} onChange={e => setForm(f => ({...f, siteDescription: e.target.value}))} className="mt-1" /></div>
+  1062→  1062→          <div><Label>Currency</Label><Input value={form.currency || ''} onChange={e => setForm(f => ({...f, currency: e.target.value}))} className="mt-1" /></div>
+  1063→  1063→          <div><Label>Currency Symbol</Label><Input value={form.currencySymbol || ''} onChange={e => setForm(f => ({...f, currencySymbol: e.target.value}))} className="mt-1" /></div>
+  1064→  1064→          <div><Label>Tax Rate (GST %)</Label><Input type="number" value={form.taxRate || ''} onChange={e => setForm(f => ({...f, taxRate: parseFloat(e.target.value)}))} className="mt-1" /></div>
+  1065→  1065→          <div><Label>Free Shipping Min (₹)</Label><Input type="number" value={form.freeShippingMin || ''} onChange={e => setForm(f => ({...f, freeShippingMin: parseFloat(e.target.value)}))} className="mt-1" /></div>
+  1066→  1066→          <div><Label>Contact Email</Label><Input value={form.contactEmail || ''} onChange={e => setForm(f => ({...f, contactEmail: e.target.value}))} className="mt-1" /></div>
+  1067→  1067→          <div><Label>Contact Phone</Label><Input value={form.contactPhone || ''} onChange={e => setForm(f => ({...f, contactPhone: e.target.value}))} className="mt-1" /></div>
+  1068→  1068→          <div className="sm:col-span-2"><Label>Address</Label><Textarea value={form.address || ''} onChange={e => setForm(f => ({...f, address: e.target.value}))} className="mt-1" /></div>
+  1069→  1069→        </div>
+  1070→  1070→        <Button className="mt-4 bg-amber-600 hover:bg-amber-700" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>Save Settings</Button>
+  1071→  1071→      </Card>
+  1072→  1072→    </div>
+  1073→  1073→  );
+  1074→  1074→}
+  1075→  1075→
+  1076→  1076→// ============ ADMIN RETURNS ============
+  1077→  1077→
+  1078→  1078→function AdminReturns() {
+  1079→  1079→  const [statusFilter, setStatusFilter] = useState('all');
+  1080→  1080→  const qc = useQueryClient();
+  1081→  1081→  const [rejectId, setRejectId] = useState<string | null>(null);
+  1082→  1082→  const [rejectNotes, setRejectNotes] = useState('');
+  1083→  1083→
+  1084→  1084→  const { data, isLoading } = useQuery({
+  1085→  1085→    queryKey: ['admin-returns', statusFilter],
+  1086→  1086→    queryFn: () => fetch(`/api/admin/returns${statusFilter !== 'all' ? `?status=${statusFilter}` : ''}`).then(r => r.json()),
+  1087→  1087→  });
+  1088→  1088→
+  1089→  1089→  const updateReturn = useMutation({
+  1090→  1090→    mutationFn: ({ id, status, adminNotes }: any) => fetch(`/api/admin/returns/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, adminNotes }) }).then(r => r.json()),
+  1091→  1091→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-returns'] }); toast.success('Return updated'); },
+  1092→  1092→    onError: () => toast.error('Failed to update return'),
+  1093→  1093→  });
+  1094→  1094→
+  1095→  1095→  const statusColor: Record<string, string> = {
+  1096→  1096→    PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30',
+  1097→  1097→    APPROVED: 'bg-blue-100 text-blue-700',
+  1098→  1098→    COMPLETED: 'bg-green-100 text-green-700',
+  1099→  1099→    REJECTED: 'bg-red-100 text-red-700',
+  1100→  1100→  };
+  1101→  1101→
+  1102→  1102→  return (
+  1103→  1103→    <div className="p-6 space-y-6">
+  1104→  1104→      <h1 className="text-2xl font-bold">Returns & Refunds</h1>
+  1105→  1105→      <div className="flex gap-2 flex-wrap">
+  1106→  1106→        {['all', 'PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'].map(s => (
+  1107→  1107→          <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-amber-600' : ''} onClick={() => setStatusFilter(s)}>{s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}</Button>
+  1108→  1108→        ))}
+  1109→  1109→      </div>
+  1110→  1110→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+  1111→  1111→        <Card><Table><TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Customer</TableHead><TableHead>Reason</TableHead><TableHead>Refund</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+  1112→  1112→          <TableBody>{(data?.data || []).map((r: any) => (
+  1113→  1113→            <TableRow key={r.id}><TableCell className="font-mono text-sm">#{r.orderId?.slice(-6)}</TableCell><TableCell>{r.userId || 'Guest'}</TableCell><TableCell className="max-w-[200px] truncate">{r.reason}</TableCell><TableCell>{r.refundAmount ? formatCurrency(r.refundAmount) : '—'}</TableCell>
+  1114→  1114→              <TableCell><Badge className={statusColor[r.status] || ''}>{r.status}</Badge></TableCell>
+  1115→  1115→              <TableCell className="text-sm text-muted-foreground">{new Date(r.createdAt).toLocaleDateString('en-IN')}</TableCell>
+  1116→  1116→              <TableCell><div className="flex gap-1">
+  1117→  1117→                {r.status === 'PENDING' && <><Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => updateReturn.mutate({ id: r.id, status: 'APPROVED' })}><CheckCircle2 size={16} /></Button><Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => setRejectId(r.id)}><XCircle size={16} /></Button></>}
+  1118→  1118→                {r.status === 'APPROVED' && <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => updateReturn.mutate({ id: r.id, status: 'COMPLETED' })}>Process Refund</Button>}
+  1119→  1119→              </div></TableCell></TableRow>
+  1120→  1120→          ))}</TableBody></Table></Card>}
+  1121→  1121→      <Dialog open={!!rejectId} onOpenChange={() => setRejectId(null)}>
+  1122→  1122→        <DialogContent><DialogHeader><DialogTitle>Reject Return</DialogTitle></DialogHeader>
+  1123→  1123→          <Textarea placeholder="Reason for rejection" value={rejectNotes} onChange={e => setRejectNotes(e.target.value)} />
+  1124→  1124→          <DialogFooter><Button variant="outline" onClick={() => setRejectId(null)}>Cancel</Button><Button variant="destructive" onClick={() => { updateReturn.mutate({ id: rejectId, status: 'REJECTED', adminNotes: rejectNotes }); setRejectId(null); setRejectNotes(''); }}>Reject</Button></DialogFooter>
+  1125→  1125→        </DialogContent>
+  1126→  1126→      </Dialog>
+  1127→  1127→    </div>
+  1128→  1128→  );
+  1129→  1129→}
+  1130→  1130→
+  1131→  1131→// ============ ADMIN PAYOUTS ============
+  1132→  1132→
+  1133→  1133→function AdminPayouts() {
+  1134→  1134→  const [statusFilter, setStatusFilter] = useState('all');
+  1135→  1135→  const qc = useQueryClient();
+  1136→  1136→  const [rejectId, setRejectId] = useState<string | null>(null);
+  1137→  1137→  const [rejectNotes, setRejectNotes] = useState('');
+  1138→  1138→
+  1139→  1139→  const { data, isLoading } = useQuery({
+  1140→  1140→    queryKey: ['admin-payouts', statusFilter],
+  1141→  1141→    queryFn: () => fetch(`/api/admin/payouts${statusFilter !== 'all' ? `?status=${statusFilter}` : ''}`).then(r => r.json()),
+  1142→  1142→  });
+  1143→  1143→
+  1144→  1144→  const updatePayout = useMutation({
+  1145→  1145→    mutationFn: ({ id, status, notes }: any) => fetch(`/api/admin/payouts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, notes }) }).then(r => r.json()),
+  1146→  1146→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-payouts'] }); toast.success('Payout updated'); },
+  1147→  1147→    onError: () => toast.error('Failed to update payout'),
+  1148→  1148→  });
+  1149→  1149→
+  1150→  1150→  const maskBank = (acc?: string | null) => acc ? '••••' + acc.slice(-4) : '—';
+  1151→  1151→
+  1152→  1152→  const statusColor: Record<string, string> = {
+  1153→  1153→    PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30',
+  1154→  1154→    APPROVED: 'bg-blue-100 text-blue-700',
+  1155→  1155→    PROCESSING: 'bg-purple-100 text-purple-700',
+  1156→  1156→    COMPLETED: 'bg-green-100 text-green-700',
+  1157→  1157→    FAILED: 'bg-red-100 text-red-700',
+  1158→  1158→  };
+  1159→  1159→
+  1160→  1160→  return (
+  1161→  1161→    <div className="p-6 space-y-6">
+  1162→  1162→      <h1 className="text-2xl font-bold">Vendor Payouts</h1>
+  1163→  1163→      <div className="flex gap-2 flex-wrap">
+  1164→  1164→        {['all', 'PENDING', 'APPROVED', 'PROCESSING', 'COMPLETED', 'FAILED'].map(s => (
+  1165→  1165→          <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-amber-600' : ''} onClick={() => setStatusFilter(s)}>{s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}</Button>
+  1166→  1166→        ))}
+  1167→  1167→      </div>
+  1168→  1168→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+  1169→  1169→        <Card><Table><TableHeader><TableRow><TableHead>Vendor</TableHead><TableHead>Amount</TableHead><TableHead>Bank</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+  1170→  1170→          <TableBody>{(data?.data || []).map((p: any) => (
+  1171→  1171→            <TableRow key={p.id}><TableCell className="font-medium text-sm">{p.vendor?.businessName || 'Unknown'}</TableCell><TableCell className="font-bold">{formatCurrency(p.amount)}</TableCell><TableCell className="text-sm text-muted-foreground">{p.bankName} ({maskBank(p.bankAccount)})</TableCell>
+  1172→  1172→              <TableCell><Badge className={statusColor[p.status] || ''}>{p.status}</Badge></TableCell>
+  1173→  1173→              <TableCell className="text-sm text-muted-foreground">{new Date(p.createdAt).toLocaleDateString('en-IN')}</TableCell>
+  1174→  1174→              <TableCell><div className="flex gap-1">
+  1175→  1175→                {p.status === 'PENDING' && <><Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => updatePayout.mutate({ id: p.id, status: 'APPROVED' })}><CheckCircle2 size={16} /></Button><Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => setRejectId(p.id)}><XCircle size={16} /></Button></>}
+  1176→  1176→                {p.status === 'APPROVED' && <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => updatePayout.mutate({ id: p.id, status: 'COMPLETED' })}>Complete</Button>}
+  1177→  1177→              </div></TableCell></TableRow>
+  1178→  1178→          ))}</TableBody></Table></Card>}
+  1179→  1179→      <Dialog open={!!rejectId} onOpenChange={() => setRejectId(null)}>
+  1180→  1180→        <DialogContent><DialogHeader><DialogTitle>Reject Payout</DialogTitle></DialogHeader>
+  1181→  1181→          <Textarea placeholder="Reason for rejection" value={rejectNotes} onChange={e => setRejectNotes(e.target.value)} />
+  1182→  1182→          <DialogFooter><Button variant="outline" onClick={() => setRejectId(null)}>Cancel</Button><Button variant="destructive" onClick={() => { updatePayout.mutate({ id: rejectId, status: 'FAILED', notes: rejectNotes }); setRejectId(null); setRejectNotes(''); }}>Reject</Button></DialogFooter>
+  1183→  1183→        </DialogContent>
+  1184→  1184→      </Dialog>
+  1185→  1185→    </div>
+  1186→  1186→  );
+  1187→  1187→}
+  1188→  1188→
+  1189→  1189→// ============ ADMIN ANALYTICS ============
+  1190→  1190→
+  1191→  1191→function AdminAnalytics() {
+  1192→  1192→  const { data, isLoading } = useQuery({
+  1193→  1193→    queryKey: ['admin-analytics'],
+  1194→  1194→    queryFn: () => fetch('/api/admin/analytics').then(r => r.json()).then((r: any) => r.data),
+  1195→  1195→  });
+  1196→  1196→
+  1197→  1197→  if (isLoading) return <div className="p-6 space-y-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />)}</div>;
+  1198→  1198→
+  1199→  1199→  return (
+  1200→  1200→    <div className="p-6 space-y-6">
+  1201→  1201→      <div><h1 className="text-2xl font-bold">Analytics</h1><p className="text-muted-foreground text-sm">Deep platform insights and metrics</p></div>
+  1202→  1202→
+  1203→  1203→      {/* Average Order Value */}
+  1204→  1204→      {data?.averageOrderValue > 0 && (
+  1205→  1205→        <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Average Order Value</p><p className="text-2xl font-bold">{formatCurrency(data.averageOrderValue)}</p></div><TrendingUp className="h-8 w-8 text-amber-500 bg-amber-100 dark:bg-amber-900/30 rounded-lg p-2" /></div></Card>
+  1206→  1206→      )}
+  1207→  1207→
+  1208→  1208→      <div className="grid lg:grid-cols-2 gap-6">
+  1209→  1209→        {/* Top Searches */}
+  1210→  1210→        <Card className="p-4">
+  1211→  1211→          <h3 className="font-semibold mb-3">Top Searches</h3>
+  1212→  1212→          <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Query</TableHead><TableHead className="text-right">Count</TableHead><TableHead className="text-right">Results</TableHead></TableRow></TableHeader>
+  1213→  1213→            <TableBody>{(data?.topSearches || []).map((s: any, i: number) => (
+  1214→  1214→              <TableRow key={i}><TableCell className="text-sm font-medium">{s.query}</TableCell><TableCell className="text-right text-sm">{s.searchCount}</TableCell><TableCell className="text-right text-sm text-muted-foreground">{s.resultCount}</TableCell></TableRow>
+  1215→  1215→            ))}</TableBody></Table></div>
+  1216→  1216→        </Card>
+  1217→  1217→
+  1218→  1218→        {/* Zero-Result Searches */}
+  1219→  1219→        <Card className="p-4">
+  1220→  1220→          <h3 className="font-semibold mb-3">Zero-Result Searches</h3>
+  1221→  1221→          <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Query</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
+  1222→  1222→            <TableBody>{(data?.zeroResultSearches || []).map((s: any, i: number) => (
+  1223→  1223→              <TableRow key={i}><TableCell className="text-sm font-medium text-red-600">{s.query}</TableCell><TableCell className="text-right text-sm">{s.searchCount}</TableCell></TableRow>
+  1224→  1224→            ))}</TableBody></Table></div>
+  1225→  1225→        </Card>
+  1226→  1226→      </div>
+  1227→  1227→
+  1228→  1228→      {/* Customer Growth Chart */}
+  1229→  1229→      {data?.customerGrowth && data.customerGrowth.length > 0 && (
+  1230→  1230→        <Card className="p-6">
+  1231→  1231→          <h3 className="font-semibold mb-4">Customer Growth (Monthly New Users)</h3>
+  1232→  1232→          <div className="h-48 flex items-end gap-3">
+  1233→  1233→            {data.customerGrowth.map((m: any, i: number) => {
+  1234→  1234→              const maxVal = Math.max(...data.customerGrowth.map((x: any) => x.count), 1);
+  1235→  1235→              return (
+  1236→  1236→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+  1237→  1237→                  <span className="text-xs font-medium">{m.count}</span>
+  1238→  1238→                  <div className="w-full rounded-t-md bg-gradient-to-t from-emerald-600 to-emerald-400 transition-all duration-500" style={{ height: `${Math.max((m.count / maxVal) * 100, 4)}%` }} />
+  1239→  1239→                  <span className="text-xs text-muted-foreground">{m.month}</span>
+  1240→  1240→                </div>
+  1241→  1241→              );
+  1242→  1242→            })}
+  1243→  1243→          </div>
+  1244→  1244→        </Card>
+  1245→  1245→      )}
+  1246→  1246→
+  1247→  1247→      {/* Vendor Performance */}
+  1248→  1248→      <Card className="p-4">
+  1249→  1249→        <h3 className="font-semibold mb-3">Vendor Performance</h3>
+  1250→  1250→        <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Vendor</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Orders</TableHead><TableHead className="text-right">Rating</TableHead></TableRow></TableHeader>
+  1251→  1251→          <TableBody>{(data?.vendorPerformance || []).map((v: any, i: number) => (
+  1252→  1252→            <TableRow key={i}><TableCell className="font-medium text-sm">{v.name}</TableCell><TableCell className="text-right font-medium">{formatCurrency(v.revenue)}</TableCell><TableCell className="text-right text-sm">{v.orders}</TableCell><TableCell className="text-right text-sm"><span className="inline-flex items-center gap-1"><Star className="h-3 w-3 text-amber-500" />{v.rating?.toFixed(1) || 'N/A'}</span></TableCell></TableRow>
+  1253→  1253→          ))}</TableBody></Table></div>
+  1254→  1254→      </Card>
+  1255→  1255→    </div>
+  1256→  1256→  );
+  1257→  1257→}
+  1258→  1258→
+  1259→  1259→// ============ ADMIN SUPPORT ============
+  1260→  1260→
+  1261→  1261→function AdminSupport() {
+  1262→  1262→  const qc = useQueryClient();
+  1263→  1263→  const [selectedTicket, setSelectedTicket] = useState<any>(null);
+  1264→  1264→  const [reply, setReply] = useState('');
+  1265→  1265→
+  1266→  1266→  const { data, isLoading } = useQuery({
+  1267→  1267→    queryKey: ['support-tickets'],
+  1268→  1268→    queryFn: () => fetch('/api/support/tickets').then(r => r.json()),
+  1269→  1269→  });
+  1270→  1270→
+  1271→  1271→  const replyMutation = useMutation({
+  1272→  1272→    mutationFn: ({ ticketId, message }: { ticketId: string; message: string }) => fetch('/api/support/tickets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticketId, message, isStaff: true }) }).then(r => r.json()),
+  1273→  1273→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['support-tickets'] }); setReply(''); toast.success('Reply sent'); },
+  1274→  1274→    onError: () => toast.error('Failed to send reply'),
+  1275→  1275→  });
+  1276→  1276→
+  1277→  1277→  const priorityColor: Record<string, string> = {
+  1278→  1278→    LOW: 'bg-gray-100 text-gray-700',
+  1279→  1279→    MEDIUM: 'bg-blue-100 text-blue-700',
+  1280→  1280→    HIGH: 'bg-orange-100 text-orange-700',
+  1281→  1281→    URGENT: 'bg-red-100 text-red-700',
+  1282→  1282→  };
+  1283→  1283→
+  1284→  1284→  const statusColor: Record<string, string> = {
+  1285→  1285→    OPEN: 'bg-green-100 text-green-700',
+  1286→  1286→    IN_PROGRESS: 'bg-blue-100 text-blue-700',
+  1287→  1287→    RESOLVED: 'bg-amber-100 text-amber-700',
+  1288→  1288→    CLOSED: 'bg-gray-100 text-gray-700',
+  1289→  1289→  };
+  1290→  1290→
+  1291→  1291→  return (
+  1292→  1292→    <div className="p-6 space-y-6">
+  1293→  1293→      <h1 className="text-2xl font-bold">Support Tickets</h1>
+  1294→  1294→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+  1295→  1295→        <Card><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Customer</TableHead><TableHead>Category</TableHead><TableHead>Priority</TableHead><TableHead>Status</TableHead><TableHead className="hidden sm:table-cell">Messages</TableHead><TableHead>Created</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+  1296→  1296→          <TableBody>{(data?.data || data || []).map((t: any) => (
+  1297→  1297→            <TableRow key={t.id}><TableCell className="font-medium text-sm max-w-[200px] truncate">{t.subject}</TableCell><TableCell className="text-sm">{t.user?.name || 'Guest'}</TableCell><TableCell className="text-sm">{t.category}</TableCell>
+  1298→  1298→              <TableCell><Badge className={priorityColor[t.priority] || ''}>{t.priority}</Badge></TableCell>
+  1299→  1299→              <TableCell><Badge className={statusColor[t.status] || ''}>{t.status.replace('_', ' ')}</Badge></TableCell>
+  1300→  1300→              <TableCell className="hidden sm:table-cell text-sm">{t._count?.messages || t.messages?.length || 0}</TableCell>
+  1301→  1301→              <TableCell className="text-sm text-muted-foreground">{new Date(t.createdAt).toLocaleDateString('en-IN')}</TableCell>
+  1302→  1302→              <TableCell><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedTicket(t)}><Eye size={14} /></Button></TableCell></TableRow>
+  1303→  1303→          ))}</TableBody></Table></div></Card>}
+  1304→  1304→
+  1305→  1305→      {/* Ticket Detail Dialog */}
+  1306→  1306→      <Dialog open={!!selectedTicket} onOpenChange={() => { setSelectedTicket(null); setReply(''); }}>
+  1307→  1307→        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+  1308→  1308→          <DialogHeader>
+  1309→  1309→            <DialogTitle>{selectedTicket?.subject}</DialogTitle>
+  1310→  1310→            <DialogDescription>{selectedTicket?.category} • {selectedTicket?.status} • {selectedTicket?.user?.name}</DialogDescription>
+  1311→  1311→          </DialogHeader>
+  1312→  1312→          <div className="flex-1 overflow-y-auto space-y-3 min-h-0">
+  1313→  1313→            {(selectedTicket?.messages || []).map((m: any) => (
+  1314→  1314→              <div key={m.id} className={`p-3 rounded-lg text-sm ${m.isStaff ? 'bg-amber-50 dark:bg-amber-900/10 ml-8' : 'bg-muted mr-8'}`}>
+  1315→  1315→                <div className="flex items-center gap-2 mb-1"><span className="font-medium text-xs">{m.isStaff ? 'Admin' : selectedTicket?.user?.name || 'Customer'}</span><span className="text-xs text-muted-foreground">{new Date(m.createdAt).toLocaleString('en-IN')}</span></div>
+  1316→  1316→                <p>{m.message}</p>
+  1317→  1317→              </div>
+  1318→  1318→            ))}
+  1319→  1319→          </div>
+  1320→  1320→          {selectedTicket?.status !== 'CLOSED' && selectedTicket?.status !== 'RESOLVED' && (
+  1321→  1321→            <div className="flex gap-2 pt-2 border-t">
+  1322→  1322→              <Input placeholder="Type your reply..." value={reply} onChange={e => setReply(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && reply.trim()) replyMutation.mutate({ ticketId: selectedTicket.id, message: reply }); }} className="flex-1" />
+  1323→  1323→              <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => replyMutation.mutate({ ticketId: selectedTicket.id, message: reply })} disabled={!reply.trim()}><Send size={16} /></Button>
+  1324→  1324→            </div>
+  1325→  1325→          )}
+  1326→  1326→        </DialogContent>
+  1327→  1327→      </Dialog>
+  1328→  1328→    </div>
+  1329→  1329→  );
+  1330→  1330→}
+  1331→  1331→
+  1332→  1332→// ============ ADMIN MARKETING ============
+  1333→  1333→
+  1334→  1334→function AdminMarketing() {
+  1335→  1335→  return (
+  1336→  1336→    <Tabs defaultValue="flash-sales" className="p-6 space-y-6">
+  1337→  1337→      <div><h1 className="text-2xl font-bold">Marketing</h1><p className="text-muted-foreground text-sm">Manage promotions and campaigns</p></div>
+  1338→  1338→      <TabsList className="flex-wrap h-auto gap-1"><TabsTrigger value="flash-sales">Flash Sales</TabsTrigger><TabsTrigger value="deals">Deals</TabsTrigger><TabsTrigger value="festival-offers">Festival Offers</TabsTrigger><TabsTrigger value="collections">Collections</TabsTrigger></TabsList>
+  1339→  1339→      <TabsContent value="flash-sales"><FlashSalesTab /></TabsContent>
+  1340→  1340→      <TabsContent value="deals"><DealsTab /></TabsContent>
+  1341→  1341→      <TabsContent value="festival-offers"><FestivalOffersTab /></TabsContent>
+  1342→  1342→      <TabsContent value="collections"><FeaturedCollectionsTab /></TabsContent>
+  1343→  1343→    </Tabs>
+  1344→  1344→  );
+  1345→  1345→}
+  1346→  1346→
+  1347→  1347→function FlashSalesTab() {
+  1348→  1348→  const qc = useQueryClient();
+  1349→  1349→  const [showCreate, setShowCreate] = useState(false);
+  1350→  1350→  const [form, setForm] = useState({ title: '', description: '', startDate: '', endDate: '' });
+  1351→  1351→
+  1352→  1352→  const { data, isLoading } = useQuery({
+  1353→  1353→    queryKey: ['flash-sales'],
+  1354→  1354→    queryFn: () => fetch('/api/flash-sales').then(r => r.json()).then((r: any) => r.data || []),
+  1355→  1355→  });
+  1356→  1356→
+  1357→  1357→  const createMutation = useMutation({
+  1358→  1358→    mutationFn: () => fetch('/api/flash-sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, isActive: true }) }).then(r => r.json()),
+  1359→  1359→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['flash-sales'] }); toast.success('Flash sale created'); setShowCreate(false); setForm({ title: '', description: '', startDate: '', endDate: '' }); },
+  1360→  1360→    onError: () => toast.error('Failed to create'),
+  1361→  1361→  });
+  1362→  1362→
+  1363→  1363→  return (
+  1364→  1364→    <div className="space-y-4">
+  1365→  1365→      <div className="flex items-center justify-between">
+  1366→  1366→        <h3 className="font-semibold">Flash Sales</h3>
+  1367→  1367→        <Button className="bg-amber-600 hover:bg-amber-700" size="sm" onClick={() => setShowCreate(true)}><Plus size={14} className="mr-1" />Create</Button>
+  1368→  1368→      </div>
+  1369→  1369→      {isLoading ? <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+  1370→  1370→        <div className="space-y-3">
+  1371→  1371→          {(data || []).map((fs: any) => (
+  1372→  1372→            <Card key={fs.id} className="p-4 flex items-center justify-between">
+  1373→  1373→              <div><p className="font-medium">{fs.title}</p><p className="text-sm text-muted-foreground flex items-center gap-1"><CalendarDays size={12} />{new Date(fs.startDate).toLocaleDateString('en-IN')} — {new Date(fs.endDate).toLocaleDateString('en-IN')}</p><p className="text-xs text-muted-foreground">{fs.items?.length || 0} products</p></div>
+  1374→  1374→              <Badge variant={fs.isActive ? 'default' : 'secondary'}>{fs.isActive ? 'Active' : 'Inactive'}</Badge>
+  1375→  1375→            </Card>
+  1376→  1376→          ))}
+  1377→  1377→          {(!data || data.length === 0) && <p className="text-muted-foreground text-sm text-center py-8">No flash sales yet</p>}
+  1378→  1378→        </div>}
+  1379→  1379→      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+  1380→  1380→        <DialogContent><DialogHeader><DialogTitle>Create Flash Sale</DialogTitle></DialogHeader>
+  1381→  1381→          <div className="space-y-4">
+  1382→  1382→            <div><Label>Title *</Label><Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="mt-1" /></div>
+  1383→  1383→            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
+  1384→  1384→            <div className="grid grid-cols-2 gap-4">
+  1385→  1385→              <div><Label>Start Date *</Label><Input type="datetime-local" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="mt-1" /></div>
+  1386→  1386→              <div><Label>End Date *</Label><Input type="datetime-local" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} className="mt-1" /></div>
+  1387→  1387→            </div>
+  1388→  1388→          </div>
+  1389→  1389→          <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.title}>Create</Button></DialogFooter>
+  1390→  1390→        </DialogContent>
+  1391→  1391→      </Dialog>
+  1392→  1392→    </div>
+  1393→  1393→  );
+  1394→  1394→}
+  1395→  1395→
+  1396→  1396→function FestivalOffersTab() {
+  1397→  1397→  const { data: flashSales, isLoading } = useQuery({
+  1398→  1398→    queryKey: ['festival-offers'],
+  1399→  1399→    queryFn: () => fetch('/api/flash-sales').then(r => r.json()).then((r: any) => r.data || []),
+  1400→  1400→  });
+  1401→  1401→  const { data: deals, isLoading: dealsLoading } = useQuery({
+  1402→  1402→    queryKey: ['deals'],
+  1403→  1403→    queryFn: () => fetch('/api/deals').then(r => r.json()).then((r: any) => r.data || []),
+  1404→  1404→  });
+  1405→  1405→
+  1406→  1406→  const isLoadingCombined = isLoading || dealsLoading;
+  1407→  1407→  const festivalFlashSales = (flashSales || []).filter((fs: any) => fs.description?.toLowerCase().includes('festival') || fs.title?.toLowerCase().includes('festival'));
+  1408→  1408→  const festivalDeals = (deals || []).filter((d: any) => d.description?.toLowerCase().includes('festival') || d.title?.toLowerCase().includes('festival'));
+  1409→  1409→  const hasFestivalContent = festivalFlashSales.length > 0 || festivalDeals.length > 0;
+  1410→  1410→
+  1411→  1411→  return (
+  1412→  1412→    <div className="space-y-4">
+  1413→  1413→      <div className="flex items-center justify-between">
+  1414→  1414→        <h3 className="font-semibold">Festival Offers</h3>
+  1415→  1415→        <Badge variant="outline" className="text-xs">Filtered from Flash Sales & Deals</Badge>
+  1416→  1416→      </div>
+  1417→  1417→      {isLoadingCombined ? <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+  1418→  1418→      hasFestivalContent ? (
+  1419→  1419→        <div className="space-y-3">
+  1420→  1420→          {festivalFlashSales.length > 0 && <>
+  1421→  1421→            <h4 className="text-sm font-medium text-muted-foreground">Festival Flash Sales</h4>
+  1422→  1422→            {festivalFlashSales.map((fs: any) => (
+  1423→  1423→              <Card key={fs.id} className="p-4 flex items-center justify-between border-l-4 border-l-amber-500">
+  1424→  1424→                <div><p className="font-medium flex items-center gap-2"><Sparkles size={14} className="text-amber-500" />{fs.title}</p><p className="text-sm text-muted-foreground flex items-center gap-1"><CalendarDays size={12} />{new Date(fs.startDate).toLocaleDateString('en-IN')} — {new Date(fs.endDate).toLocaleDateString('en-IN')}</p><p className="text-xs text-muted-foreground">{fs.items?.length || 0} products</p></div>
+  1425→  1425→                <Badge variant={fs.isActive ? 'default' : 'secondary'}>{fs.isActive ? 'Active' : 'Inactive'}</Badge>
+  1426→  1426→              </Card>
+  1427→  1427→            ))}
+  1428→  1428→          </>}
+  1429→  1429→          {festivalDeals.length > 0 && <>
+  1430→  1430→            <h4 className="text-sm font-medium text-muted-foreground">Festival Deals</h4>
+  1431→  1431→            {festivalDeals.map((d: any) => (
+  1432→  1432→              <Card key={d.id} className="p-4 flex items-center justify-between border-l-4 border-l-green-500">
+  1433→  1433→                <div><p className="font-medium flex items-center gap-2"><Sparkles size={14} className="text-green-500" />{d.title}</p><p className="text-sm text-muted-foreground">{d.product?.name || d.productId} • {d.discountPercent}% off</p><p className="text-xs text-muted-foreground">{new Date(d.startDate).toLocaleDateString()} — {new Date(d.endDate).toLocaleDateString()}</p></div>
+  1434→  1434→                <Badge variant={d.isActive ? 'default' : 'secondary'}>{d.isActive ? 'Active' : 'Inactive'}</Badge>
+  1435→  1435→              </Card>
+  1436→  1436→            ))}
+  1437→  1437→          </>}
+  1438→  1438→        </div>
+  1439→  1439→      ) : (
+  1440→  1440→        <div className="text-center py-12">
+  1441→  1441→          <Sparkles className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+  1442→  1442→          <p className="text-muted-foreground">No festival offers yet</p>
+  1443→  1443→          <p className="text-xs text-muted-foreground mt-1">Create flash sales or deals with &quot;festival&quot; in the title or description to see them here</p>
+  1444→  1444→        </div>
+  1445→  1445→      )}
+  1446→  1446→    </div>
+  1447→  1447→  );
+  1448→  1448→}
+  1449→  1449→
+  1450→  1450→interface Collection {
+  1451→  1451→  id: string;
+  1452→  1452→  name: string;
+  1453→  1453→  description: string;
+  1454→  1454→  productIds: string[];
+  1455→  1455→  coverImage: string;
+  1456→  1456→  sortOrder: number;
+  1457→  1457→  createdAt: string;
+  1458→  1458→}
+  1459→  1459→
+  1460→  1460→function FeaturedCollectionsTab() {
+  1461→  1461→  const [collections, setCollections] = useState<Collection[]>(() => {
+  1462→  1462→    if (typeof window === 'undefined') return [];
+  1463→  1463→    try {
+  1464→  1464→      return JSON.parse(localStorage.getItem('marketplace-collections') || '[]');
+  1465→  1465→    } catch { return []; }
+  1466→  1466→  });
+  1467→  1467→  const [showCreate, setShowCreate] = useState(false);
+  1468→  1468→  const [editId, setEditId] = useState<string | null>(null);
+  1469→  1469→  const [form, setForm] = useState({ name: '', description: '', coverImage: '', sortOrder: '0' });
+  1470→  1470→  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  1471→  1471→
+  1472→  1472→  const { data: products } = useQuery({
+  1473→  1473→    queryKey: ['all-products-mini'],
+  1474→  1474→    queryFn: () => fetch('/api/products?limit=100').then(r => r.json()).then((r: any) => r.data || []),
+  1475→  1475→  });
+  1476→  1476→
+  1477→  1477→  const saveCollections = (updated: Collection[]) => {
+  1478→  1478→    setCollections(updated);
+  1479→  1479→    if (typeof window !== 'undefined') {
+  1480→  1480→      localStorage.setItem('marketplace-collections', JSON.stringify(updated));
+  1481→  1481→    }
+  1482→  1482→  };
+  1483→  1483→
+  1484→  1484→  const handleSave = () => {
+  1485→  1485→    if (!form.name.trim()) return;
+  1486→  1486→    const updated = editId
+  1487→  1487→      ? collections.map(c => c.id === editId ? { ...c, name: form.name, description: form.description, coverImage: form.coverImage, sortOrder: parseInt(form.sortOrder), productIds: selectedProductIds } : c)
+  1488→  1488→      : [...collections, { id: Date.now().toString(), name: form.name, description: form.description, coverImage: form.coverImage, sortOrder: parseInt(form.sortOrder), productIds: selectedProductIds, createdAt: new Date().toISOString() }];
+  1489→  1489→    saveCollections(updated);
+  1490→  1490→    toast.success(editId ? 'Collection updated' : 'Collection created');
+  1491→  1491→    setShowCreate(false);
+  1492→  1492→    setEditId(null);
+  1493→  1493→    setForm({ name: '', description: '', coverImage: '', sortOrder: '0' });
+  1494→  1494→    setSelectedProductIds([]);
+  1495→  1495→  };
+  1496→  1496→
+  1497→  1497→  const handleEdit = (c: Collection) => {
+  1498→  1498→    setForm({ name: c.name, description: c.description, coverImage: c.coverImage, sortOrder: String(c.sortOrder) });
+  1499→  1499→    setSelectedProductIds(c.productIds);
+  1500→  1500→    setEditId(c.id);
+  1501→  1501→    setShowCreate(true);
+  1502→  1502→  };
+  1503→  1503→
+  1504→  1504→  const handleDelete = (id: string) => {
+  1505→  1505→    saveCollections(collections.filter(c => c.id !== id));
+  1506→  1506→    toast.success('Collection deleted');
+  1507→  1507→  };
+  1508→  1508→
+  1509→  1509→  const toggleProduct = (pid: string) => {
+  1510→  1510→    setSelectedProductIds(prev => prev.includes(pid) ? prev.filter(p => p !== pid) : [...prev, pid]);
+  1511→  1511→  };
+  1512→  1512→
+  1513→  1513→  const productMap = new Map((products || []).map((p: any) => [p.id, p]));
+  1514→  1514→
+  1515→  1515→  return (
+  1516→  1516→    <div className="space-y-4">
+  1517→  1517→      <div className="flex items-center justify-between">
+  1518→  1518→        <h3 className="font-semibold">Featured Collections</h3>
+  1519→  1519→        <Button className="bg-amber-600 hover:bg-amber-700" size="sm" onClick={() => { setForm({ name: '', description: '', coverImage: '', sortOrder: '0' }); setSelectedProductIds([]); setEditId(null); setShowCreate(true); }}><Plus size={14} className="mr-1" />Create Collection</Button>
+  1520→  1520→      </div>
+  1521→  1521→      {collections.length === 0 ? (
+  1522→  1522→        <div className="text-center py-12">
+  1523→  1523→          <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+  1524→  1524→          <p className="text-muted-foreground">No collections yet</p>
+  1525→  1525→          <p className="text-xs text-muted-foreground mt-1">Create curated product collections for your customers</p>
+  1526→  1526→        </div>
+  1527→  1527→      ) : (
+  1528→  1528→        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  1529→  1529→          {collections.sort((a, b) => a.sortOrder - b.sortOrder).map(c => (
+  1530→  1530→            <Card key={c.id} className="overflow-hidden">
+  1531→  1531→              {c.coverImage ? <img src={c.coverImage} alt={c.name} className="w-full h-32 object-cover" /> : <div className="w-full h-32 bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-900/30 dark:to-amber-800/30 flex items-center justify-center"><FolderOpen className="h-8 w-8 text-amber-500" /></div>}
+  1532→  1532→              <div className="p-4">
+  1533→  1533→                <div className="flex items-center justify-between mb-1">
+  1534→  1534→                  <h4 className="font-medium">{c.name}</h4>
+  1535→  1535→                  <Badge variant="outline" className="text-xs">{c.productIds.length} products</Badge>
+  1536→  1536→                </div>
+  1537→  1537→                {c.description && <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{c.description}</p>}
+  1538→  1538→                <div className="flex gap-1">
+  1539→  1539→                  <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => handleEdit(c)}><Pencil size={12} className="mr-1" />Edit</Button>
+  1540→  1540→                  <Button variant="outline" size="sm" className="text-xs text-destructive" onClick={() => handleDelete(c.id)}><Trash2 size={12} /></Button>
+  1541→  1541→                </div>
+  1542→  1542→              </div>
+  1543→  1543→            </Card>
+  1544→  1544→          ))}
+  1545→  1545→        </div>
+  1546→  1546→      )}
+  1547→  1547→      <Dialog open={showCreate} onOpenChange={(v) => { if (!v) { setShowCreate(false); setEditId(null); } }}>
+  1548→  1548→        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+  1549→  1549→          <DialogHeader><DialogTitle>{editId ? 'Edit Collection' : 'Create Collection'}</DialogTitle></DialogHeader>
+  1550→  1550→          <div className="space-y-4">
+  1551→  1551→            <div><Label>Name *</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="mt-1" /></div>
+  1552→  1552→            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
+  1553→  1553→            <div><Label>Cover Image URL</Label><Input value={form.coverImage} onChange={e => setForm(f => ({ ...f, coverImage: e.target.value }))} className="mt-1" placeholder="https://..." /></div>
+  1554→  1554→            <div><Label>Sort Order</Label><Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({ ...f, sortOrder: e.target.value }))} className="mt-1" /></div>
+  1555→  1555→            <div>
+  1556→  1556→              <Label className="mb-2 block">Select Products ({selectedProductIds.length} selected)</Label>
+  1557→  1557→              <div className="max-h-48 overflow-y-auto border rounded-lg p-2 space-y-1">
+  1558→  1558→                {products?.length ? products.map((p: any) => (
+  1559→  1559→                  <label key={p.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+  1560→  1560→                    <input type="checkbox" checked={selectedProductIds.includes(p.id)} onChange={() => toggleProduct(p.id)} className="rounded" />
+  1561→  1561→                    <span className="truncate flex-1">{p.name}</span>
+  1562→  1562→                    <span className="text-xs text-muted-foreground">{formatCurrency(p.price)}</span>
+  1563→  1563→                  </label>
+  1564→  1564→                )) : <p className="text-sm text-muted-foreground text-center py-4">Loading products...</p>}
+  1565→  1565→              </div>
+  1566→  1566→            </div>
+  1567→  1567→          </div>
+  1568→  1568→          <DialogFooter>
+  1569→  1569→            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+  1570→  1570→            <Button className="bg-amber-600 hover:bg-amber-700" onClick={handleSave} disabled={!form.name.trim()}>{editId ? 'Update' : 'Create'}</Button>
+  1571→  1571→          </DialogFooter>
+  1572→  1572→        </DialogContent>
+  1573→  1573→      </Dialog>
+  1574→  1574→    </div>
+  1575→  1575→  );
+  1576→  1576→}
+  1577→  1577→
+  1578→  1578→function DealsTab() {
+  1579→  1579→  const qc = useQueryClient();
+  1580→  1580→  const [showCreate, setShowCreate] = useState(false);
+  1581→  1581→  const [form, setForm] = useState({ title: '', description: '', productId: '', discountPercent: '10', startDate: '', endDate: '' });
+  1582→  1582→
+  1583→  1583→  const { data, isLoading } = useQuery({
+  1584→  1584→    queryKey: ['deals'],
+  1585→  1585→    queryFn: () => fetch('/api/deals').then(r => r.json()).then((r: any) => r.data || []),
+  1586→  1586→  });
+  1587→  1587→
+  1588→  1588→  const createMutation = useMutation({
+  1589→  1589→    mutationFn: () => fetch('/api/deals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, discountPercent: parseFloat(form.discountPercent), isActive: true, sortOrder: 0 }) }).then(r => r.json()),
+  1590→  1590→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['deals'] }); toast.success('Deal created'); setShowCreate(false); setForm({ title: '', description: '', productId: '', discountPercent: '10', startDate: '', endDate: '' }); },
+  1591→  1591→    onError: () => toast.error('Failed'),
+  1592→  1592→  });
+  1593→  1593→
+  1594→  1594→  const deleteMutation = useMutation({
+  1595→  1595→    mutationFn: (id: string) => fetch(`/api/deals?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+  1596→  1596→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['deals'] }); toast.success('Deal deleted'); },
+  1597→  1597→  });
+  1598→  1598→
+  1599→  1599→  return (
+  1600→  1600→    <div className="space-y-4">
+  1601→  1601→      <div className="flex items-center justify-between">
+  1602→  1602→        <h3 className="font-semibold">Deals</h3>
+  1603→  1603→        <Button className="bg-amber-600 hover:bg-amber-700" size="sm" onClick={() => setShowCreate(true)}><Plus size={14} className="mr-1" />Create</Button>
+  1604→  1604→      </div>
+  1605→  1605→      {isLoading ? <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+  1606→  1606→        <Card><Table><TableHeader><TableRow><TableHead>Deal</TableHead><TableHead>Product</TableHead><TableHead>Discount</TableHead><TableHead>Period</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+  1607→  1607→          <TableBody>{(data || []).map((d: any) => (
+  1608→  1608→            <TableRow key={d.id}><TableCell className="font-medium text-sm">{d.title}</TableCell><TableCell className="text-sm">{d.product?.name || d.productId}</TableCell><TableCell><Badge className="bg-green-100 text-green-700">{d.discountPercent}%</Badge></TableCell>
+  1609→  1609→              <TableCell className="text-xs text-muted-foreground">{new Date(d.startDate).toLocaleDateString()} — {new Date(d.endDate).toLocaleDateString()}</TableCell>
+  1610→  1610→              <TableCell><Badge variant={d.isActive ? 'default' : 'secondary'}>{d.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+  1611→  1611→              <TableCell className="text-right"><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(d.id)}><Trash2 size={14} /></Button></TableCell></TableRow>
+  1612→  1612→          ))}</TableBody></Table></Card>}
+  1613→  1613→      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+  1614→  1614→        <DialogContent><DialogHeader><DialogTitle>Create Deal</DialogTitle></DialogHeader>
+  1615→  1615→          <div className="space-y-4">
+  1616→  1616→            <div><Label>Title *</Label><Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="mt-1" /></div>
+  1617→  1617→            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
+  1618→  1618→            <div><Label>Product ID *</Label><Input value={form.productId} onChange={e => setForm(f => ({ ...f, productId: e.target.value }))} className="mt-1" /></div>
+  1619→  1619→            <div className="grid grid-cols-2 gap-4">
+  1620→  1620→              <div><Label>Discount % *</Label><Input type="number" value={form.discountPercent} onChange={e => setForm(f => ({ ...f, discountPercent: e.target.value }))} className="mt-1" /></div>
+  1621→  1621→              <div><Label>Sort Order</Label><Input type="number" value="0" disabled className="mt-1" /></div>
+  1622→  1622→            </div>
+  1623→  1623→            <div className="grid grid-cols-2 gap-4">
+  1624→  1624→              <div><Label>Start Date *</Label><Input type="datetime-local" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="mt-1" /></div>
+  1625→  1625→              <div><Label>End Date *</Label><Input type="datetime-local" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} className="mt-1" /></div>
+  1626→  1626→            </div>
+  1627→  1627→          </div>
+  1628→  1628→          <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.title || !form.productId}>Create</Button></DialogFooter>
+  1629→  1629→        </DialogContent>
+  1630→  1630→      </Dialog>
+  1631→  1631→    </div>
+  1632→  1632→  );
+  1633→  1633→}
+  1634→  1634→
+  1635→  1635→// ============ ADMIN FAQ ============
+  1636→  1636→
+  1637→  1637→function AdminFAQ() {
+  1638→  1638→  const qc = useQueryClient();
+  1639→  1639→  const [showAdd, setShowAdd] = useState(false);
+  1640→  1640→  const [editId, setEditId] = useState<string | null>(null);
+  1641→  1641→  const [form, setForm] = useState({ question: '', answer: '', category: 'General', sortOrder: '0' });
+  1642→  1642→
+  1643→  1643→  const { data: faqs, isLoading } = useQuery({
+  1644→  1644→    queryKey: ['admin-faq'],
+  1645→  1645→    queryFn: () => fetch('/api/faq').then(r => r.json()).then((r: any) => r.data || []),
+  1646→  1646→  });
+  1647→  1647→
+  1648→  1648→  const saveMutation = useMutation({
+  1649→  1649→    mutationFn: () => fetch('/api/faq', {
+  1650→  1650→      method: editId ? 'PUT' : 'POST',
+  1651→  1651→      headers: { 'Content-Type': 'application/json' },
+  1652→  1652→      body: JSON.stringify({ ...(editId ? { id: editId } : {}), ...form, sortOrder: parseInt(form.sortOrder), isActive: true }),
+  1653→  1653→    }).then(r => r.json()),
+  1654→  1654→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-faq'] }); toast.success(editId ? 'FAQ updated' : 'FAQ added'); setShowAdd(false); setEditId(null); setForm({ question: '', answer: '', category: 'General', sortOrder: '0' }); },
+  1655→  1655→    onError: () => toast.error('Failed to save FAQ'),
+  1656→  1656→  });
+  1657→  1657→
+  1658→  1658→  const deleteMutation = useMutation({
+  1659→  1659→    mutationFn: (id: string) => fetch(`/api/faq?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+  1660→  1660→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-faq'] }); toast.success('FAQ deleted'); },
+  1661→  1661→  });
+  1662→  1662→
+  1663→  1663→  const handleEdit = (faq: any) => {
+  1664→  1664→    setForm({ question: faq.question, answer: faq.answer, category: faq.category, sortOrder: String(faq.sortOrder) });
+  1665→  1665→    setEditId(faq.id);
+  1666→  1666→    setShowAdd(true);
+  1667→  1667→  };
+  1668→  1668→
+  1669→  1669→  return (
+  1670→  1670→    <div className="p-6 space-y-6">
+  1671→  1671→      <div className="flex items-center justify-between">
+  1672→  1672→        <div><h1 className="text-2xl font-bold">FAQ Management</h1><p className="text-muted-foreground text-sm">Manage frequently asked questions</p></div>
+  1673→  1673→        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => { setForm({ question: '', answer: '', category: 'General', sortOrder: '0' }); setEditId(null); setShowAdd(true); }}><Plus size={16} className="mr-1.5" />Add FAQ</Button>
+  1674→  1674→      </div>
+  1675→  1675→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div> :
+  1676→  1676→        <Card className="p-4">
+  1677→  1677→          <Accordion type="multiple">
+  1678→  1678→            {(faqs || []).map((faq: any, i: number) => (
+  1679→  1679→              <AccordionItem key={faq.id} value={faq.id}>
+  1680→  1680→                <AccordionTrigger className="text-left hover:no-underline">
+  1681→  1681→                  <div className="flex items-center gap-3 flex-1 pr-4">
+  1682→  1682→                    <span className="text-sm font-medium flex-1 truncate">{faq.question}</span>
+  1683→  1683→                    <Badge variant="outline" className="text-xs shrink-0">{faq.category}</Badge>
+  1684→  1684→                  </div>
+  1685→  1685→                </AccordionTrigger>
+  1686→  1686→                <AccordionContent>
+  1687→  1687→                  <p className="text-sm text-muted-foreground mb-3">{faq.answer}</p>
+  1688→  1688→                  <div className="flex gap-2">
+  1689→  1689→                    <Button variant="outline" size="sm" onClick={() => handleEdit(faq)}><Pencil size={12} className="mr-1" />Edit</Button>
+  1690→  1690→                    <Button variant="outline" size="sm" className="text-destructive" onClick={() => deleteMutation.mutate(faq.id)}><Trash2 size={12} className="mr-1" />Delete</Button>
+  1691→  1691→                  </div>
+  1692→  1692→                </AccordionContent>
+  1693→  1693→              </AccordionItem>
+  1694→  1694→            ))}
+  1695→  1695→          </Accordion>
+  1696→  1696→          {(!faqs || faqs.length === 0) && <p className="text-muted-foreground text-sm text-center py-8">No FAQs yet</p>}
+  1697→  1697→        </Card>}
+  1698→  1698→      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+  1699→  1699→        <DialogContent><DialogHeader><DialogTitle>{editId ? 'Edit FAQ' : 'Add FAQ'}</DialogTitle></DialogHeader>
+  1700→  1700→          <div className="space-y-4">
+  1701→  1701→            <div><Label>Question *</Label><Input value={form.question} onChange={e => setForm(f => ({ ...f, question: e.target.value }))} className="mt-1" /></div>
+  1702→  1702→            <div><Label>Answer *</Label><Textarea value={form.answer} onChange={e => setForm(f => ({ ...f, answer: e.target.value }))} className="mt-1" rows={4} /></div>
+  1703→  1703→            <div className="grid grid-cols-2 gap-4">
+  1704→  1704→              <div><Label>Category</Label><Input value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className="mt-1" placeholder="e.g. General, Shipping, Returns" /></div>
+  1705→  1705→              <div><Label>Sort Order</Label><Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({ ...f, sortOrder: e.target.value }))} className="mt-1" /></div>
+  1706→  1706→            </div>
+  1707→  1707→          </div>
+  1708→  1708→          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.question || !form.answer}>{saveMutation.isPending ? 'Saving...' : editId ? 'Update' : 'Create'}</Button></DialogFooter>
+  1709→  1709→        </DialogContent>
+  1710→  1710→      </Dialog>
+  1711→  1711→    </div>
+  1712→  1712→  );
+  1713→  1713→}
+  1714→  1714→
+  1715→  1715→// ============ ADMIN ROLES ============
+  1716→  1716→
+  1717→  1717→const ROLE_PERMISSIONS: Record<string, string> = {
+  1718→  1718→  SUPER_ADMIN: 'Full Access (all features)',
+  1719→  1719→  FINANCE_ADMIN: 'Payouts, Wallet, Commission Reports, Analytics',
+  1720→  1720→  SUPPORT_ADMIN: 'Support Tickets, Returns, Customer Management',
+  1721→  1721→  INVENTORY_ADMIN: 'Products, Categories, Brands, Inventory, Orders',
+  1722→  1722→};
+  1723→  1723→
+  1724→  1724→const ROLE_COLORS: Record<string, string> = {
+  1725→  1725→  SUPER_ADMIN: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  1726→  1726→  FINANCE_ADMIN: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  1727→  1727→  SUPPORT_ADMIN: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  1728→  1728→  INVENTORY_ADMIN: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  1729→  1729→};
+  1730→  1730→
+  1731→  1731→const ROLE_OPTIONS = ['SUPER_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN', 'INVENTORY_ADMIN'];
+  1732→  1732→
+  1733→  1733→function AdminRolesPage() {
+  1734→  1734→  const qc = useQueryClient();
+  1735→  1735→  const [showCreate, setShowCreate] = useState(false);
+  1736→  1736→  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'SUPPORT_ADMIN' });
+  1737→  1737→
+  1738→  1738→  const { data, isLoading } = useQuery({
+  1739→  1739→    queryKey: ['admin-roles'],
+  1740→  1740→    queryFn: () => fetch('/api/admin/roles').then(r => r.json()).then((r: any) => r.data || []),
+  1741→  1741→  });
+  1742→  1742→
+  1743→  1743→  const createMutation = useMutation({
+  1744→  1744→    mutationFn: () => fetch('/api/admin/roles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).then(r => r.json()),
+  1745→  1745→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-roles'] }); toast.success('Admin user created'); setShowCreate(false); setForm({ name: '', email: '', password: '', role: 'SUPPORT_ADMIN' }); },
+  1746→  1746→    onError: (e: any) => toast.error(e?.message || 'Failed to create admin'),
+  1747→  1747→  });
+  1748→  1748→
+  1749→  1749→  const updateRoleMutation = useMutation({
+  1750→  1750→    mutationFn: ({ userId, role }: { userId: string; role: string }) => fetch('/api/admin/roles', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, role }) }).then(r => r.json()),
+  1751→  1751→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-roles'] }); toast.success('Role updated'); },
+  1752→  1752→    onError: () => toast.error('Failed to update role'),
+  1753→  1753→  });
+  1754→  1754→
+  1755→  1755→  return (
+  1756→  1756→    <div className="p-6 space-y-6">
+  1757→  1757→      <div className="flex items-center justify-between">
+  1758→  1758→        <div><h1 className="text-2xl font-bold">Admin Roles</h1><p className="text-muted-foreground text-sm">Manage admin users and role-based access</p></div>
+  1759→  1759→        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => setShowCreate(true)}><Plus size={16} className="mr-1.5" />Create Admin</Button>
+  1760→  1760→      </div>
+  1761→  1761→
+  1762→  1762→      {/* RBAC Permissions Matrix */}
+  1763→  1763→      <Card className="p-6">
+  1764→  1764→        <CardHeader className="p-0 mb-4">
+  1765→  1765→          <CardTitle className="text-lg flex items-center gap-2"><ShieldCheck size={20} className="text-amber-500" />Role-Based Permissions</CardTitle>
+  1766→  1766→          <CardDescription>Each admin role has specific access permissions</CardDescription>
+  1767→  1767→        </CardHeader>
+  1768→  1768→        <div className="grid sm:grid-cols-2 gap-3">
+  1769→  1769→          {ROLE_OPTIONS.map(role => (
+  1770→  1770→            <div key={role} className="flex items-start gap-3 p-3 rounded-lg border">
+  1771→  1771→              <div className={`px-2.5 py-1 rounded text-xs font-bold shrink-0 ${ROLE_COLORS[role]}`}>{role.replace('_', ' ')}</div>
+  1772→  1772→              <p className="text-sm text-muted-foreground pt-0.5">{ROLE_PERMISSIONS[role]}</p>
+  1773→  1773→            </div>
+  1774→  1774→          ))}
+  1775→  1775→        </div>
+  1776→  1776→      </Card>
+  1777→  1777→
+  1778→  1778→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div> :
+  1779→  1779→        <Card>
+  1780→  1780→          <div className="overflow-x-auto">
+  1781→  1781→            <Table>
+  1782→  1782→              <TableHeader>
+  1783→  1783→                <TableRow>
+  1784→  1784→                  <TableHead>Name</TableHead>
+  1785→  1785→                  <TableHead className="hidden md:table-cell">Email</TableHead>
+  1786→  1786→                  <TableHead>Role</TableHead>
+  1787→  1787→                  <TableHead>Status</TableHead>
+  1788→  1788→                  <TableHead className="hidden sm:table-cell">Last Login</TableHead>
+  1789→  1789→                  <TableHead className="text-right">Actions</TableHead>
+  1790→  1790→                </TableRow>
+  1791→  1791→              </TableHeader>
+  1792→  1792→              <TableBody>
+  1793→  1793→                {(!data || data.length === 0) && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No admin users found</TableCell></TableRow>}
+  1794→  1794→                {data?.map((admin: any) => (
+  1795→  1795→                  <TableRow key={admin.id}>
+  1796→  1796→                    <TableCell>
+  1797→  1797→                      <div className="flex items-center gap-2">
+  1798→  1798→                        <Avatar className="h-8 w-8"><AvatarFallback className="text-xs bg-amber-100 text-amber-600">{admin.name?.[0]}</AvatarFallback></Avatar>
+  1799→  1799→                        <span className="font-medium text-sm">{admin.name}</span>
+  1800→  1800→                      </div>
+  1801→  1801→                    </TableCell>
+  1802→  1802→                    <TableCell className="hidden md:table-cell text-sm">{admin.email}</TableCell>
+  1803→  1803→                    <TableCell><Badge className={ROLE_COLORS[admin.role] || ''}>{admin.role?.replace('_', ' ')}</Badge></TableCell>
+  1804→  1804→                    <TableCell><Badge variant={admin.isActive ? 'default' : 'secondary'}>{admin.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+  1805→  1805→                    <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{admin.lastLoginAt ? new Date(admin.lastLoginAt).toLocaleDateString('en-IN') : 'Never'}</TableCell>
+  1806→  1806→                    <TableCell className="text-right">
+  1807→  1807→                      <Select value={admin.role} onValueChange={(v) => updateRoleMutation.mutate({ userId: admin.id, role: v })}>
+  1808→  1808→                        <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
+  1809→  1809→                        <SelectContent>{ROLE_OPTIONS.map(r => <SelectItem key={r} value={r}>{r.replace('_', ' ')}</SelectItem>)}</SelectContent>
+  1810→  1810→                      </Select>
+  1811→  1811→                    </TableCell>
+  1812→  1812→                  </TableRow>
+  1813→  1813→                ))}
+  1814→  1814→              </TableBody>
+  1815→  1815→            </Table>
+  1816→  1816→          </div>
+  1817→  1817→        </Card>}
+  1818→  1818→
+  1819→  1819→      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+  1820→  1820→        <DialogContent>
+  1821→  1821→          <DialogHeader><DialogTitle>Create Admin User</DialogTitle><DialogDescription>Add a new admin with a specific role</DialogDescription></DialogHeader>
+  1822→  1822→          <div className="space-y-4">
+  1823→  1823→            <div><Label>Full Name *</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="mt-1" /></div>
+  1824→  1824→            <div><Label>Email *</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="mt-1" /></div>
+  1825→  1825→            <div><Label>Password *</Label><Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="mt-1" /></div>
+  1826→  1826→            <div>
+  1827→  1827→              <Label>Role *</Label>
+  1828→  1828→              <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
+  1829→  1829→                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+  1830→  1830→                <SelectContent>
+  1831→  1831→                  {ROLE_OPTIONS.map(r => (
+  1832→  1832→                    <SelectItem key={r} value={r}>
+  1833→  1833→                      <div><span className="font-medium">{r.replace('_', ' ')}</span><span className="text-xs text-muted-foreground ml-2">— {ROLE_PERMISSIONS[r]}</span></div>
+  1834→  1834→                    </SelectItem>
+  1835→  1835→                  ))}
+  1836→  1836→                </SelectContent>
+  1837→  1837→              </Select>
+  1838→  1838→            </div>
+  1839→  1839→          </div>
+  1840→  1840→          <DialogFooter>
+  1841→  1841→            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+  1842→  1842→            <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.name || !form.email || !form.password}>{createMutation.isPending ? 'Creating...' : 'Create Admin'}</Button>
+  1843→  1843→          </DialogFooter>
+  1844→  1844→        </DialogContent>
+  1845→  1845→      </Dialog>
+  1846→  1846→    </div>
+  1847→  1847→  );
+  1848→  1848→}
+  1849→  1849→
+  1850→  1850→// ============ ADMIN ACTIVITY LOGS ============
+  1851→  1851→
+  1852→  1852→function AdminActivityLogs() {
+  1853→  1853→  const { data } = useQuery({ queryKey: ['activity-logs'], queryFn: () => fetch('/api/admin/activity-logs').then(r => r.json()) });
+  1854→  1854→  return (
+  1855→  1855→    <div className="p-6 space-y-6">
+  1856→  1856→      <h1 className="text-2xl font-bold">Activity Logs</h1>
+  1857→  1857→      <Card><Table><TableHeader><TableRow><TableHead>User</TableHead><TableHead>Action</TableHead><TableHead>Entity</TableHead><TableHead>Details</TableHead><TableHead className="hidden md:table-cell">IP</TableHead><TableHead>Timestamp</TableHead></TableRow></TableHeader>
+  1858→  1858→        <TableBody>{(data?.data || []).map((log: any) => (
+  1859→  1859→          <TableRow key={log.id}><TableCell className="text-sm">{log.user?.name || 'System'}</TableCell><TableCell><Badge variant="outline">{log.action}</Badge></TableCell><TableCell className="text-sm">{log.entityType || '—'}</TableCell><TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{log.details || '—'}</TableCell><TableCell className="hidden md:table-cell text-xs text-muted-foreground">{log.ipAddress || '—'}</TableCell><TableCell className="text-xs text-muted-foreground">{new Date(log.createdAt).toLocaleString('en-IN')}</TableCell></TableRow>
+  1860→  1860→        ))}</TableBody></Table></Card>
+  1861→  1861→    </div>
+  1862→  1862→  );
+  1863→  1863→}
+  1864→  1864→
+  1865→  1865→// ============ MAIN ADMIN APP ============
+  1866→  1866→
+  1867→  1867→export default function AdminApp() {
+  1868→  1868→  const { adminView, setAdminView } = useNavigationStore();
+  1869→  1869→
+  1870→  1870→  const renderView = () => {
+  1871→  1871→    switch (adminView) {
+  1872→  1872→      case 'admin-dashboard': return <AdminDashboard />;
+  1873→  1873→      case 'admin-vendors': return <AdminVendors />;
+  1874→  1874→      case 'admin-categories': return <AdminCategories />;
+  1875→  1875→      case 'admin-brands': return <AdminBrands />;
+  1876→  1876→      case 'admin-products': return <AdminProducts />;
+  1877→  1877→      case 'admin-orders': return <AdminOrders />;
+  1878→  1878→      case 'admin-customers': return <AdminCustomers />;
+  1879→  1879→      case 'admin-coupons': return <AdminCoupons />;
+  1880→  1880→      case 'admin-banners': return <AdminBanners />;
+  1881→  1881→      case 'admin-reports': return <AdminReports />;
+  1882→  1882→      case 'admin-returns': return <AdminReturns />;
+  1883→  1883→      case 'admin-payouts': return <AdminPayouts />;
+  1884→  1884→      case 'admin-analytics': return <AdminAnalytics />;
+  1885→  1885→      case 'admin-support': return <AdminSupport />;
+  1886→  1886→      case 'admin-marketing': return <AdminMarketing />;
+  1887→  1887→      case 'admin-faq': return <AdminFAQ />;
+  1888→  1888→      case 'admin-roles': return <AdminRolesPage />;
+  1889→  1889→      case 'admin-activity-logs': return <AdminActivityLogs />;
+  1890→  1890→      case 'admin-settings': return <AdminSettings />;
+  1891→  1891→      case 'admin-notifications': return <div className="p-6"><h1 className="text-2xl font-bold mb-4">Notifications</h1><p className="text-muted-foreground">No new notifications</p></div>;
+  1892→  1892→      default: return <AdminDashboard />;
+  1893→  1893→    }
+  1894→  1894→  };
+  1895→  1895→
+  1896→  1896→  return (
+  1897→  1897→    <div className="min-h-screen flex flex-col bg-background">
+  1898→  1898→      <AdminMobileHeader />
+  1899→  1899→      <div className="flex flex-1">
+  1900→  1900→        <AdminSidebar />
+  1901→  1901→        <main className="flex-1 overflow-auto">{renderView()}</main>
+  1902→  1902→      </div>
+  1903→  1903→    </div>
+  1904→  1904→  );
+  1905→  1905→}

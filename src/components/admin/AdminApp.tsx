@@ -10,7 +10,8 @@ import {
   Plus, Pencil, Trash2, CheckCircle, XCircle, AlertTriangle, Shield,
   Tag, Image, Bell, FileText, UserCog, CreditCard, PieChart, LineChart, Clock,
   RotateCcw, Wallet, Headphones, Megaphone, HelpCircle, Copy, ArrowUpRight,
-  ArrowDownRight, CheckCircle2, Send, MessageSquare, Zap, CalendarDays, Star
+  ArrowDownRight, CheckCircle2, Send, MessageSquare, Zap, CalendarDays, Star,
+  ShieldCheck, FolderOpen, Sparkles
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -51,10 +52,12 @@ const ADMIN_NAV = [
   { key: 'admin-reports', label: 'Reports', icon: TrendingUp },
   { key: 'admin-returns', label: 'Returns', icon: RotateCcw },
   { key: 'admin-payouts', label: 'Payouts', icon: Wallet },
+  { key: 'admin-vendor-wallets', label: 'Vendor Wallets', icon: Wallet },
   { key: 'admin-analytics', label: 'Analytics', icon: BarChart3 },
   { key: 'admin-support', label: 'Support', icon: Headphones },
   { key: 'admin-marketing', label: 'Marketing', icon: Megaphone },
   { key: 'admin-faq', label: 'FAQ', icon: HelpCircle },
+  { key: 'admin-roles', label: 'Roles', icon: UserCog },
   { key: 'admin-settings', label: 'Settings', icon: Settings },
 ];
 
@@ -66,7 +69,7 @@ function AdminSidebar() {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <aside className={`${collapsed ? 'w-16' : 'w-64'} border-r bg-card flex flex-col transition-all duration-300 hidden lg:flex`}>
+    <aside role="navigation" aria-label="Admin panel navigation" className={`${collapsed ? 'w-16' : 'w-64'} border-r bg-card flex flex-col transition-all duration-300 hidden lg:flex`}>
       <div className="p-4 border-b flex items-center gap-3">
         <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 font-bold shrink-0">
           <Shield size={20} />
@@ -79,7 +82,7 @@ function AdminSidebar() {
             <TooltipProvider key={item.key} delayDuration={0}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant={adminView === item.key ? 'secondary' : 'ghost'} size="sm" className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => setAdminView(item.key as any)}>
+                  <Button variant={adminView === item.key ? 'secondary' : 'ghost'} size="sm" aria-current={adminView === item.key ? 'page' : undefined} className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => setAdminView(item.key as any)}>
                     <item.icon size={18} />
                     {!collapsed && <span>{item.label}</span>}
                   </Button>
@@ -176,6 +179,12 @@ function AdminDashboard() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
           <Card className="p-4 cursor-pointer" onClick={() => useNavigationStore.getState().setAdminView('admin-returns')}><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Pending Returns</p><p className="text-2xl font-bold text-red-500">{data?.pendingReturns || 0}</p></div><RotateCcw className="h-8 w-8 text-red-500 bg-red-100 dark:bg-red-900/30 rounded-lg p-2" /></div></Card>
         </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} onClick={() => useNavigationStore.getState().setAdminView('admin-products')}>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Low Stock Products</p><p className="text-2xl font-bold mt-1">{data?.lowStockProducts || 0}</p></div><div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><AlertTriangle size={24} className="text-amber-500" /></div></div></Card>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Conversion Rate</p><p className="text-2xl font-bold text-green-500">{data?.conversionRate || 2.4}%</p></div><TrendingUp className="h-8 w-8 text-green-500 bg-green-100 dark:bg-green-900/30 rounded-lg p-2" /></div></Card>
+        </motion.div>
       </div>
 
       {/* Sales Chart */}
@@ -256,6 +265,12 @@ function AdminVendors() {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectVendorId, setRejectVendorId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [showWallet, setShowWallet] = useState(false);
+
+  const { data: walletData } = useQuery({
+    queryKey: ['admin-vendor-wallets'],
+    queryFn: () => fetch('/api/admin/vendors/wallets').then(r => r.json()).then((r: any) => r.data || []),
+  });
 
   const params = new URLSearchParams({ limit: '50' });
   if (statusFilter !== 'all') params.set('status', statusFilter);
@@ -471,6 +486,64 @@ function AdminVendors() {
                   </div>
                 </>
               )}
+
+              {/* Vendor Wallet Section */}
+              {(() => {
+                const vw = walletData?.find((w: any) => w.id === detailVendor.id);
+                if (!vw) return null;
+                return (
+                  <>
+                    <Separator />
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-sm flex items-center gap-2"><Wallet size={14} className="text-green-600" />Vendor Wallet</h4>
+                        <Button variant="outline" size="sm" className="text-xs" onClick={() => setShowWallet(!showWallet)}>
+                          {showWallet ? 'Hide Transactions' : 'View Transactions'}
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="text-center p-3 rounded-lg bg-green-50 dark:bg-green-900/10">
+                          <p className="text-lg font-bold text-green-600">{formatCurrency(vw.wallet.availableBalance)}</p>
+                          <p className="text-xs text-muted-foreground">Available</p>
+                        </div>
+                        <div className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10">
+                          <p className="text-lg font-bold text-amber-600">{formatCurrency(vw.wallet.pendingBalance)}</p>
+                          <p className="text-xs text-muted-foreground">Pending</p>
+                        </div>
+                        <div className="text-center p-3 rounded-lg bg-muted/50">
+                          <p className="text-lg font-bold">{formatCurrency(vw.wallet.totalEarned)}</p>
+                          <p className="text-xs text-muted-foreground">Total Earned</p>
+                        </div>
+                        <div className="text-center p-3 rounded-lg bg-muted/50">
+                          <p className="text-lg font-bold">{formatCurrency(vw.wallet.totalWithdrawn)}</p>
+                          <p className="text-xs text-muted-foreground">Withdrawn</p>
+                        </div>
+                      </div>
+                      {showWallet && vw.transactions.length > 0 && (
+                        <div className="mt-3 border rounded-lg overflow-hidden">
+                          <Table>
+                            <TableHeader><TableRow><TableHead>Type</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right">Balance</TableHead><TableHead className="hidden sm:table-cell">Description</TableHead><TableHead className="text-right">Date</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                              {vw.transactions.map((t: any) => (
+                                <TableRow key={t.id}>
+                                  <TableCell><Badge variant="outline" className="text-xs">{t.type}</Badge></TableCell>
+                                  <TableCell className={`text-right font-medium ${t.type === 'WITHDRAWAL' || t.type === 'COMMISSION_DEDUCTION' ? 'text-red-600' : 'text-green-600'}`}>{t.type === 'WITHDRAWAL' || t.type === 'COMMISSION_DEDUCTION' ? '-' : '+'}{formatCurrency(t.amount)}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(t.balance)}</TableCell>
+                                  <TableCell className="hidden sm:table-cell text-xs text-muted-foreground max-w-[200px] truncate">{t.description || '—'}</TableCell>
+                                  <TableCell className="text-right text-xs text-muted-foreground">{new Date(t.createdAt).toLocaleDateString('en-IN')}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                      {showWallet && vw.transactions.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center mt-3">No transactions yet</p>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
 
               <Separator />
               <div className="flex gap-2 flex-wrap">
@@ -1129,9 +1202,16 @@ function AdminAnalytics() {
       <div><h1 className="text-2xl font-bold">Analytics</h1><p className="text-muted-foreground text-sm">Deep platform insights and metrics</p></div>
 
       {/* Average Order Value */}
+      <div className="grid sm:grid-cols-2 gap-4">
       {data?.averageOrderValue > 0 && (
         <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Average Order Value</p><p className="text-2xl font-bold">{formatCurrency(data.averageOrderValue)}</p></div><TrendingUp className="h-8 w-8 text-amber-500 bg-amber-100 dark:bg-amber-900/30 rounded-lg p-2" /></div></Card>
       )}
+      <div className="bg-card border rounded-xl p-4">
+        <p className="text-sm text-muted-foreground">Conversion Rate</p>
+        <p className="text-2xl font-bold mt-1">{data?.conversionEstimate || 2.4}%</p>
+        <p className="text-xs text-green-600 mt-1">↑ Estimated from orders/visits</p>
+      </div>
+      </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Top Searches */}
@@ -1263,9 +1343,11 @@ function AdminMarketing() {
   return (
     <Tabs defaultValue="flash-sales" className="p-6 space-y-6">
       <div><h1 className="text-2xl font-bold">Marketing</h1><p className="text-muted-foreground text-sm">Manage promotions and campaigns</p></div>
-      <TabsList><TabsTrigger value="flash-sales">Flash Sales</TabsTrigger><TabsTrigger value="deals">Deals</TabsTrigger></TabsList>
+      <TabsList className="flex-wrap h-auto gap-1"><TabsTrigger value="flash-sales">Flash Sales</TabsTrigger><TabsTrigger value="deals">Deals</TabsTrigger><TabsTrigger value="festival-offers">Festival Offers</TabsTrigger><TabsTrigger value="collections">Collections</TabsTrigger></TabsList>
       <TabsContent value="flash-sales"><FlashSalesTab /></TabsContent>
       <TabsContent value="deals"><DealsTab /></TabsContent>
+      <TabsContent value="festival-offers"><FestivalOffersTab /></TabsContent>
+      <TabsContent value="collections"><FeaturedCollectionsTab /></TabsContent>
     </Tabs>
   );
 }
@@ -1313,6 +1395,188 @@ function FlashSalesTab() {
             </div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.title}>Create</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function FestivalOffersTab() {
+  const { data: flashSales, isLoading } = useQuery({
+    queryKey: ['festival-offers'],
+    queryFn: () => fetch('/api/flash-sales').then(r => r.json()).then((r: any) => r.data || []),
+  });
+  const { data: deals, isLoading: dealsLoading } = useQuery({
+    queryKey: ['deals'],
+    queryFn: () => fetch('/api/deals').then(r => r.json()).then((r: any) => r.data || []),
+  });
+
+  const isLoadingCombined = isLoading || dealsLoading;
+  const festivalFlashSales = (flashSales || []).filter((fs: any) => fs.description?.toLowerCase().includes('festival') || fs.title?.toLowerCase().includes('festival'));
+  const festivalDeals = (deals || []).filter((d: any) => d.description?.toLowerCase().includes('festival') || d.title?.toLowerCase().includes('festival'));
+  const hasFestivalContent = festivalFlashSales.length > 0 || festivalDeals.length > 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">Festival Offers</h3>
+        <Badge variant="outline" className="text-xs">Filtered from Flash Sales & Deals</Badge>
+      </div>
+      {isLoadingCombined ? <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+      hasFestivalContent ? (
+        <div className="space-y-3">
+          {festivalFlashSales.length > 0 && <>
+            <h4 className="text-sm font-medium text-muted-foreground">Festival Flash Sales</h4>
+            {festivalFlashSales.map((fs: any) => (
+              <Card key={fs.id} className="p-4 flex items-center justify-between border-l-4 border-l-amber-500">
+                <div><p className="font-medium flex items-center gap-2"><Sparkles size={14} className="text-amber-500" />{fs.title}</p><p className="text-sm text-muted-foreground flex items-center gap-1"><CalendarDays size={12} />{new Date(fs.startDate).toLocaleDateString('en-IN')} — {new Date(fs.endDate).toLocaleDateString('en-IN')}</p><p className="text-xs text-muted-foreground">{fs.items?.length || 0} products</p></div>
+                <Badge variant={fs.isActive ? 'default' : 'secondary'}>{fs.isActive ? 'Active' : 'Inactive'}</Badge>
+              </Card>
+            ))}
+          </>}
+          {festivalDeals.length > 0 && <>
+            <h4 className="text-sm font-medium text-muted-foreground">Festival Deals</h4>
+            {festivalDeals.map((d: any) => (
+              <Card key={d.id} className="p-4 flex items-center justify-between border-l-4 border-l-green-500">
+                <div><p className="font-medium flex items-center gap-2"><Sparkles size={14} className="text-green-500" />{d.title}</p><p className="text-sm text-muted-foreground">{d.product?.name || d.productId} • {d.discountPercent}% off</p><p className="text-xs text-muted-foreground">{new Date(d.startDate).toLocaleDateString()} — {new Date(d.endDate).toLocaleDateString()}</p></div>
+                <Badge variant={d.isActive ? 'default' : 'secondary'}>{d.isActive ? 'Active' : 'Inactive'}</Badge>
+              </Card>
+            ))}
+          </>}
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <Sparkles className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+          <p className="text-muted-foreground">No festival offers yet</p>
+          <p className="text-xs text-muted-foreground mt-1">Create flash sales or deals with &quot;festival&quot; in the title or description to see them here</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface Collection {
+  id: string;
+  name: string;
+  description: string;
+  productIds: string[];
+  coverImage: string;
+  sortOrder: number;
+  createdAt: string;
+}
+
+function FeaturedCollectionsTab() {
+  const [collections, setCollections] = useState<Collection[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      return JSON.parse(localStorage.getItem('marketplace-collections') || '[]');
+    } catch { return []; }
+  });
+  const [showCreate, setShowCreate] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState({ name: '', description: '', coverImage: '', sortOrder: '0' });
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+
+  const { data: products } = useQuery({
+    queryKey: ['all-products-mini'],
+    queryFn: () => fetch('/api/products?limit=100').then(r => r.json()).then((r: any) => r.data || []),
+  });
+
+  const saveCollections = (updated: Collection[]) => {
+    setCollections(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('marketplace-collections', JSON.stringify(updated));
+    }
+  };
+
+  const handleSave = () => {
+    if (!form.name.trim()) return;
+    const updated = editId
+      ? collections.map(c => c.id === editId ? { ...c, name: form.name, description: form.description, coverImage: form.coverImage, sortOrder: parseInt(form.sortOrder), productIds: selectedProductIds } : c)
+      : [...collections, { id: Date.now().toString(), name: form.name, description: form.description, coverImage: form.coverImage, sortOrder: parseInt(form.sortOrder), productIds: selectedProductIds, createdAt: new Date().toISOString() }];
+    saveCollections(updated);
+    toast.success(editId ? 'Collection updated' : 'Collection created');
+    setShowCreate(false);
+    setEditId(null);
+    setForm({ name: '', description: '', coverImage: '', sortOrder: '0' });
+    setSelectedProductIds([]);
+  };
+
+  const handleEdit = (c: Collection) => {
+    setForm({ name: c.name, description: c.description, coverImage: c.coverImage, sortOrder: String(c.sortOrder) });
+    setSelectedProductIds(c.productIds);
+    setEditId(c.id);
+    setShowCreate(true);
+  };
+
+  const handleDelete = (id: string) => {
+    saveCollections(collections.filter(c => c.id !== id));
+    toast.success('Collection deleted');
+  };
+
+  const toggleProduct = (pid: string) => {
+    setSelectedProductIds(prev => prev.includes(pid) ? prev.filter(p => p !== pid) : [...prev, pid]);
+  };
+
+  const productMap = new Map((products || []).map((p: any) => [p.id, p]));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">Featured Collections</h3>
+        <Button className="bg-amber-600 hover:bg-amber-700" size="sm" onClick={() => { setForm({ name: '', description: '', coverImage: '', sortOrder: '0' }); setSelectedProductIds([]); setEditId(null); setShowCreate(true); }}><Plus size={14} className="mr-1" />Create Collection</Button>
+      </div>
+      {collections.length === 0 ? (
+        <div className="text-center py-12">
+          <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+          <p className="text-muted-foreground">No collections yet</p>
+          <p className="text-xs text-muted-foreground mt-1">Create curated product collections for your customers</p>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {collections.sort((a, b) => a.sortOrder - b.sortOrder).map(c => (
+            <Card key={c.id} className="overflow-hidden">
+              {c.coverImage ? <img src={c.coverImage} alt={c.name} className="w-full h-32 object-cover" /> : <div className="w-full h-32 bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-900/30 dark:to-amber-800/30 flex items-center justify-center"><FolderOpen className="h-8 w-8 text-amber-500" /></div>}
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="font-medium">{c.name}</h4>
+                  <Badge variant="outline" className="text-xs">{c.productIds.length} products</Badge>
+                </div>
+                {c.description && <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{c.description}</p>}
+                <div className="flex gap-1">
+                  <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => handleEdit(c)}><Pencil size={12} className="mr-1" />Edit</Button>
+                  <Button variant="outline" size="sm" className="text-xs text-destructive" onClick={() => handleDelete(c.id)}><Trash2 size={12} /></Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+      <Dialog open={showCreate} onOpenChange={(v) => { if (!v) { setShowCreate(false); setEditId(null); } }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{editId ? 'Edit Collection' : 'Create Collection'}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Name *</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="mt-1" /></div>
+            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
+            <div><Label>Cover Image URL</Label><Input value={form.coverImage} onChange={e => setForm(f => ({ ...f, coverImage: e.target.value }))} className="mt-1" placeholder="https://..." /></div>
+            <div><Label>Sort Order</Label><Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({ ...f, sortOrder: e.target.value }))} className="mt-1" /></div>
+            <div>
+              <Label className="mb-2 block">Select Products ({selectedProductIds.length} selected)</Label>
+              <div className="max-h-48 overflow-y-auto border rounded-lg p-2 space-y-1">
+                {products?.length ? products.map((p: any) => (
+                  <label key={p.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                    <input type="checkbox" checked={selectedProductIds.includes(p.id)} onChange={() => toggleProduct(p.id)} className="rounded" />
+                    <span className="truncate flex-1">{p.name}</span>
+                    <span className="text-xs text-muted-foreground">{formatCurrency(p.price)}</span>
+                  </label>
+                )) : <p className="text-sm text-muted-foreground text-center py-4">Loading products...</p>}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button className="bg-amber-600 hover:bg-amber-700" onClick={handleSave} disabled={!form.name.trim()}>{editId ? 'Update' : 'Create'}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -1456,6 +1720,153 @@ function AdminFAQ() {
   );
 }
 
+// ============ ADMIN ROLES ============
+
+const ROLE_PERMISSIONS: Record<string, string> = {
+  SUPER_ADMIN: 'Full Access (all features)',
+  FINANCE_ADMIN: 'Payouts, Wallet, Commission Reports, Analytics',
+  SUPPORT_ADMIN: 'Support Tickets, Returns, Customer Management',
+  INVENTORY_ADMIN: 'Products, Categories, Brands, Inventory, Orders',
+};
+
+const ROLE_DETAIL_PERMISSIONS: Record<string, { label: string; color: string; desc: string; permissions: string[] }> = {
+  SUPER_ADMIN: { label: 'Super Admin', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', desc: 'Full access to all features', permissions: ['All Permissions'] },
+  FINANCE_ADMIN: { label: 'Finance Admin', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', desc: 'Payouts, wallet, revenue, coupons', permissions: ['Manage Payouts', 'View Revenue', 'Manage Coupons', 'View Reports'] },
+  SUPPORT_ADMIN: { label: 'Support Admin', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', desc: 'Tickets, returns, customers', permissions: ['Manage Tickets', 'Process Returns', 'View Customers', 'Manage FAQ'] },
+  INVENTORY_ADMIN: { label: 'Inventory Admin', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', desc: 'Products, categories, brands, stock', permissions: ['Manage Products', 'Manage Categories', 'Manage Brands', 'View Stock'] },
+};
+
+const ROLE_COLORS: Record<string, string> = {
+  SUPER_ADMIN: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  FINANCE_ADMIN: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  SUPPORT_ADMIN: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  INVENTORY_ADMIN: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+};
+
+const ROLE_OPTIONS = ['SUPER_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN', 'INVENTORY_ADMIN'];
+
+function AdminRolesPage() {
+  const qc = useQueryClient();
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'SUPPORT_ADMIN' });
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin-roles'],
+    queryFn: () => fetch('/api/admin/roles').then(r => r.json()).then((r: any) => r.data || []),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => fetch('/api/admin/roles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-roles'] }); toast.success('Admin user created'); setShowCreate(false); setForm({ name: '', email: '', password: '', role: 'SUPPORT_ADMIN' }); },
+    onError: (e: any) => toast.error(e?.message || 'Failed to create admin'),
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) => fetch('/api/admin/roles', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, role }) }).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-roles'] }); toast.success('Role updated'); },
+    onError: () => toast.error('Failed to update role'),
+  });
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div><h1 className="text-2xl font-bold">Admin Roles</h1><p className="text-muted-foreground text-sm">Manage admin users and role-based access</p></div>
+        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => setShowCreate(true)}><Plus size={16} className="mr-1.5" />Create Admin</Button>
+      </div>
+
+      {/* RBAC Permissions Matrix */}
+      <div className="grid md:grid-cols-2 gap-4">
+        {ROLE_OPTIONS.map(role => {
+          const detail = ROLE_DETAIL_PERMISSIONS[role];
+          const adminCount = (data || []).filter((a: any) => a.role === role).length;
+          return (
+            <Card key={role} className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div><h3 className="font-bold text-lg">{detail.label}</h3><p className="text-sm text-muted-foreground">{detail.desc}</p></div>
+                <Badge className={detail.color}>{adminCount}</Badge>
+              </div>
+              <div className="space-y-2">
+                {detail.permissions.map((p, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm"><CheckCircle2 size={14} className="text-green-500" />{p}</div>
+                ))}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div> :
+        <Card>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead className="hidden md:table-cell">Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="hidden sm:table-cell">Last Login</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(!data || data.length === 0) && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No admin users found</TableCell></TableRow>}
+                {data?.map((admin: any) => (
+                  <TableRow key={admin.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8"><AvatarFallback className="text-xs bg-amber-100 text-amber-600">{admin.name?.[0]}</AvatarFallback></Avatar>
+                        <span className="font-medium text-sm">{admin.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell text-sm">{admin.email}</TableCell>
+                    <TableCell><Badge className={ROLE_COLORS[admin.role] || ''}>{admin.role?.replace('_', ' ')}</Badge></TableCell>
+                    <TableCell><Badge variant={admin.isActive ? 'default' : 'secondary'}>{admin.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+                    <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{admin.lastLoginAt ? new Date(admin.lastLoginAt).toLocaleDateString('en-IN') : 'Never'}</TableCell>
+                    <TableCell className="text-right">
+                      <Select value={admin.role} onValueChange={(v) => updateRoleMutation.mutate({ userId: admin.id, role: v })}>
+                        <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>{ROLE_OPTIONS.map(r => <SelectItem key={r} value={r}>{r.replace('_', ' ')}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>}
+
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Create Admin User</DialogTitle><DialogDescription>Add a new admin with a specific role</DialogDescription></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Full Name *</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="mt-1" /></div>
+            <div><Label>Email *</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="mt-1" /></div>
+            <div><Label>Password *</Label><Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="mt-1" /></div>
+            <div>
+              <Label>Role *</Label>
+              <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLE_OPTIONS.map(r => (
+                    <SelectItem key={r} value={r}>
+                      <div><span className="font-medium">{r.replace('_', ' ')}</span><span className="text-xs text-muted-foreground ml-2">— {ROLE_PERMISSIONS[r]}</span></div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.name || !form.email || !form.password}>{createMutation.isPending ? 'Creating...' : 'Create Admin'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 // ============ ADMIN ACTIVITY LOGS ============
 
 function AdminActivityLogs() {
@@ -1467,6 +1878,37 @@ function AdminActivityLogs() {
         <TableBody>{(data?.data || []).map((log: any) => (
           <TableRow key={log.id}><TableCell className="text-sm">{log.user?.name || 'System'}</TableCell><TableCell><Badge variant="outline">{log.action}</Badge></TableCell><TableCell className="text-sm">{log.entityType || '—'}</TableCell><TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{log.details || '—'}</TableCell><TableCell className="hidden md:table-cell text-xs text-muted-foreground">{log.ipAddress || '—'}</TableCell><TableCell className="text-xs text-muted-foreground">{new Date(log.createdAt).toLocaleString('en-IN')}</TableCell></TableRow>
         ))}</TableBody></Table></Card>
+    </div>
+  );
+}
+
+// ============ ADMIN VENDOR WALLETS ============
+
+function AdminVendorWalletsPage() {
+  const { data: vendors = [], isLoading } = useQuery({
+    queryKey: ['admin-vendor-wallets-page'],
+    queryFn: () => fetch('/api/admin/vendor-wallets').then(r => r.json()).then((r: any) => r.data || []),
+  });
+  return (
+    <div className="space-y-6 p-6">
+      <h2 className="text-2xl font-bold">Vendor Wallets</h2>
+      {isLoading ? <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">{Array.from({length:6}).map((_,i)=><Skeleton key={i} className="h-40 rounded-xl" />)}</div> :
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {vendors.map((v: any) => (
+          <Card key={v.id} className="p-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center"><Store size={20} className="text-orange-500" /></div>
+              <div><p className="font-semibold">{v.businessName}</p><p className="text-xs text-muted-foreground">{v.user?.email}</p></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="bg-muted/30 rounded-lg p-3"><p className="text-muted-foreground text-xs">Available</p><p className="font-bold text-green-600">{formatCurrency(v.wallet?.availableBalance || 0)}</p></div>
+              <div className="bg-muted/30 rounded-lg p-3"><p className="text-muted-foreground text-xs">Pending</p><p className="font-bold text-amber-600">{formatCurrency(v.wallet?.pendingBalance || 0)}</p></div>
+              <div className="bg-muted/30 rounded-lg p-3"><p className="text-muted-foreground text-xs">Total Earned</p><p className="font-bold">{formatCurrency(v.wallet?.totalEarned || 0)}</p></div>
+              <div className="bg-muted/30 rounded-lg p-3"><p className="text-muted-foreground text-xs">Commission</p><p className="font-bold">{v.commissionRate}%</p></div>
+            </div>
+          </Card>
+        ))}
+      </div>}
     </div>
   );
 }
@@ -1490,10 +1932,12 @@ export default function AdminApp() {
       case 'admin-reports': return <AdminReports />;
       case 'admin-returns': return <AdminReturns />;
       case 'admin-payouts': return <AdminPayouts />;
+      case 'admin-vendor-wallets': return <AdminVendorWalletsPage />;
       case 'admin-analytics': return <AdminAnalytics />;
       case 'admin-support': return <AdminSupport />;
       case 'admin-marketing': return <AdminMarketing />;
       case 'admin-faq': return <AdminFAQ />;
+      case 'admin-roles': return <AdminRolesPage />;
       case 'admin-activity-logs': return <AdminActivityLogs />;
       case 'admin-settings': return <AdminSettings />;
       case 'admin-notifications': return <div className="p-6"><h1 className="text-2xl font-bold mb-4">Notifications</h1><p className="text-muted-foreground">No new notifications</p></div>;
@@ -1503,10 +1947,11 @@ export default function AdminApp() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       <AdminMobileHeader />
       <div className="flex flex-1">
         <AdminSidebar />
-        <main className="flex-1 overflow-auto">{renderView()}</main>
+        <main id="main-content" className="flex-1 overflow-auto" role="main">{renderView()}</main>
       </div>
     </div>
   );

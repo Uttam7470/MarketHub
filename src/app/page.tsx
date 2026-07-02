@@ -1,10 +1,23 @@
 'use client';
 
 import { useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useAuthStore, useNavigationStore } from '@/stores';
-import CustomerApp from '@/components/customer/CustomerApp';
-import VendorApp from '@/components/vendor/VendorApp';
-import AdminApp from '@/components/admin/AdminApp';
+
+const CustomerApp = dynamic(() => import('@/components/customer/CustomerApp'), {
+  loading: () => <div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-orange-500 border-t-transparent rounded-full" /></div>,
+  ssr: false,
+});
+
+const VendorApp = dynamic(() => import('@/components/vendor/VendorApp'), {
+  loading: () => <div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-orange-500 border-t-transparent rounded-full" /></div>,
+  ssr: false,
+});
+
+const AdminApp = dynamic(() => import('@/components/admin/AdminApp'), {
+  loading: () => <div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-orange-500 border-t-transparent rounded-full" /></div>,
+  ssr: false,
+});
 
 export default function Home() {
   const { appView } = useNavigationStore();

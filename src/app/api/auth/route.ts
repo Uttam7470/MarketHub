@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hash, compare } from 'bcryptjs';
+import { checkLoginAttempts, recordFailedLogin, recordSuccessfulLogin } from '@/lib/rate-limit';
 
 // POST /api/auth/login
 export async function POST(req: NextRequest) {
@@ -15,14 +16,25 @@ export async function POST(req: NextRequest) {
       include: { vendor: true, customerProfile: true },
     });
 
+    // Check login attempt limits
+    const attemptCheck = checkLoginAttempts(email);
+    if (!attemptCheck.allowed) {
+      const minsLeft = Math.ceil(((attemptCheck.lockoutUntil || 0) - Date.now()) / 60000);
+      return NextResponse.json({ success: false, error: `Account locked due to too many failed attempts. Try again in ${minsLeft} minutes.` }, { status: 429 });
+    }
+
     if (!user) {
-      return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
+      recordFailedLogin(email);
+      return NextResponse.json({ success: false, error: `Invalid credentials. ${attemptCheck.attemptsLeft - 1} attempts remaining.` }, { status: 401 });
     }
 
     const valid = await compare(password, user.password);
     if (!valid) {
-      return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
+      recordFailedLogin(email);
+      return NextResponse.json({ success: false, error: `Invalid credentials. ${attemptCheck.attemptsLeft - 1} attempts remaining.` }, { status: 401 });
     }
+
+    recordSuccessfulLogin(email);
 
     if (!user.isActive) {
       return NextResponse.json({ success: false, error: 'Account is deactivated' }, { status: 403 });
@@ -42,6 +54,9 @@ export async function POST(req: NextRequest) {
 
     // Simple token (in production, use JWT)
     const token = Buffer.from(JSON.stringify({ id: user.id, role: user.role, exp: Date.now() + 86400000 })).toString('base64');
+
+    // Update last login
+    await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
     const { password: _, ...safeUser } = user;
     return NextResponse.json({

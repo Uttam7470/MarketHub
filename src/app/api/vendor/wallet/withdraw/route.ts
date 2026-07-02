@@ -24,36 +24,37 @@ export async function POST(req: NextRequest) {
     const vendor = await db.vendor.findUnique({ where: { id: vendorId } });
     if (!vendor) return NextResponse.json({ success: false, error: 'Vendor not found' }, { status: 404 });
 
-    // Deduct from wallet
+    // Use DB transaction to atomically deduct wallet, create transaction record, and create payout
     const newBalance = wallet.availableBalance - amount;
-    await db.vendorWallet.update({
-      where: { vendorId },
-      data: { availableBalance: newBalance, pendingBalance: wallet.pendingBalance + amount },
-    });
-
-    // Create wallet transaction
-    await db.walletTransaction.create({
-      data: {
-        vendorId,
-        type: 'WITHDRAWAL',
-        amount: -amount,
-        balance: newBalance,
-        description: notes || 'Withdrawal request',
-      },
-    });
-
-    // Create payout request
-    const payout = await db.payout.create({
-      data: {
-        vendorId,
-        amount,
-        status: 'PENDING',
-        bankName: vendor.bankName,
-        bankAccount: vendor.bankAccount,
-        bankIfsc: vendor.bankIfsc,
-        notes: notes || 'Withdrawal request',
-      },
-    });
+    const [, , payout] = await db.$transaction([
+      // 1. Deduct from available balance, add to pending balance
+      db.vendorWallet.update({
+        where: { vendorId },
+        data: { availableBalance: newBalance, pendingBalance: wallet.pendingBalance + amount },
+      }),
+      // 2. Create wallet transaction record
+      db.walletTransaction.create({
+        data: {
+          vendorId,
+          type: 'WITHDRAWAL',
+          amount: -amount,
+          balance: newBalance,
+          description: notes || 'Withdrawal request',
+        },
+      }),
+      // 3. Create payout request
+      db.payout.create({
+        data: {
+          vendorId,
+          amount,
+          status: 'PENDING',
+          bankName: vendor.bankName,
+          bankAccount: vendor.bankAccount,
+          bankIfsc: vendor.bankIfsc,
+          notes: notes || 'Withdrawal request',
+        },
+      }),
+    ]);
 
     return NextResponse.json({ success: true, data: payout }, { status: 201 });
   } catch (error: unknown) {

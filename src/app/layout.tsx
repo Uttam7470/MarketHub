@@ -16,11 +16,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MarketHub - Multi-Vendor Marketplace",
-  description: "Your one-stop multi-vendor marketplace. Shop from thousands of products across multiple vendors.",
+  title: 'MarketHub - Your Multi-Vendor Marketplace',
+  description: 'Shop from thousands of products across multiple vendors. Best prices, fast delivery, and secure payments.',
+  keywords: ['marketplace', 'online shopping', 'multi-vendor', 'ecommerce', 'products', 'deals'],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
+  openGraph: {
+    title: 'MarketHub - Your Multi-Vendor Marketplace',
+    description: 'Shop from thousands of products across multiple vendors.',
+    url: 'https://markethub.com',
+    siteName: 'MarketHub',
+    type: 'website',
+    locale: 'en_IN',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'MarketHub - Your Multi-Vendor Marketplace',
+    description: 'Shop from thousands of products across multiple vendors.',
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({

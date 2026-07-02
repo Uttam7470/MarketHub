@@ -8,7 +8,7 @@ import {
   Package, ShoppingCart, DollarSign, Star, TrendingUp, BarChart3, Plus, Pencil, Trash2,
   Search, Filter, Eye, ChevronLeft, ChevronRight, Upload, Settings, Bell, LogOut,
   Store, Menu, X, User, AlertTriangle, CheckCircle, Clock, Truck, BoxIcon, XCircle, ShieldCheck,
-  Wallet, Copy, Printer, ArrowDownUp, FileText, RotateCcw, Ban
+  Wallet, Copy, Printer, ArrowDownUp, FileText, RotateCcw, Ban, Download, FileSpreadsheet, Tags
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuthStore, useNavigationStore } from '@/stores';
-import type { Product, Order, ApiResponse, VendorDashboardStats, VendorWallet, WalletTransaction } from '@/types';
+import type { Product, Order, ApiResponse, VendorDashboardStats, VendorWallet, WalletTransaction, InventoryHistory } from '@/types';
 
 const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -49,6 +49,7 @@ const VENDOR_NAV = [
   { key: 'vendor-products', label: 'Products', icon: Package },
   { key: 'vendor-add-product', label: 'Add Product', icon: Plus },
   { key: 'vendor-orders', label: 'Orders', icon: ShoppingCart },
+  { key: 'vendor-inventory', label: 'Inventory', icon: BoxIcon },
   { key: 'vendor-reports', label: 'Reports', icon: TrendingUp },
   { key: 'vendor-wallet', label: 'Wallet', icon: Wallet },
   { key: 'vendor-profile', label: 'Profile', icon: User },
@@ -61,7 +62,7 @@ function VendorSidebar() {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <aside className={`${collapsed ? 'w-16' : 'w-64'} border-r bg-card flex flex-col transition-all duration-300 hidden lg:flex`}>
+    <aside role="navigation" aria-label="Vendor panel navigation" className={`${collapsed ? 'w-16' : 'w-64'} border-r bg-card flex flex-col transition-all duration-300 hidden lg:flex`}>
       <div className="p-4 border-b flex items-center gap-3">
         <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-500 font-bold shrink-0">{user?.name?.[0]}</div>
         {!collapsed && <div className="min-w-0"><p className="font-semibold text-sm truncate">{user?.name}</p><p className="text-xs text-muted-foreground truncate">Vendor Panel</p></div>}
@@ -72,7 +73,7 @@ function VendorSidebar() {
             <TooltipProvider key={item.key} delayDuration={0}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant={vendorView === item.key ? 'secondary' : 'ghost'} size="sm" className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => setVendorView(item.key as any)}>
+                  <Button variant={vendorView === item.key ? 'secondary' : 'ghost'} size="sm" aria-current={vendorView === item.key ? 'page' : undefined} className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => setVendorView(item.key as any)}>
                     <item.icon size={18} />
                     {!collapsed && <span>{item.label}</span>}
                   </Button>
@@ -87,7 +88,7 @@ function VendorSidebar() {
         <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''} text-muted-foreground`} onClick={() => { logout(); setAppView('customer'); toast.success('Logged out'); }}>
           <LogOut size={18} />{!collapsed && <span>Logout</span>}
         </Button>
-        <Button variant="ghost" size="sm" className="w-full justify-center lg:hidden" onClick={() => setCollapsed(!collapsed)}>
+        <Button variant="ghost" size="sm" aria-label="Toggle sidebar" className="w-full justify-center lg:hidden" onClick={() => setCollapsed(!collapsed)}>
           {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </Button>
       </div>
@@ -244,6 +245,9 @@ function VendorProducts() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['vendor-products', vendorId, page, search, statusFilter],
@@ -270,6 +274,76 @@ function VendorProducts() {
     onError: () => toast.error('Failed to duplicate product'),
   });
 
+  const handleBulkImport = async () => {
+    if (!importFile || !vendorId) return;
+    setImporting(true);
+    try {
+      const text = await importFile.text();
+      const lines = text.split('\n').filter(l => l.trim());
+      if (lines.length < 2) { toast.error('CSV file is empty or has no data rows'); setImporting(false); return; }
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const products = [];
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim());
+        const row: Record<string, string> = {};
+        headers.forEach((h, idx) => { row[h] = values[idx] || ''; });
+        products.push(row);
+      }
+      const res = await fetch('/api/vendor/products/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendorId, products }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        const d = result.data;
+        toast.success(`Imported ${d.successCount}/${d.totalProducts} products successfully`);
+        if (d.errors.length > 0) toast.error(`${d.errors.length} errors occurred`);
+        qc.invalidateQueries({ queryKey: ['vendor-products'] });
+        setImportOpen(false);
+        setImportFile(null);
+      } else {
+        toast.error(result.error || 'Import failed');
+      }
+    } catch {
+      toast.error('Failed to parse CSV file');
+    }
+    setImporting(false);
+  };
+
+  const downloadTemplate = () => {
+    const csv = 'name,description,price,compareAtPrice,stock,sku,categoryId,brandId,weight\nSample Product,Sample description,999,1299,50,SKU001,cat_id_here,brand_id_here,0.5\n';
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'product_import_template.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleBulkExport = async () => {
+    try {
+      const params = new URLSearchParams({ vendorId: vendorId || '', page: '1', limit: '9999', search: '' });
+      const res = await fetch(`/api/products?${params}`);
+      const json = await res.json();
+      const products: Product[] = json.data || [];
+      if (products.length === 0) { toast.error('No products to export'); return; }
+      const headers = ['name', 'sku', 'price', 'stock', 'status', 'category'];
+      const rows = products.map(p => [
+        `"${p.name}"`, `"${p.sku || ''}"`, String(p.price), String(p.stock),
+        p.productStatus, `"${p.category?.name || ''}"`
+      ].join(','));
+      const csv = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `products_export_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${products.length} products`);
+    } catch {
+      toast.error('Failed to export products');
+    }
+  };
+
   const statusColor: Record<string, string> = {
     PUBLISHED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
     DRAFT: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
@@ -282,7 +356,11 @@ function VendorProducts() {
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div><h1 className="text-2xl font-bold">Products</h1><p className="text-muted-foreground text-sm">Manage your product catalog</p></div>
-        <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setVendorView('vendor-add-product')}><Plus size={16} className="mr-1.5" />Add Product</Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setVendorView('vendor-add-product')}><Plus size={16} className="mr-1.5" />Add Product</Button>
+          <Button variant="outline" onClick={() => setImportOpen(true)}><Upload size={16} className="mr-1.5" />Bulk Import</Button>
+          <Button variant="outline" onClick={handleBulkExport}><Download size={16} className="mr-1.5" />Bulk Export</Button>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -349,6 +427,43 @@ function VendorProducts() {
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <DialogContent><DialogHeader><DialogTitle>Delete Product</DialogTitle><DialogDescription>Are you sure? This action cannot be undone.</DialogDescription></DialogHeader>
           <DialogFooter><Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button><Button variant="destructive" onClick={() => deleteId && deleteMutation.mutate(deleteId)} disabled={deleteMutation.isPending}>Delete</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Import Dialog */}
+      <Dialog open={importOpen} onOpenChange={(open) => { setImportOpen(open); if (!open) setImportFile(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FileSpreadsheet size={20} />Bulk Import Products</DialogTitle>
+            <DialogDescription>Upload a CSV file to import products in bulk.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="border-2 border-dashed rounded-lg p-6 text-center space-y-2">
+              <Upload size={32} className="mx-auto text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                {importFile ? <span className="font-medium text-foreground">{importFile.name}</span> : 'Drag & drop or click to select a CSV file'}
+              </p>
+              <Input
+                type="file"
+                accept=".csv"
+                className="max-w-xs mx-auto"
+                onChange={e => setImportFile(e.target.files?.[0] || null)}
+              />
+            </div>
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p>Required columns: <span className="font-medium text-foreground">name, price, categoryId</span></p>
+              <p>Optional columns: description, compareAtPrice, stock, sku, brandId, weight</p>
+            </div>
+            <Button variant="link" className="p-0 h-auto text-orange-600" onClick={downloadTemplate}>
+              <Download size={14} className="mr-1" />Download CSV Template
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setImportOpen(false); setImportFile(null); }}>Cancel</Button>
+            <Button className="bg-orange-500 hover:bg-orange-600" onClick={handleBulkImport} disabled={!importFile || importing}>
+              {importing ? 'Importing...' : 'Import Products'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -460,6 +575,22 @@ function VendorAddProduct() {
               <div><Label>SEO Keywords</Label><Input value={form.seoKeywords} onChange={e => update('seoKeywords', e.target.value)} className="mt-1" /></div>
             </div>
           </Card>
+
+          {/* SEO Preview */}
+          <Card className="p-4 border bg-muted/30">
+            <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2"><Search size={14} />SEO Preview</h3>
+            <div className="bg-white dark:bg-background rounded-lg p-4 border">
+              <p className="text-blue-700 dark:text-blue-400 text-lg font-medium hover:underline cursor-pointer truncate" style={{ maxWidth: '600px' }}>
+                {form.seoTitle || form.name || 'Product Title'}{" "}<span className="text-xs text-muted-foreground">— MarketHub</span>
+              </p>
+              <p className="text-sm text-green-700 dark:text-green-500 mt-0.5">
+                markethub.com/products/{form.slug || 'product-slug'}
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+                {form.seoDescription || form.shortDescription || 'No description provided. Add a SEO description to improve search visibility.'}
+              </p>
+            </div>
+          </Card>
         </div>
 
         <div className="space-y-6">
@@ -500,11 +631,11 @@ function VendorAddProduct() {
 
 function VendorOrders() {
   const qc = useQueryClient();
-  const { vendorId } = useAuthStore();
+  const { vendorId, user } = useAuthStore();
   const { setSelectedOrderId, setVendorView } = useNavigationStore();
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
-  const [printDialog, setPrintDialog] = useState<{ open: boolean; order: Order | null; mode: 'invoice' | 'packing' }>({ open: false, order: null, mode: 'invoice' });
+  const [printDialog, setPrintDialog] = useState<{ open: boolean; order: Order | null; mode: 'invoice' | 'packing' | 'shipping' }>({ open: false, order: null, mode: 'invoice' });
 
   const params = new URLSearchParams({ vendorId: vendorId || '', page: String(page), limit: '15' });
   if (statusFilter !== 'all') params.set('status', statusFilter);
@@ -536,7 +667,7 @@ function VendorOrders() {
   const vendorItems = (order: Order) => order.items?.filter(i => i.vendorId === vendorId) || [];
   const vendorTotal = (order: Order) => vendorItems(order).reduce((sum, i) => sum + i.total, 0);
 
-  const openPrint = (order: Order, mode: 'invoice' | 'packing') => {
+  const openPrint = (order: Order, mode: 'invoice' | 'packing' | 'shipping') => {
     setPrintDialog({ open: true, order, mode });
   };
 
@@ -592,6 +723,7 @@ function VendorOrders() {
               {order.status === 'PACKED' && <Button size="sm" variant="outline" onClick={() => updateMutation.mutate({ orderId: order.id, status: 'SHIPPED' })}><Truck size={14} className="mr-1" />Mark Shipped</Button>}
               <Button size="sm" variant="outline" onClick={() => openPrint(order, 'invoice')}><FileText size={14} className="mr-1" />Invoice</Button>
               <Button size="sm" variant="outline" onClick={() => openPrint(order, 'packing')}><Printer size={14} className="mr-1" />Packing Slip</Button>
+              <Button size="sm" variant="outline" onClick={() => openPrint(order, 'shipping')}><Truck size={14} className="mr-1" />Shipping Label</Button>
             </div>
           </Card>
         ))}
@@ -601,7 +733,7 @@ function VendorOrders() {
       <Dialog open={printDialog.open} onOpenChange={(open) => { if (!open) window.close(); setPrintDialog({ open, order: null, mode: 'invoice' }); }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{printDialog.mode === 'invoice' ? 'Invoice' : 'Packing Slip'} - #{printDialog.order?.orderNumber}</DialogTitle>
+            <DialogTitle>{printDialog.mode === 'invoice' ? 'Invoice' : printDialog.mode === 'packing' ? 'Packing Slip' : 'Shipping Label'} - #{printDialog.order?.orderNumber}</DialogTitle>
           </DialogHeader>
           <div id="print-content" className="space-y-4 text-sm">
             {printDialog.mode === 'invoice' ? (
@@ -621,7 +753,7 @@ function VendorOrders() {
                 <div className="flex justify-end"><Card className="p-4 w-64 space-y-1"><div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(vendorTotal(printDialog.order!))}</span></div><div className="flex justify-between font-bold text-lg border-t pt-2 mt-2"><span>Total</span><span className="text-orange-600">{formatCurrency(vendorTotal(printDialog.order!))}</span></div></Card></div>
                 <p className="text-xs text-muted-foreground text-center">Payment: {printDialog.order?.paymentMethod} • Status: {printDialog.order?.paymentStatus}</p>
               </div>
-            ) : (
+            ) : printDialog.mode === 'packing' ? (
               <div className="space-y-4">
                 <div className="flex justify-between items-start border-b pb-4">
                   <div><h3 className="text-lg font-bold text-orange-600">PACKING SLIP</h3><p className="text-muted-foreground">Order #{printDialog.order?.orderNumber}</p></div>
@@ -636,6 +768,26 @@ function VendorOrders() {
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground text-center">Date: {new Date(printDialog.order?.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              </div>
+            ) : (
+              <div className="p-6 space-y-4">
+                <div className="border-2 border-dashed border-black dark:border-white p-8 text-center">
+                  <h2 className="text-2xl font-bold mb-4">SHIPPING LABEL</h2>
+                  <div className="text-left space-y-2 text-sm">
+                    <div className="flex justify-between"><span className="font-bold">From:</span><span>{user?.name} (Vendor)</span></div>
+                    <div className="flex justify-between"><span className="font-bold">To:</span><span>{printDialog.order?.shippingAddress}</span></div>
+                    <Separator />
+                    <div className="flex justify-between"><span className="font-bold">Order:</span><span>#{printDialog.order?.orderNumber}</span></div>
+                    <div className="flex justify-between"><span className="font-bold">Items:</span><span>{vendorItems(printDialog.order!).length} item(s)</span></div>
+                    <div className="flex justify-between"><span className="font-bold">Weight:</span><span>0.5 kg (approx)</span></div>
+                    <Separator />
+                    <div className="text-center mt-4">
+                      <div className="border-2 border-black dark:border-white p-4 font-mono text-lg tracking-wider">
+                        {printDialog.order?.orderNumber}-{printDialog.order?.id?.slice(-6).toUpperCase()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1117,6 +1269,42 @@ function VendorWalletPage() {
   );
 }
 
+// ============ VENDOR INVENTORY ============
+
+function VendorInventoryPage() {
+  const { vendorId } = useAuthStore();
+  const { data: history = [], isLoading } = useQuery({
+    queryKey: ['inventory-history'],
+    queryFn: () => fetch(`/api/vendor/products/inventory-history`).then(r => r.json()).then((r: any) => r.data || []),
+  });
+  return (
+    <div className="p-6 space-y-6">
+      <h2 className="text-2xl font-bold">Inventory History</h2>
+      {isLoading ? <div className="space-y-3">{Array.from({length:5}).map((_,i)=><Skeleton key={i} className="h-12 rounded-lg" />)}</div> :
+      history.length === 0 ? (
+        <Card className="p-8 text-center"><BoxIcon size={48} className="mx-auto text-muted-foreground/30 mb-3" /><p className="text-muted-foreground">No inventory changes recorded yet</p></Card>
+      ) : (
+        <Card>
+          <Table><TableHeader><TableRow>
+            <TableHead>Date</TableHead><TableHead>Product</TableHead><TableHead>Type</TableHead><TableHead>Quantity</TableHead><TableHead>Note</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {history.map((h: any) => (
+              <TableRow key={h.id}>
+                <TableCell className="text-sm">{new Date(h.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell className="text-sm font-medium">{h.product?.name || h.productId}</TableCell>
+                <TableCell><Badge variant={h.type === 'SOLD' ? 'secondary' : h.type === 'ADDED' ? 'default' : 'outline'} className="text-xs">{h.type}</Badge></TableCell>
+                <TableCell className={h.type === 'SOLD' || h.type === 'REMOVED' ? 'text-red-500' : 'text-green-600'}>{h.type === 'SOLD' || h.type === 'REMOVED' ? '-' : '+'}{h.quantity}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{h.note || '-'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody></Table>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // ============ MAIN VENDOR APP ============
 
 export default function VendorApp() {
@@ -1165,6 +1353,7 @@ export default function VendorApp() {
       case 'vendor-add-product': return <VendorAddProduct />;
       case 'vendor-orders': return <VendorOrders />;
       case 'vendor-reports': return <VendorReports />;
+      case 'vendor-inventory': return <VendorInventoryPage />;
       case 'vendor-wallet': return <VendorWalletPage />;
       case 'vendor-profile': return <VendorProfile />;
       case 'vendor-settings': return <VendorSettings />;
@@ -1175,10 +1364,11 @@ export default function VendorApp() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       <VendorMobileHeader />
       <div className="flex flex-1">
         <VendorSidebar />
-        <main className="flex-1 overflow-auto">{renderView()}</main>
+        <main id="main-content" className="flex-1 overflow-auto" role="main">{renderView()}</main>
       </div>
     </div>
   );

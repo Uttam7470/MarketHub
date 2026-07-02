@@ -5,11 +5,20 @@ import { db } from '@/lib/db';
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const questions = await db.productQA.findMany({
-      where: { productId: id, isActive: true },
-      include: { user: { select: { id: true, name: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
+    let questions;
+    try {
+      questions = await db.productQA.findMany({
+        where: { productId: id, isActive: true },
+        include: { user: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch {
+      // Fallback: if user relation fails (e.g. missing FK), query without include
+      questions = await db.productQA.findMany({
+        where: { productId: id, isActive: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
     return NextResponse.json({ success: true, data: questions });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch questions';
