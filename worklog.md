@@ -397,3 +397,34 @@ Work Log:
 Stage Summary:
 - Fixed crash when opening/closing vendor order print dialog (invoice/packing/shipping)
 - Lint passes clean, server recompiled with zero errors
+
+---
+Task ID: vendor-image-upload
+Agent: Main
+Task: Implement product image upload for vendor add/edit product form
+
+Work Log:
+- Added `ImagePlus, Image as ImageIcon, GripVertical, ArrowUp, ArrowDown, Link` icon imports to VendorApp.tsx
+- Added `images` state array, `urlInput` state, and `fileInputRef` ref to VendorAddProduct component
+- Updated product edit useEffect to load existing images from `product.images`
+- Updated save mutation: uses actual uploaded images if any, falls back to placeholder only if none added
+- Added `handleFileUpload`: reads files as base64 data URLs, enforces 5MB limit and max 5 images
+- Added `addImageUrl`: validates URL format, adds to images array
+- Added `removeImage`: removes image and re-indexes sort orders
+- Added `moveImage`: swaps image positions with up/down arrows, re-indexes sort orders
+- Added "Product Images" Card section between Basic Info and Pricing with:
+  - Upload Images button (file input, accept image/*, multiple)
+  - URL input with link icon and Enter key support
+  - Preview grid (2/3/5 cols responsive) with hover overlay showing reorder arrows + delete button
+  - "Main" badge on first image, numbered badges
+  - Empty state with dashed border and icon
+- Fixed PUT /api/products API: now handles image updates (deleteMany + createMany) instead of ignoring images
+- Lint passes clean, zero browser console errors
+- Browser verified: login as vendor → Add Product → image section visible → added 2 images via URL → badges显示正确
+
+Stage Summary:
+- Vendors can now upload product images via file upload (base64) or URL paste
+- Up to 5 images supported with reorder (up/down) and delete
+- First image auto-tagged as "Main" product photo
+- Editing existing products loads and displays current images
+- PUT API now properly updates images (was previously ignoring them)

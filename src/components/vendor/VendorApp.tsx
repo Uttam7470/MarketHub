@@ -8,7 +8,8 @@ import {
   Package, ShoppingCart, DollarSign, Star, TrendingUp, BarChart3, Plus, Pencil, Trash2,
   Search, Filter, Eye, ChevronLeft, ChevronRight, Upload, Settings, Bell, LogOut,
   Store, Menu, X, User, AlertTriangle, CheckCircle, Clock, Truck, BoxIcon, XCircle, ShieldCheck,
-  Wallet, Copy, Printer, ArrowDownUp, FileText, RotateCcw, Ban, Download, FileSpreadsheet, Tags
+  Wallet, Copy, Printer, ArrowDownUp, FileText, RotateCcw, Ban, Download, FileSpreadsheet, Tags,
+  ImagePlus, Image as ImageIcon, GripVertical, ArrowUp, ArrowDown, Link
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -493,6 +494,9 @@ function VendorAddProduct() {
     categoryId: '', brandId: '', isFeatured: false, seoTitle: '', seoDescription: '', seoKeywords: '',
     productStatus: 'DRAFT', badge: 'NONE', estimatedDeliveryDays: '7',
   });
+  const [images, setImages] = useState<Array<{ url: string; alt: string; sortOrder: number }>>([]);
+  const [urlInput, setUrlInput] = useState('');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (product) {
@@ -504,11 +508,15 @@ function VendorAddProduct() {
         isFeatured: product.isFeatured || false, seoTitle: product.seoTitle || '', seoDescription: product.seoDescription || '', seoKeywords: product.seoKeywords || '',
         productStatus: product.productStatus || 'DRAFT', badge: product.badge || 'NONE', estimatedDeliveryDays: String(product.estimatedDeliveryDays || 7),
       });
+      setImages(product.images?.map(img => ({ url: img.url, alt: img.alt || '', sortOrder: img.sortOrder })) || []);
     }
   }, [product]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const finalImages = images.length > 0
+        ? images.map((img, idx) => ({ url: img.url, alt: img.alt || form.name, sortOrder: idx }))
+        : [{ url: `https://placehold.co/600x600/f97316/ffffff?text=${encodeURIComponent(form.name.substring(0, 15))}`, alt: form.name, sortOrder: 0 }];
       const body = {
         vendorId,
         ...form,
@@ -519,7 +527,7 @@ function VendorAddProduct() {
         weight: parseFloat(form.weight) || null,
         estimatedDeliveryDays: parseInt(form.estimatedDeliveryDays) || 7,
         badge: form.badge === 'NONE' ? null : form.badge,
-        images: [{ url: `https://placehold.co/600x600/f97316/ffffff?text=${encodeURIComponent(form.name.substring(0, 15))}`, alt: form.name, sortOrder: 0 }],
+        images: finalImages,
         specs: [{ key: 'Warranty', value: form.warranty || 'Standard' }],
       };
       if (isEditing) {
@@ -538,6 +546,40 @@ function VendorAddProduct() {
 
   const update = (key: string, value: string | boolean) => setForm(f => ({ ...f, [key]: value }));
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const remaining = 5 - images.length;
+    if (remaining <= 0) { toast.error('Maximum 5 images allowed'); e.target.value = ''; return; }
+    const toProcess = Array.from(files).slice(0, remaining);
+    toProcess.forEach(file => {
+      if (file.size > 5 * 1024 * 1024) { toast.error(`${file.name} exceeds 5MB limit`); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImages(prev => [...prev, { url: reader.result as string, alt: form.name || file.name, sortOrder: prev.length }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const addImageUrl = () => {
+    if (!urlInput.trim()) return;
+    if (images.length >= 5) { toast.error('Maximum 5 images allowed'); return; }
+    try { new URL(urlInput); } catch { toast.error('Please enter a valid URL'); return; }
+    setImages(prev => [...prev, { url: urlInput.trim(), alt: form.name || '', sortOrder: prev.length }]);
+    setUrlInput('');
+  };
+
+  const removeImage = (index: number) => setImages(prev => prev.filter((_, i) => i !== index).map((img, i) => ({ ...img, sortOrder: i })));
+  const moveImage = (index: number, direction: 'up' | 'down') => {
+    const newImages = [...images];
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (target < 0 || target >= newImages.length) return;
+    [newImages[index], newImages[target]] = [newImages[target], newImages[index]];
+    setImages(newImages.map((img, i) => ({ ...img, sortOrder: i })));
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-4">
@@ -553,6 +595,57 @@ function VendorAddProduct() {
               <div><Label>Slug</Label><Input value={form.slug} onChange={e => update('slug', e.target.value)} className="mt-1" /></div>
               <div><Label>Short Description</Label><Input value={form.shortDescription} onChange={e => update('shortDescription', e.target.value)} className="mt-1" placeholder="Brief product summary" /></div>
               <div><Label>Full Description</Label><Textarea value={form.description} onChange={e => update('description', e.target.value)} className="mt-1" rows={4} placeholder="Detailed product description" /></div>
+            </div>
+          </Card>
+
+          <Card className="p-6"><h3 className="font-semibold mb-4 flex items-center gap-2"><ImageIcon size={18} />Product Images</h3>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Add up to 5 images. The first image will be the main product photo.</p>
+
+              {/* Upload buttons */}
+              <div className="flex gap-3 flex-wrap">
+                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} />
+                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={images.length >= 5}>
+                  <Upload size={16} className="mr-2" />Upload Images
+                </Button>
+              </div>
+
+              {/* URL input */}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Link size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input placeholder="Paste image URL (https://...)" value={urlInput} onChange={e => setUrlInput(e.target.value)} className="pl-9" onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addImageUrl())} />
+                </div>
+                <Button type="button" variant="outline" onClick={addImageUrl} disabled={!urlInput.trim() || images.length >= 5}>
+                  <ImagePlus size={16} className="mr-1" />Add URL
+                </Button>
+              </div>
+
+              {/* Image preview grid */}
+              {images.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                  {images.map((img, index) => (
+                    <div key={index} className="relative group border rounded-lg overflow-hidden bg-muted aspect-square">
+                      <img src={img.url} alt={img.alt} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                        {index > 0 && <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={() => moveImage(index, 'up')}><ArrowUp size={14} /></Button>}
+                        {index < images.length - 1 && <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={() => moveImage(index, 'down')}><ArrowDown size={14} /></Button>}
+                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-red-500/80" onClick={() => removeImage(index)}><Trash2 size={14} /></Button>
+                      </div>
+                      {index === 0 && <Badge className="absolute top-1 left-1 text-[10px] bg-orange-500">Main</Badge>}
+                      <Badge variant="secondary" className="absolute top-1 right-1 text-[10px]">{index + 1}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {images.length === 0 && (
+                <div className="border-2 border-dashed rounded-lg p-8 text-center text-muted-foreground">
+                  <ImagePlus size={32} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No images added yet</p>
+                  <p className="text-xs mt-1">Upload files or paste image URLs above</p>
+                </div>
+              )}
             </div>
           </Card>
 

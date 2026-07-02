@@ -104,10 +104,15 @@ export async function POST(req: NextRequest) {
 // PUT /api/products - Update product
 export async function PUT(req: NextRequest) {
   try {
-    const { id, ...data } = await req.json();
+    const { id, images, variants, specs, categoryId, brandId, ...rest } = await req.json();
     if (!id) return NextResponse.json({ success: false, error: 'Product ID required' }, { status: 400 });
 
-    const { images, variants, specs, categoryId, brandId, ...rest } = data;
+    // Update images if provided: delete old, create new
+    if (images && Array.isArray(images)) {
+      await db.productImage.deleteMany({ where: { productId: id } });
+      await db.productImage.createMany({ data: images.map((img: { url: string; alt?: string; sortOrder: number }) => ({ productId: id, url: img.url, alt: img.alt || '', sortOrder: img.sortOrder })) });
+    }
+
     const product = await db.product.update({
       where: { id },
       data: { ...rest, ...(categoryId && { categoryId }), ...(brandId && { brandId }) },
