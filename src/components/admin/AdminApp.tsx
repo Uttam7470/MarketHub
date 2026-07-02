@@ -139,7 +139,7 @@ function AdminMobileHeader() {
 function AdminDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ['admin-dashboard'],
-    queryFn: () => fetch('/api/admin/dashboard').then(r => r.json()).then((r: any) => r.data),
+    queryFn: () => fetch('/api/admin/dashboard').then(r => r.json()).then((r: any) => r.data ?? {}),
   });
 
   if (isLoading) return <div className="p-6 space-y-4">{Array.from({length: 6}).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>;
@@ -1006,7 +1006,7 @@ function AdminBanners() {
 // ============ ADMIN REPORTS ============
 
 function AdminReports() {
-  const { data } = useQuery({ queryKey: ['admin-dashboard'], queryFn: () => fetch('/api/admin/dashboard').then(r => r.json()).then((r: any) => r.data) });
+  const { data } = useQuery({ queryKey: ['admin-dashboard'], queryFn: () => fetch('/api/admin/dashboard').then(r => r.json()).then((r: any) => r.data ?? {}) });
 
   return (
     <div className="p-6 space-y-6">
@@ -1042,7 +1042,7 @@ function AdminReports() {
 // ============ ADMIN SETTINGS ============
 
 function AdminSettings() {
-  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: () => fetch('/api/settings').then(r => r.json()).then((r: any) => r.data) });
+  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: () => fetch('/api/settings').then(r => r.json()).then((r: any) => r.data ?? {}) });
   const [form, setForm] = useState<any>({});
 
   React.useEffect(() => { if (settings) setForm(settings); }, [settings]);
@@ -1192,7 +1192,7 @@ function AdminPayouts() {
 function AdminAnalytics() {
   const { data, isLoading } = useQuery({
     queryKey: ['admin-analytics'],
-    queryFn: () => fetch('/api/admin/analytics').then(r => r.json()).then((r: any) => r.data),
+    queryFn: () => fetch('/api/admin/analytics').then(r => r.json()).then((r: any) => r.data ?? {}),
   });
 
   if (isLoading) return <div className="p-6 space-y-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />)}</div>;
@@ -1273,7 +1273,7 @@ function AdminSupport() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['support-tickets'],
-    queryFn: () => fetch('/api/support/tickets').then(r => r.json()),
+    queryFn: () => fetch('/api/support/tickets').then(r => r.json()).then((r: any) => r.data ?? []),
   });
 
   const replyMutation = useMutation({
@@ -1301,7 +1301,7 @@ function AdminSupport() {
       <h1 className="text-2xl font-bold">Support Tickets</h1>
       {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
         <Card><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Customer</TableHead><TableHead>Category</TableHead><TableHead>Priority</TableHead><TableHead>Status</TableHead><TableHead className="hidden sm:table-cell">Messages</TableHead><TableHead>Created</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
-          <TableBody>{(data?.data || data || []).map((t: any) => (
+          <TableBody>{(Array.isArray(data) ? data : []).map((t: any) => (
             <TableRow key={t.id}><TableCell className="font-medium text-sm max-w-[200px] truncate">{t.subject}</TableCell><TableCell className="text-sm">{t.user?.name || 'Guest'}</TableCell><TableCell className="text-sm">{t.category}</TableCell>
               <TableCell><Badge className={priorityColor[t.priority] || ''}>{t.priority}</Badge></TableCell>
               <TableCell><Badge className={statusColor[t.status] || ''}>{t.status.replace('_', ' ')}</Badge></TableCell>
