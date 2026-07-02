@@ -664,8 +664,8 @@ function VendorOrders() {
     SHIPPED: 'bg-orange-100 text-orange-700', DELIVERED: 'bg-green-100 text-green-700', CANCELLED: 'bg-red-100 text-red-700',
   };
 
-  const vendorItems = (order: Order) => order.items?.filter(i => i.vendorId === vendorId) || [];
-  const vendorTotal = (order: Order) => vendorItems(order).reduce((sum, i) => sum + i.total, 0);
+  const vendorItems = (order: Order | null) => order?.items?.filter(i => i.vendorId === vendorId) || [];
+  const vendorTotal = (order: Order | null) => vendorItems(order).reduce((sum, i) => sum + i.total, 0);
 
   const openPrint = (order: Order, mode: 'invoice' | 'packing' | 'shipping') => {
     setPrintDialog({ open: true, order, mode });
@@ -736,7 +736,7 @@ function VendorOrders() {
             <DialogTitle>{printDialog.mode === 'invoice' ? 'Invoice' : printDialog.mode === 'packing' ? 'Packing Slip' : 'Shipping Label'} - #{printDialog.order?.orderNumber}</DialogTitle>
           </DialogHeader>
           <div id="print-content" className="space-y-4 text-sm">
-            {printDialog.mode === 'invoice' ? (
+            {!printDialog.order ? <p className="text-center text-muted-foreground py-8">No order selected</p> : printDialog.mode === 'invoice' ? (
               <div className="space-y-4">
                 <div className="flex justify-between items-start border-b pb-4">
                   <div><h3 className="text-lg font-bold text-orange-600">INVOICE</h3><p className="text-muted-foreground">Order #{printDialog.order?.orderNumber}</p><p className="text-muted-foreground">{new Date(printDialog.order?.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
@@ -745,12 +745,12 @@ function VendorOrders() {
                 <Table>
                   <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty</TableHead><TableHead>Price</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {vendorItems(printDialog.order!).map(item => (
+                    {vendorItems(printDialog.order).map(item => (
                       <TableRow key={item.id}><TableCell>{item.productName}</TableCell><TableCell>{item.quantity}</TableCell><TableCell>{formatCurrency(item.price)}</TableCell><TableCell className="text-right">{formatCurrency(item.total)}</TableCell></TableRow>
                     ))}
                   </TableBody>
                 </Table>
-                <div className="flex justify-end"><Card className="p-4 w-64 space-y-1"><div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(vendorTotal(printDialog.order!))}</span></div><div className="flex justify-between font-bold text-lg border-t pt-2 mt-2"><span>Total</span><span className="text-orange-600">{formatCurrency(vendorTotal(printDialog.order!))}</span></div></Card></div>
+                <div className="flex justify-end"><Card className="p-4 w-64 space-y-1"><div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(vendorTotal(printDialog.order))}</span></div><div className="flex justify-between font-bold text-lg border-t pt-2 mt-2"><span>Total</span><span className="text-orange-600">{formatCurrency(vendorTotal(printDialog.order))}</span></div></Card></div>
                 <p className="text-xs text-muted-foreground text-center">Payment: {printDialog.order?.paymentMethod} • Status: {printDialog.order?.paymentStatus}</p>
               </div>
             ) : printDialog.mode === 'packing' ? (
@@ -760,7 +760,7 @@ function VendorOrders() {
                   <div className="text-right"><p className="font-medium">{printDialog.order?.user?.name}</p><p className="text-muted-foreground text-xs">{printDialog.order?.shippingAddress}</p></div>
                 </div>
                 <div className="space-y-2">
-                  {vendorItems(printDialog.order!).map(item => (
+                  {vendorItems(printDialog.order).map(item => (
                     <div key={item.id} className="flex items-center justify-between py-2 border-b last:border-0">
                       <div className="flex items-center gap-3"><div className="w-8 h-8 rounded bg-muted overflow-hidden shrink-0">{item.productImage && <img src={item.productImage} alt="" className="w-full h-full object-cover" />}</div><span>{item.productName}</span></div>
                       <Badge variant="secondary">Qty: {item.quantity}</Badge>
@@ -778,7 +778,7 @@ function VendorOrders() {
                     <div className="flex justify-between"><span className="font-bold">To:</span><span>{printDialog.order?.shippingAddress}</span></div>
                     <Separator />
                     <div className="flex justify-between"><span className="font-bold">Order:</span><span>#{printDialog.order?.orderNumber}</span></div>
-                    <div className="flex justify-between"><span className="font-bold">Items:</span><span>{vendorItems(printDialog.order!).length} item(s)</span></div>
+                    <div className="flex justify-between"><span className="font-bold">Items:</span><span>{vendorItems(printDialog.order).length} item(s)</span></div>
                     <div className="flex justify-between"><span className="font-bold">Weight:</span><span>0.5 kg (approx)</span></div>
                     <Separator />
                     <div className="text-center mt-4">

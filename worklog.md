@@ -381,3 +381,19 @@ Stage Summary:
 - Browser verified: Home, Products, Product Detail (reviews, Q&A, pincode checker), Help Center, Contact Us
 - Zero console errors in browser
 - All 124 items from checklist now complete or gracefully handled
+
+---
+Task ID: hotfix-1
+Agent: Main
+Task: Fix TypeError in VendorApp.tsx - Cannot read properties of null (reading 'items')
+
+Work Log:
+- Identified root cause: `vendorItems(printDialog.order!)` and `vendorTotal(printDialog.order!)` used non-null assertions (`!`) but `printDialog.order` is set to `null` when the dialog closes (line 733 `setPrintDialog({ open, order: null, mode: 'invoice' })`)
+- Updated `vendorItems` function signature from `(order: Order)` to `(order: Order | null)` and added `order?.items` optional chaining
+- Updated `vendorTotal` function signature similarly
+- Added null guard at the top of print dialog content: `{!printDialog.order ? <p>No order selected</p> : printDialog.mode === 'invoice' ? (...`
+- Removed all 4 remaining `printDialog.order!` non-null assertions (lines 748, 753, 763, 781)
+
+Stage Summary:
+- Fixed crash when opening/closing vendor order print dialog (invoice/packing/shipping)
+- Lint passes clean, server recompiled with zero errors

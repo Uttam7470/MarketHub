@@ -1,0 +1,773 @@
+     1→import { PrismaClient } from '@prisma/client';
+     2→import { hash } from 'bcryptjs';
+     3→
+     4→const db = new PrismaClient();
+     5→
+     6→const CATEGORIES = [
+     7→  { name: 'Electronics', slug: 'electronics', description: 'Latest electronic gadgets and devices' },
+     8→  { name: 'Mobiles', slug: 'mobiles', parentId: null, description: 'Smartphones and accessories' },
+     9→  { name: 'Laptops', slug: 'laptops', description: 'Laptops and notebooks' },
+    10→  { name: 'Accessories', slug: 'accessories', description: 'Electronic accessories' },
+    11→  { name: 'Fashion', slug: 'fashion', description: 'Fashion and clothing' },
+    12→  { name: 'Men', slug: 'men', description: "Men's fashion" },
+    13→  { name: 'Women', slug: 'women', description: "Women's fashion" },
+    14→  { name: 'Kids', slug: 'kids', description: "Kids' fashion" },
+    15→  { name: 'Home & Kitchen', slug: 'home-kitchen', description: 'Home and kitchen essentials' },
+    16→  { name: 'Furniture', slug: 'furniture', description: 'Home furniture' },
+    17→  { name: 'Appliances', slug: 'appliances', description: 'Home appliances' },
+    18→  { name: 'Sports', slug: 'sports', description: 'Sports and fitness' },
+    19→  { name: 'Books', slug: 'books', description: 'Books and publications' },
+    20→  { name: 'Beauty', slug: 'beauty', description: 'Beauty and personal care' },
+    21→];
+    22→
+    23→const BRANDS = [
+    24→  { name: 'TechPro', slug: 'techpro' },
+    25→  { name: 'StyleWear', slug: 'stylewear' },
+    26→  { name: 'HomeEssentials', slug: 'homeessentials' },
+    27→  { name: 'FitGear', slug: 'fitgear' },
+    28→  { name: 'BookHaven', slug: 'bookhaven' },
+    29→  { name: 'GlamZone', slug: 'glamzone' },
+    30→  { name: 'SwiftTech', slug: 'swifttech' },
+    31→  { name: 'UrbanStyle', slug: 'urbanstyle' },
+    32→];
+    33→
+    34→const PRODUCT_NAMES = {
+    35→  electronics: [
+    36→    'Wireless Bluetooth Headphones', 'Smart Watch Pro', 'Portable Bluetooth Speaker',
+    37→    '4K Ultra HD Webcam', 'Wireless Charging Pad', 'USB-C Hub Adapter',
+    38→    'Mechanical Gaming Keyboard', 'Wireless Mouse', 'LED Monitor 27 inch',
+    39→    'Power Bank 20000mAh', 'Smart Home Hub', 'Wireless Earbuds Pro',
+    40→    'Action Camera 4K', 'Drone with Camera', 'Smart LED Bulb Pack',
+    41→  ],
+    42→  mobiles: [
+    43→    'Smartphone X Pro 128GB', 'Budget Phone Max 64GB', 'Flagship Phone Ultra 256GB',
+    44→    'Tablet Pro 10.5 inch', 'Refurbished Phone Lite', 'Phone Case Premium',
+    45→    'Screen Protector Pack', 'Wireless Charger Fast', 'Car Phone Mount',
+    46→    'Phone Gimbal Stabilizer',
+    47→  ],
+    48→  laptops: [
+    49→    'UltraBook Pro 15.6" i7', 'Gaming Laptop RTX 4060', 'MacBook Air M3 Clone',
+    50→    'Business Laptop 14" i5', '2-in-1 Touchscreen Laptop', 'Chromebook 14 inch',
+    51→  ],
+    52→  fashion: [
+    53→    'Classic Cotton T-Shirt', 'Slim Fit Denim Jeans', 'Casual Sneakers',
+    54→    'Leather Wallet', 'Aviator Sunglasses', 'Formal Dress Shirt',
+    55→    'Running Shoes', 'Winter Jacket', 'Silk Tie Set',
+    56→    'Canvas Backpack', 'Digital Watch', 'Polo Shirt',
+    57→  ],
+    58→  home: [
+    59→    'Ceramic Dinner Set', 'Stainless Steel Cookware', 'Bed Sheet Set King',
+    60→    'Curtains Blackout', 'Wall Clock Modern', 'LED Table Lamp',
+    61→    'Vacuum Cleaner Robot', 'Air Purifier HEPA', 'Smart Rice Cooker',
+    62→    'Water Purifier RO',
+    63→  ],
+    64→  sports: [
+    65→    'Yoga Mat Premium', 'Resistance Bands Set', 'Dumbbells Set 20kg',
+    66→    'Cricket Bat English Willow', 'Football Professional', 'Tennis Racket',
+    67→    'Gym Gloves', 'Protein Shaker Bottle', 'Sports Shoes Running',
+    68→  ],
+    69→  books: [
+    70→    'The Art of Programming', 'Business Strategy Guide', 'Self-Help Bestseller',
+    71→    'Science Fiction Collection', 'Cooking Masterclass Book', 'Children Story Book Set',
+    72→  ],
+    73→  beauty: [
+    74→    'Face Moisturizer SPF 50', 'Hair Serum Argan Oil', 'Perfume Luxury Edition',
+    75→    'Makeup Kit Professional', 'Face Wash Gel', 'Body Lotion Natural',
+    76→    'Lipstick Matte Set', 'Eye Shadow Palette',
+    77→  ],
+    78→};
+    79→
+    80→function getRandomItems<T>(arr: T[], count: number): T[] {
+    81→  const shuffled = [...arr].sort(() => 0.5 - Math.random());
+    82→  return shuffled.slice(0, count);
+    83→}
+    84→
+    85→function randomPrice(min: number, max: number): number {
+    86→  return Math.round((Math.random() * (max - min) + min) * 100) / 100;
+    87→}
+    88→
+    89→function randomInt(min: number, max: number): number {
+    90→  return Math.floor(Math.random() * (max - min + 1)) + min;
+    91→}
+    92→
+    93→async function seed() {
+    94→  console.log('🌱 Seeding database...');
+    95→
+    96→  // Clean up existing data (order matters for foreign keys)
+    97→  await db.flashSaleItem.deleteMany();
+    98→  await db.flashSale.deleteMany();
+    99→  await db.deal.deleteMany();
+   100→  await db.ticketMessage.deleteMany();
+   101→  await db.supportTicket.deleteMany();
+   102→  await db.fAQ.deleteMany();
+   103→  await db.searchAnalytics.deleteMany();
+   104→  await db.searchHistory.deleteMany();
+   105→  await db.recentlyViewed.deleteMany();
+   106→  await db.walletTransaction.deleteMany();
+   107→  await db.payout.deleteMany();
+   108→  await db.vendorWallet.deleteMany();
+   109→  await db.productQA.deleteMany();
+   110→  await db.inventoryHistory.deleteMany();
+   111→  await db.orderItem.deleteMany();
+   112→  await db.returnRequest.deleteMany();
+   113→  await db.order.deleteMany();
+   114→  await db.cartItem.deleteMany();
+   115→  await db.wishlistItem.deleteMany();
+   116→  await db.review.deleteMany();
+   117→  await db.productSpec.deleteMany();
+   118→  await db.productVariant.deleteMany();
+   119→  await db.productImage.deleteMany();
+   120→  await db.product.deleteMany();
+   121→  await db.settlement.deleteMany();
+   122→  await db.vendor.deleteMany();
+   123→  await db.notification.deleteMany();
+   124→  await db.activityLog.deleteMany();
+   125→  await db.customerAddress.deleteMany();
+   126→  await db.customerProfile.deleteMany();
+   127→  await db.coupon.deleteMany();
+   128→  await db.banner.deleteMany();
+   129→  await db.platformSettings.deleteMany();
+   130→  await db.brand.deleteMany();
+   131→  await db.category.deleteMany();
+   132→  await db.user.deleteMany();
+   133→
+   134→  // 1. Create categories
+   135→  const categoryMap: Record<string, string> = {};
+   136→  for (const cat of CATEGORIES) {
+   137→    const created = await db.category.create({ data: cat });
+   138→    categoryMap[cat.slug] = created.id;
+   139→  }
+   140→  // Set parent relationships
+   141→  await db.category.update({ where: { slug: 'mobiles' }, data: { parentId: categoryMap['electronics'] } });
+   142→  await db.category.update({ where: { slug: 'laptops' }, data: { parentId: categoryMap['electronics'] } });
+   143→  await db.category.update({ where: { slug: 'accessories' }, data: { parentId: categoryMap['electronics'] } });
+   144→  await db.category.update({ where: { slug: 'men' }, data: { parentId: categoryMap['fashion'] } });
+   145→  await db.category.update({ where: { slug: 'women' }, data: { parentId: categoryMap['fashion'] } });
+   146→  await db.category.update({ where: { slug: 'kids' }, data: { parentId: categoryMap['fashion'] } });
+   147→  await db.category.update({ where: { slug: 'furniture' }, data: { parentId: categoryMap['home-kitchen'] } });
+   148→  await db.category.update({ where: { slug: 'appliances' }, data: { parentId: categoryMap['home-kitchen'] } });
+   149→
+   150→  // 2. Create brands
+   151→  const brandMap: Record<string, string> = {};
+   152→  for (const brand of BRANDS) {
+   153→    const created = await db.brand.create({ data: brand });
+   154→    brandMap[brand.slug] = created.id;
+   155→  }
+   156→
+   157→  // 3. Create admin user
+   158→  const adminPassword = await hash('admin123', 12);
+   159→  const admin = await db.user.create({
+   160→    data: {
+   161→      email: 'admin@markethub.com',
+   162→      password: adminPassword,
+   163→      name: 'Super Admin',
+   164→      role: 'ADMIN',
+   165→      isVerified: true,
+   166→    },
+   167→  });
+   168→
+   169→  // 4. Create vendor users and profiles
+   170→  const vendorData = [
+   171→    { email: 'techstore@vendor.com', name: 'TechStore India', businessName: 'TechStore India', commission: 12 },
+   172→    { email: 'fashionhub@vendor.com', name: 'FashionHub', businessName: 'FashionHub', commission: 15 },
+   173→    { email: 'homeplus@vendor.com', name: 'HomePlus', businessName: 'HomePlus', commission: 10 },
+   174→    { email: 'sportszone@vendor.com', name: 'SportsZone', businessName: 'SportsZone', commission: 12 },
+   175→    { email: 'bookworld@vendor.com', name: 'BookWorld', businessName: 'BookWorld', commission: 8 },
+   176→  ];
+   177→  const vendors: { id: string; userId: string; totalRevenue: number }[] = [];
+   178→  for (const vd of vendorData) {
+   179→    const vp = await hash('vendor123', 12);
+   180→    const user = await db.user.create({
+   181→      data: { email: vd.email, password: vp, name: vd.name, role: 'VENDOR', isVerified: true },
+   182→    });
+   183→    const vendorTotalSales = randomPrice(50000, 500000);
+   184→    const vendorTotalRevenue = randomPrice(40000, 400000);
+   185→    const vendor = await db.vendor.create({
+   186→      data: {
+   187→        userId: user.id,
+   188→        businessName: vd.businessName,
+   189→        slug: vd.businessName.toLowerCase().replace(/\s+/g, '-'),
+   190→        description: `Premium ${vd.businessName} products at best prices`,
+   191→        businessEmail: vd.email,
+   192→        commissionRate: vd.commission,
+   193→        status: 'APPROVED',
+   194→        totalSales: vendorTotalSales,
+   195→        totalRevenue: vendorTotalRevenue,
+   196→        rating: randomPrice(3.5, 5.0),
+   197→      },
+   198→    });
+   199→    vendors.push({ id: vendor.id, userId: user.id, totalRevenue: vendorTotalRevenue });
+   200→  }
+   201→
+   202→  // 5. Create customer users
+   203→  const customerNames = [
+   204→    { name: 'Rahul Sharma', email: 'rahul@example.com' },
+   205→    { name: 'Priya Patel', email: 'priya@example.com' },
+   206→    { name: 'Amit Kumar', email: 'amit@example.com' },
+   207→    { name: 'Sneha Reddy', email: 'sneha@example.com' },
+   208→    { name: 'Vikram Singh', email: 'vikram@example.com' },
+   209→    { name: 'Ananya Gupta', email: 'ananya@example.com' },
+   210→    { name: 'Karthik Nair', email: 'karthik@example.com' },
+   211→    { name: 'Deepa Iyer', email: 'deepa@example.com' },
+   212→  ];
+   213→  const customerPasswords = await hash('customer123', 12);
+   214→  const customers: string[] = [];
+   215→  for (const cd of customerNames) {
+   216→    const user = await db.user.create({
+   217→      data: { email: cd.email, password: customerPasswords, name: cd.name, role: 'CUSTOMER', isVerified: true },
+   218→    });
+   219→    await db.customerProfile.create({ data: { userId: user.id, gender: Math.random() > 0.5 ? 'Male' : 'Female', loyaltyPoints: randomInt(100, 5000) } });
+   220→    await db.customerAddress.create({
+   221→      data: {
+   222→        userId: user.id, label: 'Home', fullName: cd.name, phone: `+91${randomInt(7000000000, 9999999999)}`,
+   223→        addressLine1: `${randomInt(1, 500)}, Sector ${randomInt(1, 50)}`,
+   224→        city: ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Hyderabad', 'Pune', 'Kolkata'][randomInt(0, 6)],
+   225→        state: ['Maharashtra', 'Delhi', 'Karnataka', 'Tamil Nadu', 'Telangana', 'Maharashtra', 'West Bengal'][randomInt(0, 6)],
+   226→        pincode: `${randomInt(100000, 999999)}`, isDefault: true,
+   227→      },
+   228→    });
+   229→    customers.push(user.id);
+   230→  }
+   231→
+   232→  // 6. Create products
+   233→  const productEntries: { catSlug: string; names: string[]; brandSlugs: string[]; vendorIdx: number[] }[] = [
+   234→    { catSlug: 'electronics', names: PRODUCT_NAMES.electronics, brandSlugs: ['techpro', 'swifttech'], vendorIdx: [0] },
+   235→    { catSlug: 'mobiles', names: PRODUCT_NAMES.mobiles, brandSlugs: ['techpro', 'swifttech'], vendorIdx: [0] },
+   236→    { catSlug: 'laptops', names: PRODUCT_NAMES.laptops, brandSlugs: ['techpro', 'swifttech'], vendorIdx: [0] },
+   237→    { catSlug: 'fashion', names: PRODUCT_NAMES.fashion, brandSlugs: ['stylewear', 'urbanstyle'], vendorIdx: [1] },
+   238→    { catSlug: 'men', names: ['Formal Suit Premium', 'Casual Shirt Collection', 'Leather Belt Genuine'], brandSlugs: ['stylewear', 'urbanstyle'], vendorIdx: [1] },
+   239→    { catSlug: 'women', names: ['Designer Saree Silk', 'Handbag Leather', 'Ethnic Kurta Set'], brandSlugs: ['stylewear', 'urbanstyle'], vendorIdx: [1] },
+   240→    { catSlug: 'home-kitchen', names: PRODUCT_NAMES.home, brandSlugs: ['homeessentials'], vendorIdx: [2] },
+   241→    { catSlug: 'furniture', names: ['Office Chair Ergonomic', 'Study Table Wooden', 'Sofa Set 3+2+1'], brandSlugs: ['homeessentials'], vendorIdx: [2] },
+   242→    { catSlug: 'sports', names: PRODUCT_NAMES.sports, brandSlugs: ['fitgear'], vendorIdx: [3] },
+   243→    { catSlug: 'books', names: PRODUCT_NAMES.books, brandSlugs: ['bookhaven'], vendorIdx: [4] },
+   244→    { catSlug: 'beauty', names: PRODUCT_NAMES.beauty, brandSlugs: ['glamzone'], vendorIdx: [1] },
+   245→  ];
+   246→
+   247→  const allProducts: string[] = [];
+   248→  const badges: (string | null)[] = ['BEST_SELLER', 'NEW_ARRIVAL', 'LIMITED_TIME', 'FESTIVAL_OFFER', null, null, null];
+   249→  for (const entry of productEntries) {
+   250→    for (const name of entry.names) {
+   251→      const vi = entry.vendorIdx[randomInt(0, entry.vendorIdx.length - 1)];
+   252→      const vendor = vendors[vi];
+   253→      const brandSlug = entry.brandSlugs[randomInt(0, entry.brandSlugs.length - 1)];
+   254→      const price = randomPrice(199, 49999);
+   255→      const comparePrice = price * randomPrice(1.1, 1.5);
+   256→      const stock = randomInt(5, 200);
+   257→      const badge = badges[randomInt(0, badges.length - 1)];
+   258→
+   259→      const product = await db.product.create({
+   260→        data: {
+   261→          vendorId: vendor.id,
+   262→          categoryId: categoryMap[entry.catSlug]!,
+   263→          brandId: brandMap[brandSlug],
+   264→          name,
+   265→          slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+   266→          description: `High quality ${name.toLowerCase()}. Perfect for everyday use with premium materials and craftsmanship.`,
+   267→          shortDescription: `Buy ${name} at best price`,
+   268→          price,
+   269→          compareAtPrice: Math.round(comparePrice * 100) / 100,
+   270→          costPrice: Math.round(price * 0.6 * 100) / 100,
+   271→          stock,
+   272→          weight: randomPrice(0.1, 10),
+   273→          isFeatured: Math.random() > 0.7,
+   274→          badge,
+   275→          estimatedDeliveryDays: randomInt(3, 10),
+   276→          rating: randomPrice(3.0, 5.0),
+   277→          reviewCount: randomInt(1, 150),
+   278→          totalSold: randomInt(10, 500),
+   279→          seoTitle: name,
+   280→          seoDescription: `Shop ${name} online at best price`,
+   281→        },
+   282→      });
+   283→
+   284→      // Add images
+   285→      const colors = ['red', 'blue', 'black', 'white', 'green', 'gray'];
+   286→      for (let i = 0; i < randomInt(2, 4); i++) {
+   287→        await db.productImage.create({
+   288→          data: {
+   289→            productId: product.id,
+   290→            url: `https://placehold.co/600x600/${colors[i % colors.length]}/ffffff?text=${encodeURIComponent(name.substring(0, 15))}`,
+   291→            alt: `${name} - Image ${i + 1}`,
+   292→            sortOrder: i,
+   293→          },
+   294→        });
+   295→      }
+   296→
+   297→      // Add variants
+   298→      if (Math.random() > 0.3) {
+   299→        const sizes = ['S', 'M', 'L', 'XL', 'XXL'];
+   300→        const colors2 = ['Black', 'White', 'Red', 'Blue', 'Green'];
+   301→        for (const size of getRandomItems(sizes, randomInt(2, 4))) {
+   302→          await db.productVariant.create({
+   303→            data: { productId: product.id, name: 'Size', value: size, stock: randomInt(2, 50) },
+   304→          });
+   305→        }
+   306→        for (const color of getRandomItems(colors2, randomInt(1, 3))) {
+   307→          await db.productVariant.create({
+   308→            data: { productId: product.id, name: 'Color', value: color, stock: randomInt(2, 50) },
+   309→          });
+   310→        }
+   311→      }
+   312→
+   313→      // Add specs
+   314→      const specKeys = ['Material', 'Weight', 'Dimensions', 'Warranty', 'Color', 'Brand', 'Model'];
+   315→      for (const key of getRandomItems(specKeys, randomInt(2, 4))) {
+   316→        await db.productSpec.create({
+   317→          data: { productId: product.id, key, value: `${key} - ${name.substring(0, 10)}` },
+   318→        });
+   319→      }
+   320→
+   321→      allProducts.push(product.id);
+   322→    }
+   323→  }
+   324→
+   325→  // 7. Create some orders
+   326→  const statuses = ['NEW', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
+   327→  const paymentMethods = ['COD', 'UPI', 'Credit Card', 'Debit Card', 'Net Banking'];
+   328→  for (let i = 0; i < 20; i++) {
+   329→    const customerId = customers[randomInt(0, customers.length - 1)];
+   330→    const numItems = randomInt(1, 3);
+   331→    const selectedProducts = getRandomItems(allProducts, numItems);
+   332→    let subtotal = 0;
+   333→
+   334→    const orderItemsData = [];
+   335→    for (const pid of selectedProducts) {
+   336→      const prod = await db.product.findUnique({ where: { id: pid }, include: { vendor: true } });
+   337→      if (prod) {
+   338→        const qty = randomInt(1, 3);
+   339→        const itemTotal = prod.price * qty;
+   340→        subtotal += itemTotal;
+   341→        orderItemsData.push({
+   342→          productId: pid,
+   343→          vendorId: prod.vendorId,
+   344→          productName: prod.name,
+   345→          productImage: `https://placehold.co/100x100/333/fff?text=${encodeURIComponent(prod.name.substring(0, 10))}`,
+   346→          quantity: qty,
+   347→          price: prod.price,
+   348→          total: itemTotal,
+   349→          status: statuses[randomInt(0, statuses.length - 1)],
+   350→          vendorName: prod.vendor.businessName,
+   351→        });
+   352→      }
+   353→    }
+   354→
+   355→    if (orderItemsData.length > 0) {
+   356→      const shipping = subtotal > 500 ? 0 : 99;
+   357→      const tax = subtotal * 0.18;
+   358→      const orderStatus = statuses[randomInt(0, statuses.length - 1)];
+   359→      const isCancelled = orderStatus === 'CANCELLED';
+   360→
+   361→      const order = await db.order.create({
+   362→        data: {
+   363→          userId: customerId,
+   364→          orderNumber: `ORD-${String(1000 + i).padStart(6, '0')}`,
+   365→          subtotal: Math.round(subtotal * 100) / 100,
+   366→          shippingCost: shipping,
+   367→          tax: Math.round(tax * 100) / 100,
+   368→          total: Math.round((subtotal + shipping + tax) * 100) / 100,
+   369→          status: orderStatus,
+   370→          paymentMethod: paymentMethods[randomInt(0, paymentMethods.length - 1)],
+   371→          paymentStatus: Math.random() > 0.2 ? 'PAID' : 'PENDING',
+   372→          shippingAddress: '123, Main Street, Mumbai, Maharashtra 400001',
+   373→          ...(isCancelled ? {
+   374→            cancellationReason: 'Customer requested cancellation',
+   375→            cancelledAt: new Date(Date.now() - randomInt(1, 5) * 24 * 60 * 60 * 1000),
+   376→          } : {}),
+   377→          items: { create: orderItemsData },
+   378→        },
+   379→      });
+   380→    }
+   381→  }
+   382→
+   383→  // Also create a guest order (userId is null)
+   384→  {
+   385→    const selectedProducts = getRandomItems(allProducts, 2);
+   386→    let subtotal = 0;
+   387→    const orderItemsData = [];
+   388→    for (const pid of selectedProducts) {
+   389→      const prod = await db.product.findUnique({ where: { id: pid }, include: { vendor: true } });
+   390→      if (prod) {
+   391→        const qty = randomInt(1, 2);
+   392→        const itemTotal = prod.price * qty;
+   393→        subtotal += itemTotal;
+   394→        orderItemsData.push({
+   395→          productId: pid,
+   396→          vendorId: prod.vendorId,
+   397→          productName: prod.name,
+   398→          productImage: `https://placehold.co/100x100/333/fff?text=${encodeURIComponent(prod.name.substring(0, 10))}`,
+   399→          quantity: qty,
+   400→          price: prod.price,
+   401→          total: itemTotal,
+   402→          vendorName: prod.vendor.businessName,
+   403→        });
+   404→      }
+   405→    }
+   406→    if (orderItemsData.length > 0) {
+   407→      const shipping = subtotal > 500 ? 0 : 99;
+   408→      const tax = subtotal * 0.18;
+   409→      await db.order.create({
+   410→        data: {
+   411→          orderNumber: 'ORD-GUEST-00001',
+   412→          subtotal: Math.round(subtotal * 100) / 100,
+   413→          shippingCost: shipping,
+   414→          tax: Math.round(tax * 100) / 100,
+   415→          total: Math.round((subtotal + shipping + tax) * 100) / 100,
+   416→          status: 'DELIVERED',
+   417→          paymentMethod: 'COD',
+   418→          paymentStatus: 'PAID',
+   419→          shippingAddress: '456, Park Avenue, Delhi, Delhi 110001',
+   420→          guestEmail: 'guest@example.com',
+   421→          guestPhone: '+919876543210',
+   422→          items: { create: orderItemsData },
+   423→        },
+   424→      });
+   425→    }
+   426→  }
+   427→
+   428→  // 8. Create reviews (with new fields: images, verifiedPurchase, helpfulCount)
+   429→  for (let i = 0; i < 40; i++) {
+   430→    const productId = allProducts[randomInt(0, allProducts.length - 1)];
+   431→    const userId = customers[randomInt(0, customers.length - 1)];
+   432→    const reviewImages = Math.random() > 0.7 ? 'https://placehold.co/400x400/eee/333?text=Review+Photo' : null;
+   433→    await db.review.create({
+   434→      data: {
+   435→        userId,
+   436→        productId,
+   437→        rating: randomInt(3, 5),
+   438→        title: ['Great product!', 'Good quality', 'Worth the price', 'Excellent!', 'Very satisfied'][randomInt(0, 4)],
+   439→        comment: `I bought this product and I am ${['very happy', 'satisfied', 'impressed', 'pleased'][randomInt(0, 3)]} with the quality. Would recommend to others.`,
+   440→        images: reviewImages,
+   441→        verifiedPurchase: Math.random() > 0.3,
+   442→        helpfulCount: randomInt(0, 25),
+   443→      },
+   444→    });
+   445→  }
+   446→
+   447→  // 9. Create coupons (with autoSuggest)
+   448→  await db.coupon.createMany({
+   449→    data: [
+   450→      { code: 'WELCOME10', discountType: 'PERCENTAGE', discountValue: 10, minOrder: 500, maxDiscount: 200, usageLimit: 1000, usedCount: 150, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: true },
+   451→      { code: 'FLAT500', discountType: 'FIXED', discountValue: 500, minOrder: 2000, usageLimit: 500, usedCount: 45, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: false },
+   452→      { code: 'SAVE20', discountType: 'PERCENTAGE', discountValue: 20, minOrder: 1000, maxDiscount: 1000, usageLimit: 200, usedCount: 80, startDate: new Date('2024-06-01'), endDate: new Date('2025-06-30'), isActive: true, autoSuggest: true },
+   453→    ],
+   454→  });
+   455→
+   456→  // 10. Create banners
+   457→  await db.banner.createMany({
+   458→    data: [
+   459→      { title: 'Mega Electronics Sale', image: 'https://placehold.co/1200x400/ff6b35/ffffff?text=Mega+Electronics+Sale+-+Up+to+70%25+Off', position: 'HOME', sortOrder: 1, isActive: true, link: '#electronics' },
+   460→      { title: 'Fashion Fiesta', image: 'https://placehold.co/1200x400/e63946/ffffff?text=Fashion+Fiesta+-+New+Collection', position: 'HOME', sortOrder: 2, isActive: true, link: '#fashion' },
+   461→      { title: 'Home Essentials', image: 'https://placehold.co/1200x400/2a9d8f/ffffff?text=Home+Essentials+-+Best+Deals', position: 'HOME', sortOrder: 3, isActive: true, link: '#home-kitchen' },
+   462→      { title: 'Sports & Fitness', image: 'https://placehold.co/1200x400/e76f51/ffffff?text=Sports+%26+Fitness+Sale', position: 'HOME', sortOrder: 4, isActive: true, link: '#sports' },
+   463→    ],
+   464→  });
+   465→
+   466→  // 11. Platform settings
+   467→  await db.platformSettings.create({
+   468→    data: {
+   469→      siteName: 'MarketHub',
+   470→      siteDescription: 'Your one-stop multi-vendor marketplace',
+   471→      currency: 'INR',
+   472→      currencySymbol: '₹',
+   473→      taxRate: 18.0,
+   474→      freeShippingMin: 500,
+   475→      contactEmail: 'support@markethub.com',
+   476→      contactPhone: '+91-1800-123-4567',
+   477→      address: 'MarketHub HQ, Bangalore, India',
+   478→    },
+   479→  });
+   480→
+   481→  // 12. Create activity logs (with new fields: entityType, entityId, oldValues, newValues, userAgent)
+   482→  await db.activityLog.createMany({
+   483→    data: [
+   484→      { userId: admin.id, action: 'LOGIN', entityType: 'User', entityId: admin.id, details: 'Admin logged in', ipAddress: '192.168.1.1', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+   485→      { userId: vendors[0].userId, action: 'PRODUCT_CREATE', entityType: 'Product', entityId: allProducts[0], details: 'Created new product', ipAddress: '10.0.0.1', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X)' },
+   486→      { userId: customers[0], action: 'ORDER_PLACE', entityType: 'Order', entityId: null, details: 'Placed order #ORD-001000', ipAddress: '172.16.0.1', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS)' },
+   487→      { userId: admin.id, action: 'UPDATE', entityType: 'Vendor', entityId: vendors[0].id, details: 'Updated vendor commission rate', oldValues: '{"commissionRate":10}', newValues: '{"commissionRate":12}', ipAddress: '192.168.1.1', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+   488→      { userId: vendors[1].userId, action: 'PRODUCT_UPDATE', entityType: 'Product', entityId: allProducts[15], details: 'Updated product price', oldValues: '{"price":999}', newValues: '{"price":899}', ipAddress: '10.0.0.2', userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' },
+   489→    ],
+   490→  });
+   491→
+   492→  // =============================================
+   493→  // NEW MODEL SEED DATA
+   494→  // =============================================
+   495→
+   496→  // 13. Create VendorWallet for all APPROVED vendors
+   497→  for (const vendor of vendors) {
+   498→    const availableBalance = randomPrice(5000, vendor.totalRevenue * 0.6);
+   499→    const totalWithdrawn = randomPrice(1000, vendor.totalRevenue * 0.3);
+   500→    const pendingBalance = vendor.totalRevenue - availableBalance - totalWithdrawn;
+   501→    await db.vendorWallet.create({
+   502→      data: {
+   503→        vendorId: vendor.id,
+   504→        availableBalance: Math.round(availableBalance * 100) / 100,
+   505→        pendingBalance: Math.round(Math.max(0, pendingBalance) * 100) / 100,
+   506→        totalEarned: Math.round(vendor.totalRevenue * 100) / 100,
+   507→        totalWithdrawn: Math.round(totalWithdrawn * 100) / 100,
+   508→      },
+   509→    });
+   510→  }
+   511→
+   512→  // 14. Create FAQs
+   513→  await db.fAQ.createMany({
+   514→    data: [
+   515→      { question: 'How do I place an order?', answer: 'Browse products, add items to your cart, proceed to checkout, select a payment method, and confirm your order. You will receive an order confirmation email with tracking details.', category: 'GENERAL', sortOrder: 1, isActive: true },
+   516→      { question: 'What payment methods are accepted?', answer: 'We accept Credit Cards, Debit Cards, UPI, Net Banking, and Cash on Delivery (COD). All online payments are secured with 256-bit encryption.', category: 'PAYMENT', sortOrder: 2, isActive: true },
+   517→      { question: 'How long does delivery take?', answer: 'Standard delivery takes 3-7 business days depending on your location. Express delivery (available in select cities) takes 1-2 business days. You can track your order from the Orders section.', category: 'ORDER', sortOrder: 3, isActive: true },
+   518→      { question: 'What is the return and refund policy?', answer: 'You can return most items within 7 days of delivery. Items must be unused and in original packaging. Refunds are processed within 5-7 business days after we receive the returned item.', category: 'REFUND', sortOrder: 4, isActive: true },
+   519→      { question: 'How do I become a vendor on MarketHub?', answer: 'Click "Become a Seller" on our homepage, fill in your business details, upload required documents (GST, PAN, bank details), and submit for approval. Once approved, you can start listing products within 24 hours.', category: 'GENERAL', sortOrder: 5, isActive: true },
+   520→    ],
+   521→  });
+   522→
+   523→  // 15. Create FlashSales with items
+   524→  const flashSale1 = await db.flashSale.create({
+   525→    data: {
+   526→      title: 'Lightning Deal - Electronics',
+   527→      description: 'Grab electronics at unbeatable prices! Limited time offer.',
+   528→      banner: 'https://placehold.co/1200x300/f59e0b/ffffff?text=Lightning+Deal+-+Electronics',
+   529→      startDate: new Date('2025-01-01T00:00:00.000Z'),
+   530→      endDate: new Date('2025-12-31T23:59:59.000Z'),
+   531→      isActive: true,
+   532→    },
+   533→  });
+   534→
+   535→  // Get some electronics products for flash sale
+   536→  const electronicsProducts = await db.product.findMany({
+   537→    where: { categoryId: categoryMap['electronics'] },
+   538→    take: 4,
+   539→  });
+   540→
+   541→  for (let i = 0; i < electronicsProducts.length; i++) {
+   542→    const prod = electronicsProducts[i];
+   543→    const discount = randomInt(15, 40);
+   544→    await db.flashSaleItem.create({
+   545→      data: {
+   546→        flashSaleId: flashSale1.id,
+   547→        productId: prod.id,
+   548→        salePrice: Math.round(prod.price * (1 - discount / 100) * 100) / 100,
+   549→        originalPrice: prod.price,
+   550→        discountPercent: discount,
+   551→        totalStock: randomInt(20, 100),
+   552→        soldCount: randomInt(5, 50),
+   553→        sortOrder: i,
+   554→      },
+   555→    });
+   556→  }
+   557→
+   558→  const flashSale2 = await db.flashSale.create({
+   559→    data: {
+   560→      title: 'Flash Sale - Fashion Week',
+   561→      description: 'Style up with amazing fashion deals this week!',
+   562→      banner: 'https://placehold.co/1200x300/e63946/ffffff?text=Flash+Sale+-+Fashion+Week',
+   563→      startDate: new Date('2025-01-01T00:00:00.000Z'),
+   564→      endDate: new Date('2025-12-31T23:59:59.000Z'),
+   565→      isActive: true,
+   566→    },
+   567→  });
+   568→
+   569→  const fashionProducts = await db.product.findMany({
+   570→    where: { categoryId: categoryMap['fashion'] },
+   571→    take: 3,
+   572→  });
+   573→
+   574→  for (let i = 0; i < fashionProducts.length; i++) {
+   575→    const prod = fashionProducts[i];
+   576→    const discount = randomInt(20, 50);
+   577→    await db.flashSaleItem.create({
+   578→      data: {
+   579→        flashSaleId: flashSale2.id,
+   580→        productId: prod.id,
+   581→        salePrice: Math.round(prod.price * (1 - discount / 100) * 100) / 100,
+   582→        originalPrice: prod.price,
+   583→        discountPercent: discount,
+   584→        totalStock: randomInt(30, 150),
+   585→        soldCount: randomInt(10, 80),
+   586→        sortOrder: i,
+   587→      },
+   588→    });
+   589→  }
+   590→
+   591→  // 16. Create Deals
+   592→  const dealProducts = await db.product.findMany({
+   593→    where: { isFeatured: true },
+   594→    take: 3,
+   595→  });
+   596→
+   597→  for (let i = 0; i < dealProducts.length; i++) {
+   598→    const prod = dealProducts[i];
+   599→    const discount = randomInt(10, 35);
+   600→    await db.deal.create({
+   601→      data: {
+   602→        title: `Deal of the Day - ${prod.name}`,
+   603→        description: `Don't miss out on ${prod.name} at ${discount}% off! Limited time only.`,
+   604→        productId: prod.id,
+   605→        discountPercent: discount,
+   606→        startDate: new Date('2025-01-01T00:00:00.000Z'),
+   607→        endDate: new Date('2025-12-31T23:59:59.000Z'),
+   608→        isActive: true,
+   609→        sortOrder: i + 1,
+   610→      },
+   611→    });
+   612→  }
+   613→
+   614→  // 17. Create SearchAnalytics
+   615→  await db.searchAnalytics.createMany({
+   616→    data: [
+   617→      { query: 'wireless headphones', searchCount: 1250, resultCount: 8, noResults: false, lastSearched: new Date('2025-01-15T10:30:00.000Z') },
+   618→      { query: 'iphone 15', searchCount: 980, resultCount: 3, noResults: false, lastSearched: new Date('2025-01-15T09:15:00.000Z') },
+   619→      { query: 'laptop under 50000', searchCount: 756, resultCount: 12, noResults: false, lastSearched: new Date('2025-01-14T18:45:00.000Z') },
+   620→      { query: 'running shoes', searchCount: 634, resultCount: 15, noResults: false, lastSearched: new Date('2025-01-15T11:00:00.000Z') },
+   621→      { query: 'saree', searchCount: 521, resultCount: 9, noResults: false, lastSearched: new Date('2025-01-13T14:20:00.000Z') },
+   622→      { query: 'yoga mat', searchCount: 412, resultCount: 6, noResults: false, lastSearched: new Date('2025-01-15T07:30:00.000Z') },
+   623→      { query: 'smart watch', searchCount: 389, resultCount: 7, noResults: false, lastSearched: new Date('2025-01-14T16:00:00.000Z') },
+   624→      { query: 'nonexistent product xyz', searchCount: 45, resultCount: 0, noResults: true, lastSearched: new Date('2025-01-12T22:10:00.000Z') },
+   625→    ],
+   626→  });
+   627→
+   628→  // 18. Create SearchHistory for a few users
+   629→  await db.searchHistory.createMany({
+   630→    data: [
+   631→      { userId: customers[0], query: 'wireless headphones', results: 8 },
+   632→      { userId: customers[0], query: 'laptop under 50000', results: 12 },
+   633→      { userId: customers[1], query: 'running shoes', results: 15 },
+   634→      { userId: customers[2], query: 'saree', results: 9 },
+   635→      { sessionId: 'guest-session-abc123', query: 'smart watch', results: 7 },
+   636→    ],
+   637→  });
+   638→
+   639→  // 19. Create RecentlyViewed for some users
+   640→  const recentlyViewedData = [];
+   641→  for (let i = 0; i < 3; i++) {
+   642→    const userId = customers[i];
+   643→    const productIds = getRandomItems(allProducts, randomInt(3, 6));
+   644→    for (const pid of productIds) {
+   645→      recentlyViewedData.push({ userId, productId: pid });
+   646→    }
+   647→  }
+   648→  await db.recentlyViewed.createMany({ data: recentlyViewedData });
+   649→
+   650→  // 20. Create SupportTickets with messages
+   651→  const supportTicket1 = await db.supportTicket.create({
+   652→    data: {
+   653→      userId: customers[0],
+   654→      subject: 'Order not received after expected delivery date',
+   655→      status: 'IN_PROGRESS',
+   656→      priority: 'HIGH',
+   657→      category: 'ORDER',
+   658→      assignedTo: admin.id,
+   659→    },
+   660→  });
+   661→  await db.ticketMessage.createMany({
+   662→    data: [
+   663→      { ticketId: supportTicket1.id, userId: customers[0], message: 'I placed order #ORD-001003 on Jan 5th and the estimated delivery was Jan 10th, but I still haven\'t received it. Can you please check?', isStaff: false },
+   664→      { ticketId: supportTicket1.id, userId: admin.id, message: 'I\'m sorry for the delay. I\'ve checked with the courier and there was a transit delay. Your order is expected to be delivered by Jan 13th. I\'ll keep you updated.', isStaff: true },
+   665→    ],
+   666→  });
+   667→
+   668→  const supportTicket2 = await db.supportTicket.create({
+   669→    data: {
+   670→      userId: customers[3],
+   671→      subject: 'Wrong product delivered',
+   672→      status: 'OPEN',
+   673→      priority: 'URGENT',
+   674→      category: 'PRODUCT',
+   675→    },
+   676→  });
+   677→  await db.ticketMessage.createMany({
+   678→    data: [
+   679→      { ticketId: supportTicket2.id, userId: customers[3], message: 'I ordered a Wireless Bluetooth Headphone (Black) but received a wired earphone instead. This is completely wrong. I need a replacement ASAP.', isStaff: false },
+   680→    ],
+   681→  });
+   682→
+   683→  const supportTicket3 = await db.supportTicket.create({
+   684→    data: {
+   685→      userId: customers[5],
+   686→      subject: 'Refund not processed for returned item',
+   687→      status: 'RESOLVED',
+   688→      priority: 'MEDIUM',
+   689→      category: 'REFUND',
+   690→      assignedTo: admin.id,
+   691→    },
+   692→  });
+   693→  await db.ticketMessage.createMany({
+   694→    data: [
+   695→      { ticketId: supportTicket3.id, userId: customers[5], message: 'I returned a product on Dec 28th and the tracking shows it was delivered to your warehouse on Jan 2nd. But I still haven\'t received my refund of ₹1,299.', isStaff: false },
+   696→      { ticketId: supportTicket3.id, userId: admin.id, message: 'Thank you for your patience. The refund has been processed to your original payment method. It should reflect in 3-5 business days. Reference: REF-2025-0089.', isStaff: true },
+   697→      { ticketId: supportTicket3.id, userId: customers[5], message: 'Thank you! I received the refund today. Closing this ticket.', isStaff: false },
+   698→    ],
+   699→  });
+   700→
+   701→  const supportTicket4 = await db.supportTicket.create({
+   702→    data: {
+   703→      subject: 'Payment failed but amount deducted',
+   704→      status: 'OPEN',
+   705→      priority: 'HIGH',
+   706→      category: 'PAYMENT',
+   707→    },
+   708→  });
+   709→  await db.ticketMessage.createMany({
+   710→    data: [
+   711→      { ticketId: supportTicket4.id, message: 'I tried to place an order as a guest and the payment page showed "Transaction Failed" but ₹2,499 was deducted from my bank account. Order was not placed. Please help.', isStaff: false },
+   712→    ],
+   713→  });
+   714→
+   715→  // 21. Create ProductQA for some products
+   716→  const qaProducts = getRandomItems(allProducts, 5);
+   717→  for (const pid of qaProducts) {
+   718→    const prod = await db.product.findUnique({ where: { id: pid } });
+   719→    if (prod) {
+   720→      await db.productQA.create({
+   721→        data: {
+   722→          productId: pid,
+   723→          userId: customers[randomInt(0, customers.length - 1)],
+   724→          question: `Is this ${prod.name.substring(0, 20)} available in different colors?`,
+   725→          answer: 'Yes, this product is available in multiple color options. Please check the variants section on the product page.',
+   726→          answeredBy: vendors[0].userId,
+   727→          answeredAt: new Date(Date.now() - randomInt(1, 10) * 24 * 60 * 60 * 1000),
+   728→        },
+   729→      });
+   730→    }
+   731→  }
+   732→
+   733→  // 22. Create InventoryHistory for some products
+   734→  const invProducts = getRandomItems(allProducts, 8);
+   735→  for (const pid of invProducts) {
+   736→    await db.inventoryHistory.createMany({
+   737→      data: [
+   738→        { productId: pid, type: 'ADDED', quantity: randomInt(20, 100), note: 'Initial stock' },
+   739→        { productId: pid, type: 'SOLD', quantity: randomInt(1, 15), note: 'Customer order' },
+   740→        { productId: pid, type: 'ADDED', quantity: randomInt(5, 30), note: 'Restocked by vendor' },
+   741→      ],
+   742→    });
+   743→  }
+   744→
+   745→  // 23. Create Notifications for users
+   746→  await db.notification.createMany({
+   747→    data: [
+   748→      { userId: customers[0], title: 'Order Shipped', message: 'Your order #ORD-001003 has been shipped! Track your delivery.', type: 'ORDER', link: '/orders', isRead: false },
+   749→      { userId: customers[1], title: 'Price Drop Alert', message: 'A product in your wishlist has dropped in price by 20%!', type: 'PROMOTION', link: '/wishlist', isRead: false },
+   750→      { userId: vendors[0].userId, title: 'New Order Received', message: 'You have received a new order. Please process it within 24 hours.', type: 'ORDER', isRead: true },
+   751→      { userId: customers[2], title: 'Welcome to MarketHub!', message: 'Thank you for signing up. Use code WELCOME10 for 10% off your first order.', type: 'INFO', isRead: true },
+   752→      { userId: null, title: 'Flash Sale Live Now!', message: 'Lightning deals on electronics are live. Grab them before they\'re gone!', type: 'PROMOTION', isRead: false },
+   753→    ],
+   754→  });
+   755→
+   756→  console.log('✅ Database seeded successfully!');
+   757→  console.log(`   Admin: admin@markethub.com / admin123`);
+   758→  console.log(`   Vendors: ${vendorData.map(v => `${v.email} / vendor123`).join(', ')}`);
+   759→  console.log(`   Customer: ${customerNames.map(c => `${c.email} / customer123`).join(', ')}`);
+   760→  console.log(`   Products: ${allProducts.length}`);
+   761→  console.log(`   Categories: ${CATEGORIES.length}`);
+   762→  console.log(`   Brands: ${BRANDS.length}`);
+   763→  console.log(`   FAQs: 5`);
+   764→  console.log(`   FlashSales: 2`);
+   765→  console.log(`   Deals: ${dealProducts.length}`);
+   766→  console.log(`   VendorWallets: ${vendors.length}`);
+   767→  console.log(`   SupportTickets: 4`);
+   768→  console.log(`   SearchAnalytics: 8`);
+   769→}
+   770→
+   771→seed()
+   772→  .catch((e) => { console.error(e); process.exit(1); })
+   773→  .finally(() => { db.$disconnect(); process.exit(0); });
