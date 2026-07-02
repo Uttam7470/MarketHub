@@ -668,14 +668,13 @@ function VendorPendingPage() {
       if (vendor.rejectionReason) {
         setRejectionReason(vendor.rejectionReason);
       }
-      // If approved, let the app refresh naturally
+      // If approved, navigate to dashboard
       if (vendor.status === 'APPROVED') {
-        // Small delay to let the store update before re-rendering
-        const timer = setTimeout(() => setVendorView('vendor-dashboard'), 100);
+        const timer = setTimeout(() => useNavigationStore.getState().setVendorView('vendor-dashboard'), 100);
         return () => clearTimeout(timer);
       }
     }
-  }, [vendor?.status, vendorId, setVendorView]);
+  }, [vendor?.status, vendorId]);
 
   const isRejected = vendorStatus === 'REJECTED' || vendor?.status === 'REJECTED';
   const isPending = vendorStatus === 'PENDING' || vendor?.status === 'PENDING';

@@ -29,3 +29,20 @@ Stage Summary:
 - Approved vendors are automatically marked as verified
 - Login page now has 3 tabs: Login, Customer Register, Vendor Register
 - Vendor registration form includes: account details, business details, tax & bank details
+
+---
+Task ID: 2
+Agent: Main
+Task: Fix hydration mismatch and VendorPendingPage crash
+
+Work Log:
+- Fixed cart badge hydration mismatch in CustomerHeader: added `mounted &&` guard to conditionally render badge only after client mount (prevents server/client mismatch from Zustand localStorage hydration)
+- Fixed Runtime ReferenceError in VendorPendingPage: `setVendorView` was used in useEffect dependency array but never destructured from useNavigationStore. Replaced with `useNavigationStore.getState().setVendorView()` and removed from dependency array
+- Browser-verified: customer store loads with zero hydration errors
+- Browser-verified full vendor approval flow: register → pending page → admin approve → vendor dashboard access
+- Browser-verified vendor rejection flow: admin reject with reason → vendor sees rejection page with reason displayed
+- Browser-verified admin panel: pending vendor count badge, status filters, approve/reject action buttons all functional
+
+Stage Summary:
+- Two bugs fixed: hydration mismatch (cart badge) and ReferenceError (setVendorView)
+- Complete end-to-end vendor approval system verified via browser testing
