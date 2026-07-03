@@ -46,7 +46,7 @@ import type { Product, Category, Brand, Order, Banner, CustomerAddress, ApiRespo
 
 // ============ HELPERS ============
 
-const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+const formatCurrency = (price: number | undefined | null) => '₹' + (price ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function useRequireAuth() {
