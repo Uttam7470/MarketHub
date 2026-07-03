@@ -2,12 +2,12 @@
 
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { authToast, vendorStatusToast } from '@/lib/auth-toast';
 import {
   Package, ShoppingCart, ShoppingBag, DollarSign, Star, TrendingUp, BarChart3, Plus, Pencil, Trash2,
-  Search, Filter, Eye, ChevronLeft, ChevronRight, Upload, Settings, Bell, LogOut,
+  Search, Filter, Eye, ChevronLeft, ChevronRight, Upload, Settings, Bell, LogOut, Loader2,
   Store, Menu, X, User, AlertTriangle, CheckCircle, Clock, Truck, BoxIcon, XCircle, ShieldCheck,
   Wallet, Copy, Printer, ArrowDownUp, FileText, RotateCcw, Ban, Download, FileSpreadsheet, Tags,
   ImagePlus, Image as ImageIcon, GripVertical, ArrowUp, ArrowDown, Link
@@ -30,10 +30,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useAuthStore, useNavigationStore } from '@/stores';
+import { useAuthStore, useNavigationStore, useNotificationStore } from '@/stores';
+import { useNotifications } from '@/hooks/use-notifications';
 import type { Product, Order, ApiResponse, VendorDashboardStats, VendorWallet, WalletTransaction, InventoryHistory } from '@/types';
 
 const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+function timeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return 'Just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
 
 function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
   const stars = [];
@@ -62,6 +75,7 @@ const VENDOR_NAV = [
 function VendorSidebar() {
   const { vendorView, setVendorView, setAppView } = useNavigationStore();
   const { user, vendorId, logout } = useAuthStore();
+  const { unreadCount } = useNotificationStore();
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -88,6 +102,11 @@ function VendorSidebar() {
         </nav>
       </ScrollArea>
       <div className="p-3 border-t space-y-1">
+        <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 relative ${vendorView === 'vendor-notifications' ? 'bg-secondary' : ''} ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => setVendorView('vendor-notifications')}>
+          <Bell size={18} />
+          {!collapsed && <span>Notifications</span>}
+          {unreadCount > 0 && <Badge className="ml-auto h-5 min-w-5 rounded-full px-1.5 flex items-center justify-center text-[10px] bg-red-500 text-white">{unreadCount}</Badge>}
+        </Button>
         <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''} text-muted-foreground`} onClick={() => { logout(); setAppView('customer'); authToast.logoutSuccess(); }}>
           <LogOut size={18} />{!collapsed && <span>Logout</span>}
         </Button>
@@ -103,6 +122,7 @@ function VendorMobileHeader() {
   const { user, logout } = useAuthStore();
   const { vendorView, setVendorView, setAppView } = useNavigationStore();
   const [open, setOpen] = useState(false);
+  const { unreadCount } = useNotificationStore();
 
   return (
     <header className="lg:hidden sticky top-0 z-50 bg-background border-b px-4 h-14 flex items-center justify-between">
@@ -111,7 +131,11 @@ function VendorMobileHeader() {
         <Store size={20} className="text-orange-500" />
         <span className="font-bold">Vendor Panel</span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="icon" className="relative" aria-label="Notifications" onClick={() => setVendorView('vendor-notifications')}>
+          <Bell size={20} />
+          {unreadCount > 0 && <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] bg-red-500 text-white border-2 border-background">{unreadCount}</Badge>}
+        </Button>
         <Avatar className="h-8 w-8"><AvatarFallback className="text-xs bg-orange-100 text-orange-600">{user?.name?.[0]}</AvatarFallback></Avatar>
       </div>
       {open && (
@@ -392,7 +416,7 @@ function VendorProducts() {
               </div></TableCell></TableRow>
             )}
             {data?.data?.map(product => (
-              <TableRow key={product.id}>
+              <TableRow key={product.id} className="hover:bg-muted/50 transition-colors duration-150">
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">
@@ -757,7 +781,7 @@ function VendorAddProduct() {
 
           <Card className="p-6">
             <Button className="w-full bg-orange-500 hover:bg-orange-600" size="lg" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.name || !form.price || !form.categoryId}>
-              {saveMutation.isPending ? 'Saving...' : isEditing ? 'Update Product' : 'Create Product'}
+              {saveMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : isEditing ? 'Update Product' : 'Create Product'}
             </Button>
           </Card>
         </div>
@@ -1078,7 +1102,27 @@ function VendorProfile() {
     enabled: !!vendorId,
   });
 
-  if (isLoading) return <div className="p-6"><Skeleton className="h-64 rounded-xl" /></div>;
+  if (isLoading) return (
+    <div className="p-6 space-y-6">
+      <div><Skeleton className="h-8 w-48" /><Skeleton className="h-4 w-64 mt-1" /></div>
+      <Card className="p-6">
+        <div className="flex items-start gap-6 mb-6">
+          <Skeleton className="w-20 h-20 rounded-xl shrink-0" />
+          <div className="space-y-2 flex-1">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+        </div>
+        <Skeleton className="h-px w-full my-4" />
+        <div className="grid sm:grid-cols-2 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex gap-2"><Skeleton className="h-4 w-28" /><Skeleton className="h-4 w-36" /></div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -1532,6 +1576,119 @@ export default function VendorApp() {
     );
   }
 
+// ============ VENDOR NOTIFICATIONS ============
+
+function VendorNotifications() {
+  const { notifications, unreadCount, isLoading, refetch } = useNotifications();
+  const { markAllRead: storeMarkAllRead } = useNotificationStore();
+  const qc = useQueryClient();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => fetch(`/api/notifications/${id}`, { method: 'DELETE' }).then(r => r.json()),
+    onSuccess: () => { refetch(); qc.invalidateQueries({ queryKey: ['notifications'] }); setDeletingId(null); toast.success('Notification deleted'); },
+    onError: () => { setDeletingId(null); toast.error('Failed to delete notification'); },
+  });
+
+  const handleMarkAllRead = async () => {
+    await fetch('/api/notifications/mark-all-read', { method: 'PUT' });
+    storeMarkAllRead();
+    qc.invalidateQueries({ queryKey: ['notifications'] });
+    toast.success('All notifications marked as read');
+  };
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'order': case 'ORDER': return <Package size={18} className="text-blue-500" />;
+      case 'alert': case 'ALERT': case 'low_stock': return <AlertTriangle size={18} className="text-amber-500" />;
+      case 'wallet': case 'WALLET': case 'payout': return <DollarSign size={18} className="text-green-500" />;
+      case 'approval': case 'APPROVAL': case 'status': return <CheckCircle size={18} className="text-emerald-500" />;
+      default: return <Bell size={18} className="text-muted-foreground" />;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-9 w-32" />
+        </div>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex items-start gap-3 p-4 border rounded-lg">
+            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Notifications</h1>
+          <p className="text-sm text-muted-foreground">{unreadCount > 0 ? `${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}` : 'All caught up!'}</p>
+        </div>
+        {unreadCount > 0 && (
+          <Button variant="outline" size="sm" onClick={handleMarkAllRead}>
+            <CheckCircle size={14} className="mr-2" />Mark all read
+          </Button>
+        )}
+      </div>
+
+      {notifications.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+            <Bell size={32} className="text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-medium mb-1">No notifications</h3>
+          <p className="text-sm text-muted-foreground">You&apos;re all caught up!</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <AnimatePresence>
+            {(notifications as Array<{ id: string; title: string; message: string; isRead: boolean; createdAt: string; type?: string }>).map((n) => (
+              <motion.div
+                key={n.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className={`flex items-start gap-3 p-4 rounded-lg border transition-colors ${!n.isRead ? 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/50' : 'hover:bg-muted/50'}`}
+              >
+                <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5">
+                  {getNotificationIcon(n.type || '')}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm ${!n.isRead ? 'font-medium' : 'text-muted-foreground'}`}>{n.title}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">{timeAgo(n.createdAt)}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                  aria-label="Delete notification"
+                  disabled={deletingId === n.id}
+                  onClick={() => { setDeletingId(n.id); deleteMutation.mutate(n.id); }}
+                >
+                  {deletingId === n.id ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+                </Button>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
+    </div>
+  );
+}
+
   const renderView = () => {
     switch (vendorView) {
       case 'vendor-dashboard': return <VendorDashboard />;
@@ -1543,7 +1700,7 @@ export default function VendorApp() {
       case 'vendor-wallet': return <VendorWalletPage />;
       case 'vendor-profile': return <VendorProfile />;
       case 'vendor-settings': return <VendorSettings />;
-      case 'vendor-notifications': return <div className="p-6"><h1 className="text-2xl font-bold mb-4">Notifications</h1><p className="text-muted-foreground">No new notifications</p></div>;
+      case 'vendor-notifications': return <VendorNotifications />;
       default: return <VendorDashboard />;
     }
   };
@@ -1554,7 +1711,7 @@ export default function VendorApp() {
       <VendorMobileHeader />
       <div className="flex flex-1">
         <VendorSidebar />
-        <main id="main-content" className="flex-1 overflow-auto" role="main">{renderView()}</main>
+        <main id="main-content" className="flex-1 overflow-auto" role="main"><AnimatePresence mode="wait"><motion.div key={vendorView} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}} transition={{duration:0.15}}>{renderView()}</motion.div></AnimatePresence></main>
       </div>
     </motion.div>
   );

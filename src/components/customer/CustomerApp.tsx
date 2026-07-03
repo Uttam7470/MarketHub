@@ -13,7 +13,8 @@ import {
   Store, CreditCard, Banknote, Smartphone, Building2, Home,
   Settings, LogOut, Bell, Sun, Moon, Monitor, Filter, SlidersHorizontal,
   Bookmark, Send, Printer, RotateCcw, XCircle,
-  MessageCircle, Facebook, Twitter, Link as LinkIcon, HelpCircle, Headphones, SearchX, ShoppingBag
+  MessageCircle, Facebook, Twitter, Link as LinkIcon, HelpCircle, Headphones, SearchX, ShoppingBag,
+  Loader2
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -120,7 +121,7 @@ function ProductCard({ product }: { product: Product }) {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} whileHover={{ y: -4 }}>
-      <Card role="article" aria-label={`${product.name}, ${formatCurrency(product.price)}`} className="group overflow-hidden border-border/50 hover:shadow-lg transition-all duration-300 cursor-pointer h-full flex flex-col">
+      <Card role="article" aria-label={`${product.name}, ${formatCurrency(product.price)}`} className="group overflow-hidden border-border/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer h-full flex flex-col">
         <div className="relative aspect-square overflow-hidden bg-muted/30">
           {mainImage ? (
             <img src={mainImage} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
@@ -171,7 +172,19 @@ function ProductCard({ product }: { product: Product }) {
 function ProductGrid({ products, loading }: { products: Product[]; loading?: boolean }) {
   if (loading) {
     return <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="aspect-square rounded-xl" />)}
+      {Array.from({ length: 8 }).map((_, i) => (
+        <Card key={i} className="overflow-hidden">
+          <Skeleton className="aspect-square" />
+          <div className="p-3 space-y-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <div className="flex items-center gap-1"><Skeleton className="h-3 w-20" /></div>
+            <Skeleton className="h-5 w-24" />
+          </div>
+          <div className="px-3 pb-3"><Skeleton className="h-8 w-full rounded-md" /></div>
+        </Card>
+      ))}
     </div>;
   }
   if (!products.length) {
@@ -499,10 +512,10 @@ function CartSheet() {
 
 function HomePage() {
   const { data: banners } = useQuery({ queryKey: ['banners'], queryFn: () => fetch('/api/banners?position=HOME').then(r => r.json()).then((r: ApiResponse<Banner[]>) => r.data || []) });
-  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: ApiResponse<Category[]>) => r.data || []) });
-  const { data: featuredData } = useQuery({ queryKey: ['products', 'featured'], queryFn: () => fetch('/api/products?featured=true&limit=8').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
-  const { data: newArrivals } = useQuery({ queryKey: ['products', 'new'], queryFn: () => fetch('/api/products?limit=8&sort=newest').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
-  const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: ApiResponse<Brand[]>) => r.data || []) });
+  const { data: categories, isLoading: categoriesLoading } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: ApiResponse<Category[]>) => r.data || []) });
+  const { data: featuredData, isLoading: featuredLoading } = useQuery({ queryKey: ['products', 'featured'], queryFn: () => fetch('/api/products?featured=true&limit=8').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
+  const { data: newArrivals, isLoading: newArrivalsLoading } = useQuery({ queryKey: ['products', 'new'], queryFn: () => fetch('/api/products?limit=8&sort=newest').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
+  const { data: brands, isLoading: brandsLoading } = useQuery({ queryKey: ['brands'], queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: ApiResponse<Brand[]>) => r.data || []) });
   const { data: popularSearches } = useQuery({ queryKey: ['popular-searches'], queryFn: () => fetch('/api/search/popular').then(r => r.json()).then((r: any) => r.data || []) });
   const { setSelectedCategory, setCustomerView, setSearchQuery } = useNavigationStore();
   const [bannerIdx, setBannerIdx] = useState(0);
@@ -549,7 +562,23 @@ function HomePage() {
       )}
 
       {/* Categories */}
-      {categories && categories.length > 0 && (
+      {categoriesLoading ? (
+        <section className="container mx-auto px-4">
+          <div className="flex items-center justify-between mb-4">
+            <Skeleton className="h-7 w-40" />
+            <Skeleton className="h-8 w-20" />
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i} className="text-center p-4">
+                <Skeleton className="w-12 h-12 mx-auto rounded-full mb-2" />
+                <Skeleton className="h-3 w-16 mx-auto" />
+                <Skeleton className="h-2 w-12 mx-auto mt-1" />
+              </Card>
+            ))}
+          </div>
+        </section>
+      ) : categories && categories.length > 0 ? (
         <section className="container mx-auto px-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold">Shop by Category</h2>
@@ -560,7 +589,7 @@ function HomePage() {
               const allCats = [cat, ...(cat.children || [])];
               return allCats.slice(0, 1).map(c => (
                 <motion.div key={c.id} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                  <Card className="cursor-pointer hover:border-orange-300 transition-colors text-center p-4" onClick={() => { setSelectedCategory(c.slug); setCustomerView('products'); }}>
+                  <Card className="cursor-pointer hover:border-orange-300 hover:shadow-md transition-shadow duration-200 text-center p-4" onClick={() => { setSelectedCategory(c.slug); setCustomerView('products'); }}>
                     <div className="w-12 h-12 mx-auto rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-2 text-orange-500 font-bold text-lg">{c.name[0]}</div>
                     <p className="text-xs font-medium truncate">{c.name}</p>
                     <p className="text-[10px] text-muted-foreground">{c._count?.products || 0} items</p>
@@ -570,21 +599,28 @@ function HomePage() {
             })}
           </div>
         </section>
-      )}
+      ) : null}
 
       {/* Featured Products */}
-      {featuredData && featuredData.length > 0 && (
-        <section className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold">Featured Products</h2>
-            <Button variant="ghost" size="sm" className="text-orange-500" onClick={() => { setSelectedCategory(null); setCustomerView('products'); }}>View All <ArrowRight size={14} /></Button>
-          </div>
-          <ProductGrid products={featuredData} />
-        </section>
-      )}
+      <section className="container mx-auto px-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold">Featured Products</h2>
+          {!featuredLoading && featuredData && featuredData.length > 0 && <Button variant="ghost" size="sm" className="text-orange-500" onClick={() => { setSelectedCategory(null); setCustomerView('products'); }}>View All <ArrowRight size={14} /></Button>}
+        </div>
+        <ProductGrid products={featuredData || []} loading={featuredLoading} />
+      </section>
 
       {/* Brands */}
-      {brands && brands.length > 0 && (
+      {brandsLoading ? (
+        <section className="container mx-auto px-4">
+          <Skeleton className="h-7 w-28 mb-4" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 rounded-lg" />
+            ))}
+          </div>
+        </section>
+      ) : brands && brands.length > 0 ? (
         <section className="container mx-auto px-4">
           <h2 className="text-xl font-bold mb-4">Top Brands</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
@@ -595,17 +631,15 @@ function HomePage() {
             ))}
           </div>
         </section>
-      )}
+      ) : null}
 
       {/* New Arrivals */}
-      {newArrivals && newArrivals.length > 0 && (
-        <section className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold">New Arrivals</h2>
-          </div>
-          <ProductGrid products={newArrivals} />
-        </section>
-      )}
+      <section className="container mx-auto px-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold">New Arrivals</h2>
+        </div>
+        <ProductGrid products={newArrivals || []} loading={newArrivalsLoading} />
+      </section>
 
       {/* Features */}
       <section className="container mx-auto px-4">
@@ -1526,7 +1560,7 @@ function CheckoutPage() {
             <div className="flex justify-between text-lg font-bold"><span>Total</span><span className="text-orange-500">{formatCurrency(getTotal())}</span></div>
           </div>
           <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 text-lg" onClick={handlePlaceOrder} disabled={placing}>
-            {placing ? 'Placing Order...' : `Place Order • ${formatCurrency(getTotal())}`}
+            {placing ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Placing Order...</> : `Place Order • ${formatCurrency(getTotal())}`}
           </Button>
         </Card>
       </div>
@@ -1557,7 +1591,27 @@ function OrdersPage() {
   return (
     <div className="container mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold mb-6">My Orders</h1>
-      {isLoading ? <div className="space-y-4">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div> :
+      {isLoading ? <div className="space-y-4">{Array.from({length: 3}).map((_, i) => (
+        <Card key={i} className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="space-y-2"><Skeleton className="h-4 w-32" /><Skeleton className="h-3 w-24" /></div>
+            <Skeleton className="h-6 w-20 rounded-full" />
+          </div>
+          <div className="flex gap-3 mb-3">
+            {Array.from({length: 3}).map((_, j) => (
+              <div key={j} className="flex items-center gap-2">
+                <Skeleton className="w-12 h-12 rounded" />
+                <div className="space-y-1.5"><Skeleton className="h-3 w-28" /><Skeleton className="h-2.5 w-16" /></div>
+              </div>
+            ))}
+          </div>
+          <Skeleton className="h-px w-full" />
+          <div className="flex justify-between items-center mt-3">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+        </Card>
+      ))}</div> :
       !data?.length ? <div className="flex flex-col items-center justify-center py-16 text-center"><Package size={64} className="text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium">No orders yet</h3><p className="text-sm text-muted-foreground mt-1">When you place your first order, it will appear here</p><Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Start Shopping</Button></div> :
       <div className="space-y-4">{data.map(order => (
         <Card key={order.id} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setSelectedOrderId(order.id); navigateTo('order-detail'); }}>
@@ -2077,7 +2131,7 @@ function WishlistPage() {
   const { addItem: addCartItem } = useCartStore();
   const { isAuthenticated, navigateTo } = useNavigationStore();
 
-  const { data: products } = useQuery({
+  const { data: products, isLoading: wishlistLoading } = useQuery({
     queryKey: ['wishlist-products', items],
     queryFn: async () => {
       if (!items.length) return [];
@@ -2094,7 +2148,8 @@ function WishlistPage() {
   return (
     <div className="container mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold mb-6">My Wishlist ({items.length})</h1>
-      {!products?.length ? <div className="flex flex-col items-center justify-center py-16 text-center"><Heart size={64} className="text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium">No items in wishlist</h3><p className="text-sm text-muted-foreground mt-1">Save items you love for later</p><Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Discover Products</Button></div> :
+      {wishlistLoading ? <ProductGrid products={[]} loading={true} /> :
+      !products?.length ? <div className="flex flex-col items-center justify-center py-16 text-center"><Heart size={64} className="text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium">No items in wishlist</h3><p className="text-sm text-muted-foreground mt-1">Save items you love for later</p><Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Discover Products</Button></div> :
       <ProductGrid products={products} />}
     </div>
   );
@@ -2128,7 +2183,7 @@ function ComparePage() {
   const { items, removeItem, clearAll } = useCompareStore();
   const { navigateTo, setSelectedProductId } = useNavigationStore();
 
-  const { data: products } = useQuery({
+  const { data: products, isLoading: compareLoading } = useQuery({
     queryKey: ['compare-products', items],
     queryFn: async () => {
       if (!items.length) return [];
@@ -2154,6 +2209,25 @@ function ComparePage() {
         <h1 className="text-2xl font-bold">Compare Products ({items.length}/4)</h1>
         <Button variant="outline" onClick={clearAll}>Clear All</Button>
       </div>
+      {compareLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="relative">
+              <CardContent className="p-4 space-y-3">
+                <Skeleton className="aspect-square rounded-lg" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-6 w-24" />
+                <div className="space-y-2">
+                  <Skeleton className="h-3.5 w-full" />
+                  <Skeleton className="h-3.5 w-5/6" />
+                  <Skeleton className="h-3.5 w-4/6" />
+                  <Skeleton className="h-3.5 w-3/6" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
       <div className="overflow-x-auto">
         <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${products?.length || 1}, minmax(200px, 1fr))` }}>
           {products?.map(p => (
@@ -2176,6 +2250,7 @@ function ComparePage() {
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -2347,7 +2422,7 @@ export default function CustomerApp() {
     <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.2}} className="min-h-screen flex flex-col bg-background">
       <a href="#main-content" className="skip-link">Skip to main content</a>
       <CustomerHeader />
-      <main id="main-content" className="flex-1" role="main">{renderView()}</main>
+      <main id="main-content" className="flex-1" role="main"><AnimatePresence mode="wait"><motion.div key={customerView} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}} transition={{duration:0.15}}>{renderView()}</motion.div></AnimatePresence></main>
       <CustomerFooter />
     </motion.div>
   );

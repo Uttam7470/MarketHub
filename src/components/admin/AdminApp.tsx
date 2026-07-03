@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useContext } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { authToast } from '@/lib/auth-toast';
 import {
@@ -12,7 +12,7 @@ import {
   Tag, Image, Bell, FileText, UserCog, CreditCard, PieChart, LineChart, Clock,
   RotateCcw, Wallet, Headphones, Megaphone, HelpCircle, Copy, ArrowUpRight,
   ArrowDownRight, CheckCircle2, Send, MessageSquare, Zap, CalendarDays, Star,
-  ShieldCheck, FolderOpen, Sparkles
+  ShieldCheck, FolderOpen, Sparkles, Loader2
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -34,10 +34,23 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
-import { useAuthStore, useNavigationStore } from '@/stores';
+import { useAuthStore, useNavigationStore, useNotificationStore } from '@/stores';
+import { useNotifications } from '@/hooks/use-notifications';
 import type { Product, Category, Brand, Vendor, Order, Coupon, Banner, AdminDashboardStats } from '@/types';
 
 const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+function timeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return 'Just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
 
 const ConfirmContext = React.createContext<((action: { title: string; description: string; onConfirm: () => void }) => void)>(() => {});
 const useConfirm = () => useContext(ConfirmContext);
@@ -71,6 +84,7 @@ const ADMIN_NAV = [
 function AdminSidebar() {
   const { adminView, setAdminView, setAppView } = useNavigationStore();
   const { user, logout } = useAuthStore();
+  const { unreadCount } = useNotificationStore();
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -99,6 +113,11 @@ function AdminSidebar() {
         </nav>
       </ScrollArea>
       <div className="p-3 border-t space-y-1">
+        <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 relative ${adminView === 'admin-notifications' ? 'bg-secondary' : ''} ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => setAdminView('admin-notifications')}>
+          <Bell size={18} />
+          {!collapsed && <span>Notifications</span>}
+          {unreadCount > 0 && <Badge className="ml-auto h-5 min-w-5 rounded-full px-1.5 flex items-center justify-center text-[10px] bg-red-500 text-white">{unreadCount}</Badge>}
+        </Button>
         <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 text-muted-foreground ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => { logout(); setAppView('customer'); authToast.logoutSuccess(); }}>
           <LogOut size={18} />{!collapsed && <span>Logout</span>}
         </Button>
@@ -111,6 +130,7 @@ function AdminMobileHeader() {
   const { user, logout } = useAuthStore();
   const { adminView, setAdminView, setAppView } = useNavigationStore();
   const [open, setOpen] = useState(false);
+  const { unreadCount } = useNotificationStore();
 
   return (
     <header className="lg:hidden sticky top-0 z-50 bg-background border-b px-4 h-14 flex items-center justify-between">
@@ -119,7 +139,13 @@ function AdminMobileHeader() {
         <Shield size={20} className="text-amber-600" />
         <span className="font-bold">Admin Panel</span>
       </div>
-      <Avatar className="h-8 w-8"><AvatarFallback className="text-xs bg-amber-100 text-amber-600">{user?.name?.[0]}</AvatarFallback></Avatar>
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="icon" className="relative" aria-label="Notifications" onClick={() => setAdminView('admin-notifications')}>
+          <Bell size={20} />
+          {unreadCount > 0 && <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] bg-red-500 text-white border-2 border-background">{unreadCount}</Badge>}
+        </Button>
+        <Avatar className="h-8 w-8"><AvatarFallback className="text-xs bg-amber-100 text-amber-600">{user?.name?.[0]}</AvatarFallback></Avatar>
+      </div>
       {open && (
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
@@ -172,23 +198,23 @@ function AdminDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {stats.map((s, i) => (
           <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: i * 0.05 }}>
-            <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">{s.label}</p><p className="text-2xl font-bold mt-1">{s.value}</p></div><div className={`w-10 h-10 rounded-lg flex items-center justify-center ${s.color}`}><s.icon size={20} /></div></div></Card>
+            <Card className="p-4 hover:shadow-md transition-shadow duration-200"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">{s.label}</p><p className="text-2xl font-bold mt-1">{s.value}</p></div><div className={`w-10 h-10 rounded-lg flex items-center justify-center ${s.color}`}><s.icon size={20} /></div></div></Card>
           </motion.div>
         ))}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Today's Revenue</p><p className="text-2xl font-bold">{formatCurrency(data?.todayRevenue || 0)}</p></div><DollarSign className="h-8 w-8 text-green-500 bg-green-100 dark:bg-green-900/30 rounded-lg p-2" /></div></Card>
+          <Card className="p-4 hover:shadow-md transition-shadow duration-200"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Today's Revenue</p><p className="text-2xl font-bold">{formatCurrency(data?.todayRevenue || 0)}</p></div><DollarSign className="h-8 w-8 text-green-500 bg-green-100 dark:bg-green-900/30 rounded-lg p-2" /></div></Card>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-          <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Today's Orders</p><p className="text-2xl font-bold">{data?.todayOrders || 0}</p></div><ShoppingCart className="h-8 w-8 text-blue-500 bg-blue-100 dark:bg-blue-900/30 rounded-lg p-2" /></div></Card>
+          <Card className="p-4 hover:shadow-md transition-shadow duration-200"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Today's Orders</p><p className="text-2xl font-bold">{data?.todayOrders || 0}</p></div><ShoppingCart className="h-8 w-8 text-blue-500 bg-blue-100 dark:bg-blue-900/30 rounded-lg p-2" /></div></Card>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <Card className="p-4 cursor-pointer" onClick={() => useNavigationStore.getState().setAdminView('admin-returns')}><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Pending Returns</p><p className="text-2xl font-bold text-red-500">{data?.pendingReturns || 0}</p></div><RotateCcw className="h-8 w-8 text-red-500 bg-red-100 dark:bg-red-900/30 rounded-lg p-2" /></div></Card>
+          <Card className="p-4 cursor-pointer hover:shadow-md transition-shadow duration-200" onClick={() => useNavigationStore.getState().setAdminView('admin-returns')}><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Pending Returns</p><p className="text-2xl font-bold text-red-500">{data?.pendingReturns || 0}</p></div><RotateCcw className="h-8 w-8 text-red-500 bg-red-100 dark:bg-red-900/30 rounded-lg p-2" /></div></Card>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} onClick={() => useNavigationStore.getState().setAdminView('admin-products')}>
-          <Card className="cursor-pointer hover:shadow-md transition-shadow p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Low Stock Products</p><p className="text-2xl font-bold mt-1">{data?.lowStockProducts || 0}</p></div><div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><AlertTriangle size={24} className="text-amber-500" /></div></div></Card>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow duration-200 p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Low Stock Products</p><p className="text-2xl font-bold mt-1">{data?.lowStockProducts || 0}</p></div><div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><AlertTriangle size={24} className="text-amber-500" /></div></div></Card>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-          <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Conversion Rate</p><p className="text-2xl font-bold text-green-500">{data?.conversionRate || 2.4}%</p></div><TrendingUp className="h-8 w-8 text-green-500 bg-green-100 dark:bg-green-900/30 rounded-lg p-2" /></div></Card>
+          <Card className="p-4 hover:shadow-md transition-shadow duration-200"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Conversion Rate</p><p className="text-2xl font-bold text-green-500">{data?.conversionRate || 2.4}%</p></div><TrendingUp className="h-8 w-8 text-green-500 bg-green-100 dark:bg-green-900/30 rounded-lg p-2" /></div></Card>
         </motion.div>
       </div>
 
@@ -366,7 +392,7 @@ function AdminVendors() {
               <TableBody>
                 {!data?.data?.length && <TableRow><TableCell colSpan={8}><div className="flex flex-col items-center justify-center py-12 text-center"><Store size={40} className="text-muted-foreground/40 mb-3" /><p className="text-muted-foreground font-medium">No vendors found</p><p className="text-muted-foreground text-sm mt-1">Vendors will appear here when they register</p></div></TableCell></TableRow>}
                 {data?.data?.map((vendor: Vendor) => (
-                  <TableRow key={vendor.id} className={vendor.status === 'PENDING' ? 'bg-amber-50/50 dark:bg-amber-900/5' : ''}>
+                  <TableRow key={vendor.id} className={`hover:bg-muted/50 transition-colors duration-150 ${vendor.status === 'PENDING' ? 'bg-amber-50/50 dark:bg-amber-900/5' : ''}`}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 font-bold text-sm shrink-0">{vendor.businessName[0]}</div>
@@ -667,7 +693,7 @@ function AdminCategories() {
       <div className="space-y-2">
         {categories?.map((cat: any) => (
           <div key={cat.id}>
-            <Card className="p-4 flex items-center justify-between">
+            <Card className="p-4 hover:shadow-md transition-shadow duration-200 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-sm font-bold">{cat.name[0]}</div>
                 <div><p className="font-medium">{cat.name}</p><p className="text-sm text-muted-foreground">{cat._count?.products || 0} products</p></div>
@@ -678,7 +704,7 @@ function AdminCategories() {
               </div>
             </Card>
             {cat.children?.map((child: any) => (
-              <Card key={child.id} className="p-4 flex items-center justify-between ml-8 mt-1">
+              <Card key={child.id} className="p-4 hover:shadow-md transition-shadow duration-200 flex items-center justify-between ml-8 mt-1">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-xs font-bold">{child.name[0]}</div>
                   <div><p className="font-medium text-sm">{child.name}</p><p className="text-xs text-muted-foreground">{child._count?.products || 0} products</p></div>
@@ -750,7 +776,7 @@ function AdminBrands() {
       ) : (
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {brands.map((brand: any) => (
-          <Card key={brand.id} className="p-4 flex items-center justify-between">
+          <Card key={brand.id} className="p-4 hover:shadow-md transition-shadow duration-200 flex items-center justify-between">
             <div><p className="font-medium">{brand.name}</p><p className="text-sm text-muted-foreground">{brand._count?.products || 0} products</p></div>
             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive shrink-0" disabled={deleteMutation.isPending} onClick={() => { confirm({ title: 'Delete Brand?', description: 'Are you sure you want to delete "' + brand.name + '"? This action cannot be undone.', onConfirm: () => deleteMutation.mutate(brand.id) }); }}><Trash2 size={14} /></Button>
           </Card>
@@ -790,7 +816,7 @@ function AdminProducts() {
           <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="hidden md:table-cell">Vendor</TableHead><TableHead>Price</TableHead><TableHead>Stock</TableHead><TableHead className="hidden sm:table-cell">Sold</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
           <TableBody>
             {data?.data?.map((p: any) => (
-              <TableRow key={p.id}>
+              <TableRow key={p.id} className="hover:bg-muted/50 transition-colors duration-150">
                 <TableCell><div className="flex items-center gap-3"><div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">{p.images?.[0]?.url && <img src={p.images[0].url} alt="" className="w-full h-full object-cover" />}</div><div className="min-w-0"><p className="font-medium text-sm truncate max-w-48">{p.name}</p><p className="text-xs text-muted-foreground">{p.category?.name}</p></div></div></TableCell>
                 <TableCell className="hidden md:table-cell text-sm">{p.vendor?.businessName}</TableCell>
                 <TableCell className="font-medium">{formatCurrency(p.price)}</TableCell>
@@ -858,7 +884,7 @@ function AdminOrders() {
           <TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Customer</TableHead><TableHead>Items</TableHead><TableHead>Total</TableHead><TableHead>Payment</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
           <TableBody>
             {data.data.map((order: any) => (
-              <TableRow key={order.id}>
+              <TableRow key={order.id} className="hover:bg-muted/50 transition-colors duration-150">
                 <TableCell><p className="font-medium text-sm">#{order.orderNumber}</p></TableCell>
                 <TableCell className="text-sm">{order.user?.name}</TableCell>
                 <TableCell className="text-sm">{order.items?.length || 0} items</TableCell>
@@ -907,7 +933,7 @@ function AdminCustomers() {
           <TableHeader><TableRow><TableHead>Customer</TableHead><TableHead>Email</TableHead><TableHead className="hidden sm:table-cell">Phone</TableHead><TableHead>Joined</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
           <TableBody>
             {data?.data?.map((u: any) => (
-              <TableRow key={u.id}>
+              <TableRow key={u.id} className="hover:bg-muted/50 transition-colors duration-150">
                 <TableCell><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarFallback className="text-xs">{u.name[0]}</AvatarFallback></Avatar><span className="font-medium text-sm">{u.name}</span></div></TableCell>
                 <TableCell className="text-sm">{u.email}</TableCell>
                 <TableCell className="hidden sm:table-cell text-sm">{u.phone || 'N/A'}</TableCell>
@@ -953,7 +979,7 @@ function AdminCoupons() {
           <TableBody>
             {isLoading ? Array.from({length: 3}).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8" /></TableCell></TableRow>) :
             coupons?.map((c: any) => (
-              <TableRow key={c.id}>
+              <TableRow key={c.id} className="hover:bg-muted/50 transition-colors duration-150">
                 <TableCell className="font-mono font-bold">{c.code}</TableCell>
                 <TableCell>{c.discountType === 'PERCENTAGE' ? `${c.discountValue}%` : formatCurrency(c.discountValue)}{c.maxDiscount ? ` (max ${formatCurrency(c.maxDiscount)})` : ''}</TableCell>
                 <TableCell>{c.minOrder ? formatCurrency(c.minOrder) : 'N/A'}</TableCell>
@@ -1943,6 +1969,122 @@ function AdminVendorWalletsPage() {
   );
 }
 
+// ============ ADMIN NOTIFICATIONS ============
+
+function AdminNotifications() {
+  const { notifications, unreadCount, isLoading, refetch } = useNotifications();
+  const { markAllRead: storeMarkAllRead } = useNotificationStore();
+  const qc = useQueryClient();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => fetch(`/api/notifications/${id}`, { method: 'DELETE' }).then(r => r.json()),
+    onSuccess: () => { refetch(); qc.invalidateQueries({ queryKey: ['notifications'] }); setDeletingId(null); toast.success('Notification deleted'); },
+    onError: () => { setDeletingId(null); toast.error('Failed to delete notification'); },
+  });
+
+  const handleMarkAllRead = async () => {
+    await fetch('/api/notifications/mark-all-read', { method: 'PUT' });
+    storeMarkAllRead();
+    qc.invalidateQueries({ queryKey: ['notifications'] });
+    toast.success('All notifications marked as read');
+  };
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'vendor': case 'VENDOR': case 'vendor_registration': return <Store size={18} className="text-blue-500" />;
+      case 'customer': case 'CUSTOMER': case 'customer_registration': return <Users size={18} className="text-purple-500" />;
+      case 'alert': case 'ALERT': case 'low_stock': return <AlertTriangle size={18} className="text-amber-500" />;
+      case 'order': case 'ORDER': case 'high_value': return <ShoppingCart size={18} className="text-orange-500" />;
+      case 'return': case 'RETURN': return <RotateCcw size={18} className="text-red-500" />;
+      case 'wallet': case 'WALLET': case 'payout': case 'withdrawal': return <Wallet size={18} className="text-green-500" />;
+      case 'system': case 'SYSTEM': case 'platform': return <Shield size={18} className="text-slate-500" />;
+      default: return <Bell size={18} className="text-muted-foreground" />;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-9 w-32" />
+        </div>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex items-start gap-3 p-4 border rounded-lg">
+            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Notifications</h1>
+          <p className="text-sm text-muted-foreground">{unreadCount > 0 ? `${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}` : 'All caught up!'}</p>
+        </div>
+        {unreadCount > 0 && (
+          <Button variant="outline" size="sm" onClick={handleMarkAllRead}>
+            <CheckCircle size={14} className="mr-2" />Mark all read
+          </Button>
+        )}
+      </div>
+
+      {notifications.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+            <Bell size={32} className="text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-medium mb-1">No notifications</h3>
+          <p className="text-sm text-muted-foreground">You&apos;re all caught up!</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <AnimatePresence>
+            {(notifications as Array<{ id: string; title: string; message: string; isRead: boolean; createdAt: string; type?: string }>).map((n) => (
+              <motion.div
+                key={n.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className={`flex items-start gap-3 p-4 rounded-lg border transition-colors ${!n.isRead ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/50' : 'hover:bg-muted/50'}`}
+              >
+                <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5">
+                  {getNotificationIcon(n.type || '')}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm ${!n.isRead ? 'font-medium' : 'text-muted-foreground'}`}>{n.title}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">{timeAgo(n.createdAt)}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                  aria-label="Delete notification"
+                  disabled={deletingId === n.id}
+                  onClick={() => { setDeletingId(n.id); deleteMutation.mutate(n.id); }}
+                >
+                  {deletingId === n.id ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+                </Button>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ============ MAIN ADMIN APP ============
 
 export default function AdminApp() {
@@ -1983,7 +2125,7 @@ export default function AdminApp() {
       case 'admin-roles': return <AdminRolesPage />;
       case 'admin-activity-logs': return <AdminActivityLogs />;
       case 'admin-settings': return <AdminSettings />;
-      case 'admin-notifications': return <div className="p-6"><h1 className="text-2xl font-bold mb-4">Notifications</h1><p className="text-muted-foreground">No new notifications</p></div>;
+      case 'admin-notifications': return <AdminNotifications />;
       default: return <AdminDashboard />;
     }
   };
@@ -1995,7 +2137,7 @@ export default function AdminApp() {
       <AdminMobileHeader />
       <div className="flex flex-1">
         <AdminSidebar />
-        <main id="main-content" className="flex-1 overflow-auto" role="main">{renderView()}</main>
+        <main id="main-content" className="flex-1 overflow-auto" role="main"><AnimatePresence mode="wait"><motion.div key={adminView} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}} transition={{duration:0.15}}>{renderView()}</motion.div></AnimatePresence></main>
       </div>
       <AlertDialog open={!!confirmState} onOpenChange={(open) => { if (!open) setConfirmState(null); }}>
         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{confirmState?.title}</AlertDialogTitle><AlertDialogDescription>{confirmState?.description}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleConfirm}>Confirm</AlertDialogAction></AlertDialogFooter></AlertDialogContent>

@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useCallback, useContext } from 'react';
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→import { motion } from 'framer-motion';
+     6→import { toast } from 'sonner';
+     7→import { authToast } from '@/lib/auth-toast';
+     8→import {
+     9→  BarChart3, Users, Package, ShoppingCart, Store, DollarSign, TrendingUp,
+    10→  Settings, LogOut, Menu, X, ChevronLeft, ChevronRight, Search, Eye,
+    11→  Plus, Pencil, Trash2, CheckCircle, XCircle, AlertTriangle, Shield,
+    12→  Tag, Image, Bell, FileText, UserCog, CreditCard, PieChart, LineChart, Clock,
+    13→  RotateCcw, Wallet, Headphones, Megaphone, HelpCircle, Copy, ArrowUpRight,
+    14→  ArrowDownRight, CheckCircle2, Send, MessageSquare, Zap, CalendarDays, Star,
+    15→  ShieldCheck, FolderOpen, Sparkles
+    16→} from 'lucide-react';
+    17→
+    18→import { Button } from '@/components/ui/button';
+    19→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    20→import { Input } from '@/components/ui/input';
+    21→import { Label } from '@/components/ui/label';
+    22→import { Badge } from '@/components/ui/badge';
+    23→import { Separator } from '@/components/ui/separator';
+    24→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    25→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    26→import { Textarea } from '@/components/ui/textarea';
+    27→import { Skeleton } from '@/components/ui/skeleton';
+    28→import { ScrollArea } from '@/components/ui/scroll-area';
+    29→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    30→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+    31→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+    32→import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
+    33→import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+    34→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    35→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    36→import { Switch } from '@/components/ui/switch';
+    37→import { useAuthStore, useNavigationStore } from '@/stores';
+    38→import type { Product, Category, Brand, Vendor, Order, Coupon, Banner, AdminDashboardStats } from '@/types';
+    39→
+    40→const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    41→
+    42→const ConfirmContext = React.createContext<((action: { title: string; description: string; onConfirm: () => void }) => void)>(() => {});
+    43→const useConfirm = () => useContext(ConfirmContext);
+    44→
+    45→// ============ ADMIN NAV ============
+    46→
+    47→const ADMIN_NAV = [
+    48→  { key: 'admin-dashboard', label: 'Dashboard', icon: BarChart3 },
+    49→  { key: 'admin-vendors', label: 'Vendors', icon: Store },
+    50→  { key: 'admin-categories', label: 'Categories', icon: Tag },
+    51→  { key: 'admin-brands', label: 'Brands', icon: Shield },
+    52→  { key: 'admin-products', label: 'Products', icon: Package },
+    53→  { key: 'admin-orders', label: 'Orders', icon: ShoppingCart },
+    54→  { key: 'admin-customers', label: 'Customers', icon: Users },
+    55→  { key: 'admin-coupons', label: 'Coupons', icon: CreditCard },
+    56→  { key: 'admin-banners', label: 'Banners', icon: Image },
+    57→  { key: 'admin-reports', label: 'Reports', icon: TrendingUp },
+    58→  { key: 'admin-returns', label: 'Returns', icon: RotateCcw },
+    59→  { key: 'admin-payouts', label: 'Payouts', icon: Wallet },
+    60→  { key: 'admin-vendor-wallets', label: 'Vendor Wallets', icon: Wallet },
+    61→  { key: 'admin-analytics', label: 'Analytics', icon: BarChart3 },
+    62→  { key: 'admin-support', label: 'Support', icon: Headphones },
+    63→  { key: 'admin-marketing', label: 'Marketing', icon: Megaphone },
+    64→  { key: 'admin-faq', label: 'FAQ', icon: HelpCircle },
+    65→  { key: 'admin-roles', label: 'Roles', icon: UserCog },
+    66→  { key: 'admin-settings', label: 'Settings', icon: Settings },
+    67→];
+    68→
+    69→// ============ ADMIN SIDEBAR ============
+    70→
+    71→function AdminSidebar() {
+    72→  const { adminView, setAdminView, setAppView } = useNavigationStore();
+    73→  const { user, logout } = useAuthStore();
+    74→  const [collapsed, setCollapsed] = useState(false);
+    75→
+    76→  return (
+    77→    <aside role="navigation" aria-label="Admin panel navigation" className={`${collapsed ? 'w-16' : 'w-64'} border-r bg-card flex flex-col transition-all duration-300 hidden lg:flex`}>
+    78→      <div className="p-4 border-b flex items-center gap-3">
+    79→        <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 font-bold shrink-0">
+    80→          <Shield size={20} />
+    81→        </div>
+    82→        {!collapsed && <div className="min-w-0"><p className="font-semibold text-sm truncate">Super Admin</p><p className="text-xs text-muted-foreground truncate">{user?.email}</p></div>}
+    83→      </div>
+    84→      <ScrollArea className="flex-1 py-2">
+    85→        <nav className="px-2 space-y-1">
+    86→          {ADMIN_NAV.map(item => (
+    87→            <TooltipProvider key={item.key} delayDuration={0}>
+    88→              <Tooltip>
+    89→                <TooltipTrigger asChild>
+    90→                  <Button variant={adminView === item.key ? 'secondary' : 'ghost'} size="sm" aria-current={adminView === item.key ? 'page' : undefined} className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => setAdminView(item.key as any)}>
+    91→                    <item.icon size={18} />
+    92→                    {!collapsed && <span>{item.label}</span>}
+    93→                  </Button>
+    94→                </TooltipTrigger>
+    95→                {collapsed && <TooltipContent side="right">{item.label}</TooltipContent>}
+    96→              </Tooltip>
+    97→            </TooltipProvider>
+    98→          ))}
+    99→        </nav>
+   100→      </ScrollArea>
+   101→      <div className="p-3 border-t space-y-1">
+   102→        <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 text-muted-foreground ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => { logout(); setAppView('customer'); authToast.logoutSuccess(); }}>
+   103→          <LogOut size={18} />{!collapsed && <span>Logout</span>}
+   104→        </Button>
+   105→      </div>
+   106→    </aside>
+   107→  );
+   108→}
+   109→
+   110→function AdminMobileHeader() {
+   111→  const { user, logout } = useAuthStore();
+   112→  const { adminView, setAdminView, setAppView } = useNavigationStore();
+   113→  const [open, setOpen] = useState(false);
+   114→
+   115→  return (
+   116→    <header className="lg:hidden sticky top-0 z-50 bg-background border-b px-4 h-14 flex items-center justify-between">
+   117→      <div className="flex items-center gap-2">
+   118→        <Button variant="ghost" size="icon" onClick={() => setOpen(true)}><Menu size={20} /></Button>
+   119→        <Shield size={20} className="text-amber-600" />
+   120→        <span className="font-bold">Admin Panel</span>
+   121→      </div>
+   122→      <Avatar className="h-8 w-8"><AvatarFallback className="text-xs bg-amber-100 text-amber-600">{user?.name?.[0]}</AvatarFallback></Avatar>
+   123→      {open && (
+   124→        <div className="fixed inset-0 z-50">
+   125→          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
+   126→          <div className="absolute left-0 top-0 bottom-0 w-72 bg-background border-r p-4 space-y-2 overflow-y-auto">
+   127→            <div className="flex items-center justify-between mb-4"><span className="font-bold">Admin Menu</span><Button variant="ghost" size="icon" onClick={() => setOpen(false)}><X size={20} /></Button></div>
+   128→            {ADMIN_NAV.map(item => (
+   129→              <Button key={item.key} variant={adminView === item.key ? 'secondary' : 'ghost'} className="w-full justify-start gap-3" onClick={() => { setAdminView(item.key as any); setOpen(false); }}>
+   130→                <item.icon size={18} />{item.label}
+   131→              </Button>
+   132→            ))}
+   133→            <Separator />
+   134→            <Button variant="ghost" className="w-full justify-start gap-3 text-destructive" onClick={() => { authToast.logoutSuccess(); logout(); setAppView('customer'); }}><LogOut size={18} />Logout</Button>
+   135→          </div>
+   136→        </div>
+   137→      )}
+   138→    </header>
+   139→  );
+   140→}
+   141→
+   142→// ============ ADMIN DASHBOARD ============
+   143→
+   144→function AdminDashboard() {
+   145→  const { data, isLoading } = useQuery({
+   146→    queryKey: ['admin-dashboard'],
+   147→    queryFn: () => fetch('/api/admin/dashboard').then(r => r.json()).then((r: any) => r.data ?? {}),
+   148→  });
+   149→
+   150→  if (isLoading) return <div className="p-6 space-y-4">{Array.from({length: 6}).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>;
+   151→
+   152→  const stats = [
+   153→    { label: 'Total Revenue', value: formatCurrency(data?.totalRevenue || 0), icon: DollarSign, color: 'text-green-600 bg-green-100 dark:bg-green-900/30' },
+   154→    { label: 'Platform Earnings', value: formatCurrency(data?.platformEarnings || 0), icon: TrendingUp, color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30' },
+   155→    { label: 'Total Orders', value: String(data?.totalOrders || 0), icon: ShoppingCart, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30' },
+   156→    { label: 'Total Products', value: String(data?.totalProducts || 0), icon: Package, color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30' },
+   157→    { label: 'Customers', value: String(data?.totalCustomers || 0), icon: Users, color: 'text-pink-600 bg-pink-100 dark:bg-pink-900/30' },
+   158→    { label: 'Active Vendors', value: String(data?.totalVendors || 0), icon: Store, color: 'text-amber-600 bg-amber-100 dark:bg-amber-900/30' },
+   159→  ];
+   160→
+   161→  return (
+   162→    <div className="p-6 space-y-6">
+   163→      <div className="flex items-center justify-between">
+   164→        <div><h1 className="text-2xl font-bold">Admin Dashboard</h1><p className="text-muted-foreground">Platform overview and analytics</p></div>
+   165→        {data?.pendingVendors > 0 && (
+   166→          <Badge variant="outline" className="text-amber-600 border-amber-500 cursor-pointer" onClick={() => useNavigationStore.getState().setAdminView('admin-vendors')}>
+   167→            <AlertTriangle size={14} className="mr-1" />{data.pendingVendors} Pending Vendors
+   168→          </Badge>
+   169→        )}
+   170→      </div>
+   171→
+   172→      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+   173→        {stats.map((s, i) => (
+   174→          <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: i * 0.05 }}>
+   175→            <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">{s.label}</p><p className="text-2xl font-bold mt-1">{s.value}</p></div><div className={`w-10 h-10 rounded-lg flex items-center justify-center ${s.color}`}><s.icon size={20} /></div></div></Card>
+   176→          </motion.div>
+   177→        ))}
+   178→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+   179→          <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Today's Revenue</p><p className="text-2xl font-bold">{formatCurrency(data?.todayRevenue || 0)}</p></div><DollarSign className="h-8 w-8 text-green-500 bg-green-100 dark:bg-green-900/30 rounded-lg p-2" /></div></Card>
+   180→        </motion.div>
+   181→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+   182→          <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Today's Orders</p><p className="text-2xl font-bold">{data?.todayOrders || 0}</p></div><ShoppingCart className="h-8 w-8 text-blue-500 bg-blue-100 dark:bg-blue-900/30 rounded-lg p-2" /></div></Card>
+   183→        </motion.div>
+   184→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+   185→          <Card className="p-4 cursor-pointer" onClick={() => useNavigationStore.getState().setAdminView('admin-returns')}><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Pending Returns</p><p className="text-2xl font-bold text-red-500">{data?.pendingReturns || 0}</p></div><RotateCcw className="h-8 w-8 text-red-500 bg-red-100 dark:bg-red-900/30 rounded-lg p-2" /></div></Card>
+   186→        </motion.div>
+   187→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} onClick={() => useNavigationStore.getState().setAdminView('admin-products')}>
+   188→          <Card className="cursor-pointer hover:shadow-md transition-shadow p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Low Stock Products</p><p className="text-2xl font-bold mt-1">{data?.lowStockProducts || 0}</p></div><div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><AlertTriangle size={24} className="text-amber-500" /></div></div></Card>
+   189→        </motion.div>
+   190→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+   191→          <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Conversion Rate</p><p className="text-2xl font-bold text-green-500">{data?.conversionRate || 2.4}%</p></div><TrendingUp className="h-8 w-8 text-green-500 bg-green-100 dark:bg-green-900/30 rounded-lg p-2" /></div></Card>
+   192→        </motion.div>
+   193→      </div>
+   194→
+   195→      {/* Sales Chart */}
+   196→      {data?.monthlySales && (
+   197→        <Card className="p-6">
+   198→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Monthly Revenue</CardTitle></CardHeader>
+   199→          <div className="h-56 flex items-end gap-3">
+   200→            {data.monthlySales.map((ms: any, i: number) => {
+   201→              const maxSale = Math.max(...data.monthlySales.map((m: any) => m.sales), 1);
+   202→              const height = (ms.sales / maxSale) * 100;
+   203→              return (
+   204→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+   205→                  <span className="text-xs font-medium">{formatCurrency(ms.sales)}</span>
+   206→                  <div className="w-full rounded-t-md bg-gradient-to-t from-amber-600 to-amber-400 transition-all duration-500" style={{ height: `${Math.max(height, 4)}%` }} />
+   207→                  <span className="text-xs text-muted-foreground">{ms.month}</span>
+   208→                </div>
+   209→              );
+   210→            })}
+   211→          </div>
+   212→        </Card>
+   213→      )}
+   214→
+   215→      <div className="grid lg:grid-cols-2 gap-6">
+   216→        {/* Top Categories */}
+   217→        {data?.topCategories && data.topCategories.length > 0 && (
+   218→          <Card className="p-4 col-span-full lg:col-span-2">
+   219→            <h3 className="font-semibold mb-3">Top Categories</h3>
+   220→            <div className="space-y-2">
+   221→              {data.topCategories.map((cat: any, i: number) => (
+   222→                <div key={i} className="flex items-center gap-3">
+   223→                  <span className="text-sm font-medium w-32 truncate">{cat.name}</span>
+   224→                  <div className="flex-1 bg-muted rounded-full h-2"><div className="bg-amber-500 h-2 rounded-full" style={{ width: `${Math.min(100, (cat.count / (data.topCategories[0]?.count || 1)) * 100)}%` }} /></div>
+   225→                  <span className="text-sm text-muted-foreground">{cat.count} orders</span>
+   226→                </div>
+   227→              ))}
+   228→            </div>
+   229→          </Card>
+   230→        )}
+   231→
+   232→        {/* Recent Orders */}
+   233→        <Card className="p-6">
+   234→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Recent Orders</CardTitle></CardHeader>
+   235→          <div className="space-y-3">
+   236→            {data?.recentOrders?.slice(0, 8).map((order: any) => (
+   237→              <div key={order.id} className="flex items-center justify-between py-2 border-b last:border-0">
+   238→                <div><p className="text-sm font-medium">#{order.orderNumber}</p><p className="text-xs text-muted-foreground">{order.user?.name} • {new Date(order.createdAt).toLocaleDateString()}</p></div>
+   239→                <div className="text-right"><p className="text-sm font-bold">{formatCurrency(order.total)}</p><Badge variant="secondary" className="text-xs">{order.status}</Badge></div>
+   240→              </div>
+   241→            ))}
+   242→          </div>
+   243→        </Card>
+   244→
+   245→        {/* Top Products */}
+   246→        <Card className="p-6">
+   247→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Top Products</CardTitle></CardHeader>
+   248→          <div className="space-y-3">
+   249→            {data?.topProducts?.map((p: any, i: number) => (
+   250→              <div key={p.id} className="flex items-center gap-3 py-2 border-b last:border-0">
+   251→                <span className="text-lg font-bold text-muted-foreground w-6">#{i + 1}</span>
+   252→                <div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">{p.images?.[0]?.url && <img src={p.images[0].url} alt="" className="w-full h-full object-cover" />}</div>
+   253→                <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{p.name}</p><p className="text-xs text-muted-foreground">{p.vendor?.businessName} • {p.totalSold} sold</p></div>
+   254→                <p className="text-sm font-bold">{formatCurrency(p.price)}</p>
+   255→              </div>
+   256→            ))}
+   257→          </div>
+   258→        </Card>
+   259→      </div>
+   260→    </div>
+   261→  );
+   262→}
+   263→
+   264→// ============ VENDOR MANAGEMENT ============
+   265→
+   266→function AdminVendors() {
+   267→  const confirm = useConfirm();
+   268→  const [statusFilter, setStatusFilter] = useState('all');
+   269→  const qc = useQueryClient();
+   270→  const [detailVendor, setDetailVendor] = useState<Vendor | null>(null);
+   271→  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+   272→  const [rejectVendorId, setRejectVendorId] = useState<string | null>(null);
+   273→  const [rejectionReason, setRejectionReason] = useState('');
+   274→  const [showWallet, setShowWallet] = useState(false);
+   275→
+   276→  const { data: walletData } = useQuery({
+   277→    queryKey: ['admin-vendor-wallets'],
+   278→    queryFn: () => fetch('/api/admin/vendors/wallets').then(r => r.json()).then((r: any) => r.data || []),
+   279→  });
+   280→
+   281→  const params = new URLSearchParams({ limit: '50' });
+   282→  if (statusFilter !== 'all') params.set('status', statusFilter);
+   283→
+   284→  const { data, isLoading } = useQuery({
+   285→    queryKey: ['admin-vendors', statusFilter],
+   286→    queryFn: () => fetch(`/api/vendors?${params}`).then(r => r.json()).then((r: any) => r),
+   287→  });
+   288→
+   289→  const updateVendor = useMutation({
+   290→    mutationFn: ({ id, status, rejectionReason: reason }: { id: string; status: string; rejectionReason?: string }) =>
+   291→      fetch(`/api/vendors/${id}`, {
+   292→        method: 'PUT',
+   293→        headers: { 'Content-Type': 'application/json' },
+   294→        body: JSON.stringify({ status, ...(reason ? { rejectionReason: reason } : {}) }),
+   295→      }).then(r => r.json()),
+   296→    onSuccess: () => {
+   297→      qc.invalidateQueries({ queryKey: ['admin-vendors'] });
+   298→      qc.invalidateQueries({ queryKey: ['admin-dashboard'] });
+   299→      toast.success('Vendor updated');
+   300→    },
+   301→    onError: () => toast.error('Failed to update vendor'),
+   302→  });
+   303→
+   304→  const handleReject = () => {
+   305→    if (!rejectVendorId) return;
+   306→    updateVendor.mutate({ id: rejectVendorId, status: 'REJECTED', rejectionReason: rejectionReason || 'Application does not meet our requirements.' });
+   307→    setRejectDialogOpen(false);
+   308→    setRejectVendorId(null);
+   309→    setRejectionReason('');
+   310→    setDetailVendor(null);
+   311→  };
+   312→
+   313→  const openRejectDialog = (vendorId: string) => {
+   314→    setRejectVendorId(vendorId);
+   315→    setRejectionReason('');
+   316→    setRejectDialogOpen(true);
+   317→  };
+   318→
+   319→  const statusColor: Record<string, string> = {
+   320→    PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+   321→    APPROVED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+   322→    SUSPENDED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+   323→    REJECTED: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+   324→  };
+   325→
+   326→  const pendingCount = data?.data?.filter((v: Vendor) => v.status === 'PENDING').length || 0;
+   327→
+   328→  return (
+   329→    <div className="p-6 space-y-6">
+   330→      <div className="flex items-center justify-between flex-wrap gap-3">
+   331→        <div>
+   332→          <h1 className="text-2xl font-bold">Vendor Management</h1>
+   333→          <p className="text-muted-foreground text-sm">Manage vendor accounts and applications</p>
+   334→        </div>
+   335→        {pendingCount > 0 && (
+   336→          <Badge className="bg-amber-500 text-white px-3 py-1 text-sm cursor-pointer" onClick={() => setStatusFilter('PENDING')}>
+   337→            <Clock size={14} className="mr-1.5" />{pendingCount} Pending Review
+   338→          </Badge>
+   339→        )}
+   340→      </div>
+   341→
+   342→      <div className="flex gap-2 flex-wrap">
+   343→        {['all', 'PENDING', 'APPROVED', 'SUSPENDED', 'REJECTED'].map(s => (
+   344→          <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-amber-600' : ''} onClick={() => setStatusFilter(s)}>
+   345→            {s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}
+   346→            {s === 'PENDING' && pendingCount > 0 ? ` (${pendingCount})` : ''}
+   347→          </Button>
+   348→        ))}
+   349→      </div>
+   350→
+   351→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+   352→        <Card>
+   353→          <div className="overflow-x-auto">
+   354→            <Table>
+   355→              <TableHeader>
+   356→                <TableRow>
+   357→                  <TableHead>Vendor</TableHead>
+   358→                  <TableHead className="hidden md:table-cell">Email</TableHead>
+   359→                  <TableHead className="hidden lg:table-cell">GST/PAN</TableHead>
+   360→                  <TableHead>Products</TableHead>
+   361→                  <TableHead className="hidden sm:table-cell">Revenue</TableHead>
+   362→                  <TableHead>Status</TableHead>
+   363→                  <TableHead className="text-right">Actions</TableHead>
+   364→                </TableRow>
+   365→              </TableHeader>
+   366→              <TableBody>
+   367→                {!data?.data?.length && <TableRow><TableCell colSpan={8}><div className="flex flex-col items-center justify-center py-12 text-center"><Store size={40} className="text-muted-foreground/40 mb-3" /><p className="text-muted-foreground font-medium">No vendors found</p><p className="text-muted-foreground text-sm mt-1">Vendors will appear here when they register</p></div></TableCell></TableRow>}
+   368→                {data?.data?.map((vendor: Vendor) => (
+   369→                  <TableRow key={vendor.id} className={vendor.status === 'PENDING' ? 'bg-amber-50/50 dark:bg-amber-900/5' : ''}>
+   370→                    <TableCell>
+   371→                      <div className="flex items-center gap-3">
+   372→                        <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 font-bold text-sm shrink-0">{vendor.businessName[0]}</div>
+   373→                        <div>
+   374→                          <p className="font-medium text-sm">{vendor.businessName}</p>
+   375→                          <p className="text-xs text-muted-foreground">Joined {new Date(vendor.createdAt).toLocaleDateString()}</p>
+   376→                        </div>
+   377→                      </div>
+   378→                    </TableCell>
+   379→                    <TableCell className="hidden md:table-cell text-sm">{vendor.user?.email}</TableCell>
+   380→                    <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+   381→                      {vendor.gstNumber || vendor.panNumber || '—'}
+   382→                    </TableCell>
+   383→                    <TableCell className="font-medium">{vendor._count?.products || 0}</TableCell>
+   384→                    <TableCell className="hidden sm:table-cell font-medium">{formatCurrency(vendor.totalRevenue)}</TableCell>
+   385→                    <TableCell>
+   386→                      <Badge className={statusColor[vendor.status] || ''}>
+   387→                        {vendor.status === 'PENDING' && <Clock size={12} className="mr-1" />}
+   388→                        {vendor.status}
+   389→                      </Badge>
+   390→                    </TableCell>
+   391→                    <TableCell className="text-right">
+   392→                      <div className="flex items-center justify-end gap-1">
+   393→                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailVendor(vendor)}><Eye size={14} /></Button>
+   394→                        {vendor.status === 'PENDING' && (
+   395→                          <>
+   396→                            <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20" onClick={() => { updateVendor.mutate({ id: vendor.id, status: 'APPROVED' }); toast.success('Vendor approved', { description: vendor.businessName + ' can now sell.' }); }}><CheckCircle size={16} /></Button>
+   397→                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => openRejectDialog(vendor.id)}><XCircle size={16} /></Button>
+   398→                          </>
+   399→                        )}
+   400→                        {vendor.status === 'APPROVED' && (
+   401→                          <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600" disabled={updateVendor.isPending} onClick={() => { confirm({ title: 'Suspend Vendor?', description: 'This will prevent ' + vendor.businessName + ' from accessing the vendor panel.', onConfirm: () => updateVendor.mutate({ id: vendor.id, status: 'SUSPENDED' }) }); }}><XCircle size={14} /></Button>
+   402→                        )}
+   403→                        {vendor.status === 'SUSPENDED' && (
+   404→                          <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600" onClick={() => updateVendor.mutate({ id: vendor.id, status: 'APPROVED' })}><CheckCircle size={14} /></Button>
+   405→                        )}
+   406→                      </div>
+   407→                    </TableCell>
+   408→                  </TableRow>
+   409→                ))}
+   410→              </TableBody>
+   411→            </Table>
+   412→          </div>
+   413→        </Card>}
+   414→
+   415→      {/* Vendor Detail Modal */}
+   416→      <Dialog open={!!detailVendor} onOpenChange={() => setDetailVendor(null)}>
+   417→        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+   418→          <DialogHeader><DialogTitle>Vendor Details</DialogTitle></DialogHeader>
+   419→          {detailVendor && (
+   420→            <div className="space-y-4">
+   421→              <div className="flex items-center gap-4">
+   422→                <div className="w-16 h-16 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 text-2xl font-bold shrink-0">{detailVendor.businessName[0]}</div>
+   423→                <div className="min-w-0">
+   424→                  <h3 className="text-xl font-bold">{detailVendor.businessName}</h3>
+   425→                  <div className="flex items-center gap-2 mt-1">
+   426→                    <Badge className={statusColor[detailVendor.status] || ''}>
+   427→                      {detailVendor.status === 'PENDING' && <Clock size={12} className="mr-1" />}
+   428→                      {detailVendor.status}
+   429→                    </Badge>
+   430→                    {detailVendor._count && <span className="text-sm text-muted-foreground">{detailVendor._count.products} products</span>}
+   431→                  </div>
+   432→                  <p className="text-sm text-muted-foreground mt-1">{detailVendor.description || 'No description provided'}</p>
+   433→                </div>
+   434→              </div>
+   435→              <Separator />
+   436→
+   437→              {/* Business Details */}
+   438→              <div>
+   439→                <h4 className="font-semibold text-sm mb-2">Business Information</h4>
+   440→                <div className="grid sm:grid-cols-2 gap-3 text-sm">
+   441→                  <div><span className="text-muted-foreground">Contact Email:</span> <span className="ml-2">{detailVendor.user?.email}</span></div>
+   442→                  <div><span className="text-muted-foreground">Phone:</span> <span className="ml-2">{detailVendor.user?.phone || 'N/A'}</span></div>
+   443→                  <div><span className="text-muted-foreground">Business Email:</span> <span className="ml-2">{detailVendor.businessEmail || 'N/A'}</span></div>
+   444→                  <div><span className="text-muted-foreground">Business Phone:</span> <span className="ml-2">{detailVendor.businessPhone || 'N/A'}</span></div>
+   445→                  <div className="sm:col-span-2"><span className="text-muted-foreground">Business Address:</span> <span className="ml-2">{detailVendor.businessAddress || 'N/A'}</span></div>
+   446→                </div>
+   447→              </div>
+   448→
+   449→              <Separator />
+   450→
+   451→              {/* Tax & Bank Details */}
+   452→              <div>
+   453→                <h4 className="font-semibold text-sm mb-2">Tax & Bank Details</h4>
+   454→                <div className="grid sm:grid-cols-2 gap-3 text-sm">
+   455→                  <div><span className="text-muted-foreground">GST Number:</span> <span className="ml-2">{detailVendor.gstNumber || 'N/A'}</span></div>
+   456→                  <div><span className="text-muted-foreground">PAN Number:</span> <span className="ml-2">{detailVendor.panNumber || 'N/A'}</span></div>
+   457→                  <div><span className="text-muted-foreground">Bank Name:</span> <span className="ml-2">{detailVendor.bankName || 'N/A'}</span></div>
+   458→                  <div><span className="text-muted-foreground">Bank Account:</span> <span className="ml-2">{detailVendor.bankAccount ? '••••' + detailVendor.bankAccount.slice(-4) : 'N/A'}</span></div>
+   459→                  <div><span className="text-muted-foreground">IFSC:</span> <span className="ml-2">{detailVendor.bankIfsc || 'N/A'}</span></div>
+   460→                  <div><span className="text-muted-foreground">Commission:</span> <span className="ml-2 font-medium">{detailVendor.commissionRate}%</span></div>
+   461→                </div>
+   462→              </div>
+   463→
+   464→              <Separator />
+   465→
+   466→              {/* Stats */}
+   467→              <div>
+   468→                <h4 className="font-semibold text-sm mb-2">Performance</h4>
+   469→                <div className="grid grid-cols-3 gap-3">
+   470→                  <div className="text-center p-3 rounded-lg bg-muted/50">
+   471→                    <p className="text-lg font-bold text-green-600">{formatCurrency(detailVendor.totalSales)}</p>
+   472→                    <p className="text-xs text-muted-foreground">Total Sales</p>
+   473→                  </div>
+   474→                  <div className="text-center p-3 rounded-lg bg-muted/50">
+   475→                    <p className="text-lg font-bold">{formatCurrency(detailVendor.totalRevenue)}</p>
+   476→                    <p className="text-xs text-muted-foreground">Revenue</p>
+   477→                  </div>
+   478→                  <div className="text-center p-3 rounded-lg bg-muted/50">
+   479→                    <p className="text-lg font-bold">{detailVendor.rating?.toFixed(1) || 'N/A'}</p>
+   480→                    <p className="text-xs text-muted-foreground">Rating</p>
+   481→                  </div>
+   482→                </div>
+   483→              </div>
+   484→
+   485→              {/* Rejection reason if previously rejected */}
+   486→              {detailVendor.rejectionReason && (
+   487→                <>
+   488→                  <Separator />
+   489→                  <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
+   490→                    <p className="text-sm font-medium text-red-700 dark:text-red-400">Previous Rejection Reason:</p>
+   491→                    <p className="text-sm text-red-600 dark:text-red-300 mt-1">{detailVendor.rejectionReason}</p>
+   492→                  </div>
+   493→                </>
+   494→              )}
+   495→
+   496→              {/* Vendor Wallet Section */}
+   497→              {(() => {
+   498→                const vw = walletData?.find((w: any) => w.id === detailVendor.id);
+   499→                if (!vw) return null;
+   500→                return (
+   501→                  <>
+   502→                    <Separator />
+   503→                    <div>
+   504→                      <div className="flex items-center justify-between mb-3">
+   505→                        <h4 className="font-semibold text-sm flex items-center gap-2"><Wallet size={14} className="text-green-600" />Vendor Wallet</h4>
+   506→                        <Button variant="outline" size="sm" className="text-xs" onClick={() => setShowWallet(!showWallet)}>
+   507→                          {showWallet ? 'Hide Transactions' : 'View Transactions'}
+   508→                        </Button>
+   509→                      </div>
+   510→                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   511→                        <div className="text-center p-3 rounded-lg bg-green-50 dark:bg-green-900/10">
+   512→                          <p className="text-lg font-bold text-green-600">{formatCurrency(vw.wallet.availableBalance)}</p>
+   513→                          <p className="text-xs text-muted-foreground">Available</p>
+   514→                        </div>
+   515→                        <div className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10">
+   516→                          <p className="text-lg font-bold text-amber-600">{formatCurrency(vw.wallet.pendingBalance)}</p>
+   517→                          <p className="text-xs text-muted-foreground">Pending</p>
+   518→                        </div>
+   519→                        <div className="text-center p-3 rounded-lg bg-muted/50">
+   520→                          <p className="text-lg font-bold">{formatCurrency(vw.wallet.totalEarned)}</p>
+   521→                          <p className="text-xs text-muted-foreground">Total Earned</p>
+   522→                        </div>
+   523→                        <div className="text-center p-3 rounded-lg bg-muted/50">
+   524→                          <p className="text-lg font-bold">{formatCurrency(vw.wallet.totalWithdrawn)}</p>
+   525→                          <p className="text-xs text-muted-foreground">Withdrawn</p>
+   526→                        </div>
+   527→                      </div>
+   528→                      {showWallet && vw.transactions.length > 0 && (
+   529→                        <div className="mt-3 border rounded-lg overflow-hidden">
+   530→                          <Table>
+   531→                            <TableHeader><TableRow><TableHead>Type</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right">Balance</TableHead><TableHead className="hidden sm:table-cell">Description</TableHead><TableHead className="text-right">Date</TableHead></TableRow></TableHeader>
+   532→                            <TableBody>
+   533→                              {vw.transactions.map((t: any) => (
+   534→                                <TableRow key={t.id}>
+   535→                                  <TableCell><Badge variant="outline" className="text-xs">{t.type}</Badge></TableCell>
+   536→                                  <TableCell className={`text-right font-medium ${t.type === 'WITHDRAWAL' || t.type === 'COMMISSION_DEDUCTION' ? 'text-red-600' : 'text-green-600'}`}>{t.type === 'WITHDRAWAL' || t.type === 'COMMISSION_DEDUCTION' ? '-' : '+'}{formatCurrency(t.amount)}</TableCell>
+   537→                                  <TableCell className="text-right">{formatCurrency(t.balance)}</TableCell>
+   538→                                  <TableCell className="hidden sm:table-cell text-xs text-muted-foreground max-w-[200px] truncate">{t.description || '—'}</TableCell>
+   539→                                  <TableCell className="text-right text-xs text-muted-foreground">{new Date(t.createdAt).toLocaleDateString('en-IN')}</TableCell>
+   540→                                </TableRow>
+   541→                              ))}
+   542→                            </TableBody>
+   543→                          </Table>
+   544→                        </div>
+   545→                      )}
+   546→                      {showWallet && vw.transactions.length === 0 && (
+   547→                        <p className="text-sm text-muted-foreground text-center mt-3">No transactions yet</p>
+   548→                      )}
+   549→                    </div>
+   550→                  </>
+   551→                );
+   552→              })()}
+   553→
+   554→              <Separator />
+   555→              <div className="flex gap-2 flex-wrap">
+   556→                {detailVendor.status === 'PENDING' && (
+   557→                  <>
+   558→                    <Button className="bg-green-600 hover:bg-green-700" disabled={updateVendor.isPending} onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); toast.success('Vendor approved', { description: detailVendor.businessName + ' can now sell.' }); }}>
+   559→                      <CheckCircle size={16} className="mr-1.5" />Approve Vendor
+   560→                    </Button>
+   561→                    <Button variant="destructive" disabled={updateVendor.isPending} onClick={() => { openRejectDialog(detailVendor.id); }}>
+   562→                      <XCircle size={16} className="mr-1.5" />Reject Application
+   563→                    </Button>
+   564→                  </>
+   565→                )}
+   566→                {detailVendor.status === 'APPROVED' && (
+   567→                  <Button variant="destructive" disabled={updateVendor.isPending} onClick={() => { confirm({ title: 'Suspend Vendor?', description: 'This will prevent ' + detailVendor.businessName + ' from accessing the vendor panel.', onConfirm: () => { updateVendor.mutate({ id: detailVendor.id, status: 'SUSPENDED' }); setDetailVendor(null); } }); }}>
+   568→                    <XCircle size={16} className="mr-1.5" />Suspend Vendor
+   569→                  </Button>
+   570→                )}
+   571→                {detailVendor.status === 'SUSPENDED' && (
+   572→                  <Button className="bg-green-600 hover:bg-green-700" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); }}>
+   573→                    <CheckCircle size={16} className="mr-1.5" />Re-activate Vendor
+   574→                  </Button>
+   575→                )}
+   576→                {detailVendor.status === 'REJECTED' && (
+   577→                  <Button className="bg-green-600 hover:bg-green-700" disabled={updateVendor.isPending} onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); toast.success('Vendor approved', { description: detailVendor.businessName + ' can now sell.' }); }}>
+   578→                    <CheckCircle size={16} className="mr-1.5" />Approve Now
+   579→                  </Button>
+   580→                )}
+   581→              </div>
+   582→            </div>
+   583→          )}
+   584→        </DialogContent>
+   585→      </Dialog>
+   586→
+   587→      {/* Rejection Reason Dialog */}
+   588→      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+   589→        <DialogContent className="max-w-md">
+   590→          <DialogHeader>
+   591→            <DialogTitle>Reject Vendor Application</DialogTitle>
+   592→            <DialogDescription>Please provide a reason for rejecting this application. This will be shown to the vendor.</DialogDescription>
+   593→          </DialogHeader>
+   594→          <div className="space-y-4">
+   595→            <div>
+   596→              <Label>Rejection Reason *</Label>
+   597→              <Textarea
+   598→                className="mt-1"
+   599→                rows={4}
+   600→                placeholder="e.g., Incomplete business information, invalid GST number, etc."
+   601→                value={rejectionReason}
+   602→                onChange={e => setRejectionReason(e.target.value)}
+   603→              />
+   604→            </div>
+   605→            <div className="flex gap-2 justify-end">
+   606→              <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
+   607→              <Button variant="destructive" onClick={handleReject} disabled={!rejectionReason.trim()}>
+   608→                <XCircle size={16} className="mr-1.5" />Confirm Rejection
+   609→              </Button>
+   610→            </div>
+   611→          </div>
+   612→        </DialogContent>
+   613→      </Dialog>
+   614→    </div>
+   615→  );
+   616→}
+   617→
+   618→// ============ CATEGORY MANAGEMENT ============
+   619→
+   620→function AdminCategories() {
+   621→  const confirm = useConfirm();
+   622→  const qc = useQueryClient();
+   623→  const { data: categories, isLoading } = useQuery({
+   624→    queryKey: ['categories'],
+   625→    queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: any) => r.data || []),
+   626→  });
+   627→
+   628→  const [showAdd, setShowAdd] = useState(false);
+   629→  const [editId, setEditId] = useState<string | null>(null);
+   630→  const [form, setForm] = useState({ name: '', description: '', parentId: '', sortOrder: '0' });
+   631→
+   632→  const saveMutation = useMutation({
+   633→    mutationFn: async () => {
+   634→      if (editId) {
+   635→        return fetch('/api/categories', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editId, name: form.name, description: form.description, parentId: form.parentId || null, sortOrder: parseInt(form.sortOrder) }) }).then(r => r.json());
+   636→      }
+   637→      return fetch('/api/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, description: form.description, parentId: form.parentId || null, sortOrder: parseInt(form.sortOrder) }) }).then(r => r.json());
+   638→    },
+   639→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success(editId ? 'Category updated' : 'Category created', { description: editId ? undefined : form.name + ' added.' }); setShowAdd(false); setEditId(null); setForm({ name: '', description: '', parentId: '', sortOrder: '0' }); },
+   640→    onError: () => toast.error('Failed to save category'),
+   641→  });
+   642→
+   643→  const deleteMutation = useMutation({
+   644→    mutationFn: (id: string) => fetch(`/api/categories?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+   645→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success('Category deleted'); },
+   646→    onError: () => toast.error('Failed to delete'),
+   647→  });
+   648→
+   649→  const handleEdit = (cat: any) => { setForm({ name: cat.name, description: cat.description || '', parentId: cat.parentId || '', sortOrder: String(cat.sortOrder) }); setEditId(cat.id); setShowAdd(true); };
+   650→
+   651→  return (
+   652→    <div className="p-6 space-y-6">
+   653→      <div className="flex items-center justify-between">
+   654→        <div><h1 className="text-2xl font-bold">Categories</h1><p className="text-muted-foreground text-sm">Manage product categories and subcategories</p></div>
+   655→        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => { setForm({ name: '', description: '', parentId: '', sortOrder: '0' }); setEditId(null); setShowAdd(true); }}><Plus size={16} className="mr-1.5" />Add Category</Button>
+   656→      </div>
+   657→
+   658→      {isLoading ? <div className="space-y-3">{Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div> :
+   659→      (!categories || categories.length === 0) ? (
+   660→        <div className="flex flex-col items-center justify-center py-16 text-center">
+   661→          <FolderOpen size={48} className="text-muted-foreground/50 mb-4" />
+   662→          <h3 className="text-lg font-semibold">No categories yet</h3>
+   663→          <p className="text-sm text-muted-foreground mb-4">Create your first product category to get started.</p>
+   664→          <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => { setForm({ name: '', description: '', parentId: '', sortOrder: '0' }); setEditId(null); setShowAdd(true); }}><Plus size={16} className="mr-1.5" />Add Category</Button>
+   665→        </div>
+   666→      ) : (
+   667→      <div className="space-y-2">
+   668→        {categories?.map((cat: any) => (
+   669→          <div key={cat.id}>
+   670→            <Card className="p-4 flex items-center justify-between">
+   671→              <div className="flex items-center gap-3">
+   672→                <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-sm font-bold">{cat.name[0]}</div>
+   673→                <div><p className="font-medium">{cat.name}</p><p className="text-sm text-muted-foreground">{cat._count?.products || 0} products</p></div>
+   674→              </div>
+   675→              <div className="flex items-center gap-1">
+   676→                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(cat)}><Pencil size={14} /></Button>
+   677→                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" disabled={deleteMutation.isPending} onClick={() => { confirm({ title: 'Delete Category?', description: 'Are you sure you want to delete "' + cat.name + '"? This action cannot be undone.', onConfirm: () => deleteMutation.mutate(cat.id) }); }}><Trash2 size={14} /></Button>
+   678→              </div>
+   679→            </Card>
+   680→            {cat.children?.map((child: any) => (
+   681→              <Card key={child.id} className="p-4 flex items-center justify-between ml-8 mt-1">
+   682→                <div className="flex items-center gap-3">
+   683→                  <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-xs font-bold">{child.name[0]}</div>
+   684→                  <div><p className="font-medium text-sm">{child.name}</p><p className="text-xs text-muted-foreground">{child._count?.products || 0} products</p></div>
+   685→                </div>
+   686→                <div className="flex items-center gap-1">
+   687→                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(child)}><Pencil size={12} /></Button>
+   688→                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" disabled={deleteMutation.isPending} onClick={() => { confirm({ title: 'Delete Category?', description: 'Are you sure you want to delete "' + child.name + '"? This action cannot be undone.', onConfirm: () => deleteMutation.mutate(child.id) }); }}><Trash2 size={12} /></Button>
+   689→                </div>
+   690→              </Card>
+   691→            ))}
+   692→          </div>
+   693→        ))}
+   694→      </div>)}
+   695→
+   696→      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+   697→        <DialogContent><DialogHeader><DialogTitle>{editId ? 'Edit Category' : 'Add Category'}</DialogTitle></DialogHeader>
+   698→          <div className="space-y-4">
+   699→            <div><Label>Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /></div>
+   700→            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} className="mt-1" /></div>
+   701→            <div><Label>Parent Category</Label><Select value={form.parentId} onValueChange={v => setForm(f => ({...f, parentId: v}))}><SelectTrigger className="mt-1"><SelectValue placeholder="None (Root Category)" /></SelectTrigger><SelectContent><SelectItem value="none">None (Root Category)</SelectItem>{categories?.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+   702→            <div><Label>Sort Order</Label><Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({...f, sortOrder: e.target.value}))} className="mt-1" /></div>
+   703→          </div>
+   704→          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => { if (!form.name.trim()) { toast.error('Name is required'); return; } saveMutation.mutate(); }} disabled={saveMutation.isPending || !form.name}>{saveMutation.isPending ? 'Saving...' : editId ? 'Update' : 'Create'}</Button></DialogFooter>
+   705→        </DialogContent>
+   706→      </Dialog>
+   707→    </div>
+   708→  );
+   709→}
+   710→
+   711→// ============ BRAND MANAGEMENT ============
+   712→
+   713→function AdminBrands() {
+   714→  const confirm = useConfirm();
+   715→  const qc = useQueryClient();
+   716→  const { data: brands, isLoading } = useQuery({
+   717→    queryKey: ['brands'],
+   718→    queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: any) => r.data || []),
+   719→  });
+   720→
+   721→  const [showAdd, setShowAdd] = useState(false);
+   722→  const [form, setForm] = useState({ name: '', description: '' });
+   723→
+   724→  const addMutation = useMutation({
+   725→    mutationFn: () => fetch('/api/brands', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).then(r => r.json()),
+   726→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['brands'] }); toast.success('Brand created', { description: form.name + ' has been added.' }); setShowAdd(false); setForm({ name: '', description: '' }); },
+   727→  });
+   728→
+   729→  const deleteMutation = useMutation({
+   730→    mutationFn: (id: string) => fetch(`/api/brands?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+   731→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['brands'] }); toast.success('Brand deleted'); },
+   732→    onError: () => toast.error('Failed to delete'),
+   733→  });
+   734→
+   735→  return (
+   736→    <div className="p-6 space-y-6">
+   737→      <div className="flex items-center justify-between">
+   738→        <div><h1 className="text-2xl font-bold">Brands</h1><p className="text-muted-foreground text-sm">Manage product brands</p></div>
+   739→        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => setShowAdd(true)}><Plus size={16} className="mr-1.5" />Add Brand</Button>
+   740→      </div>
+   741→
+   742→      {isLoading ? <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">{Array.from({length: 8}).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+   743→      (!brands || brands.length === 0) ? (
+   744→        <div className="flex flex-col items-center justify-center py-16 text-center">
+   745→          <Tag size={48} className="text-muted-foreground/50 mb-4" />
+   746→          <h3 className="text-lg font-semibold">No brands yet</h3>
+   747→          <p className="text-sm text-muted-foreground mb-4">Add your first product brand.</p>
+   748→          <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => setShowAdd(true)}><Plus size={16} className="mr-1.5" />Add Brand</Button>
+   749→        </div>
+   750→      ) : (
+   751→      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   752→        {brands.map((brand: any) => (
+   753→          <Card key={brand.id} className="p-4 flex items-center justify-between">
+   754→            <div><p className="font-medium">{brand.name}</p><p className="text-sm text-muted-foreground">{brand._count?.products || 0} products</p></div>
+   755→            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive shrink-0" disabled={deleteMutation.isPending} onClick={() => { confirm({ title: 'Delete Brand?', description: 'Are you sure you want to delete "' + brand.name + '"? This action cannot be undone.', onConfirm: () => deleteMutation.mutate(brand.id) }); }}><Trash2 size={14} /></Button>
+   756→          </Card>
+   757→        ))}
+   758→      </div>)}
+   759→
+   760→      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+   761→        <DialogContent><DialogHeader><DialogTitle>Add Brand</DialogTitle></DialogHeader>
+   762→          <div className="space-y-4">
+   763→            <div><Label>Brand Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /></div>
+   764→            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} className="mt-1" /></div>
+   765→          </div>
+   766→          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => { if (!form.name.trim()) { toast.error('Name is required'); return; } addMutation.mutate(); }} disabled={addMutation.isPending || !form.name}>Create</Button></DialogFooter>
+   767→        </DialogContent>
+   768→      </Dialog>
+   769→    </div>
+   770→  );
+   771→}
+   772→
+   773→// ============ ADMIN PRODUCTS ============
+   774→
+   775→function AdminProducts() {
+   776→  const [page, setPage] = useState(1);
+   777→  const [search, setSearch] = useState('');
+   778→
+   779→  const { data, isLoading } = useQuery({
+   780→    queryKey: ['admin-products', page, search],
+   781→    queryFn: () => fetch(`/api/products?page=${page}&limit=15&search=${search}`).then(r => r.json()).then((r: any) => r),
+   782→  });
+   783→
+   784→  return (
+   785→    <div className="p-6 space-y-6">
+   786→      <div><h1 className="text-2xl font-bold">All Products</h1><p className="text-muted-foreground text-sm">Manage products across all vendors</p></div>
+   787→      <div className="max-w-md"><div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search products..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" /></div></div>
+   788→      <Card>
+   789→        <Table>
+   790→          <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="hidden md:table-cell">Vendor</TableHead><TableHead>Price</TableHead><TableHead>Stock</TableHead><TableHead className="hidden sm:table-cell">Sold</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+   791→          <TableBody>
+   792→            {data?.data?.map((p: any) => (
+   793→              <TableRow key={p.id}>
+   794→                <TableCell><div className="flex items-center gap-3"><div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">{p.images?.[0]?.url && <img src={p.images[0].url} alt="" className="w-full h-full object-cover" />}</div><div className="min-w-0"><p className="font-medium text-sm truncate max-w-48">{p.name}</p><p className="text-xs text-muted-foreground">{p.category?.name}</p></div></div></TableCell>
+   795→                <TableCell className="hidden md:table-cell text-sm">{p.vendor?.businessName}</TableCell>
+   796→                <TableCell className="font-medium">{formatCurrency(p.price)}</TableCell>
+   797→                <TableCell><span className={p.stock < 5 ? 'text-red-600 font-medium' : ''}>{p.stock}</span></TableCell>
+   798→                <TableCell className="hidden sm:table-cell">{p.totalSold}</TableCell>
+   799→                <TableCell><Badge variant={p.isActive ? 'default' : 'secondary'}>{p.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+   800→              </TableRow>
+   801→            ))}
+   802→          </TableBody>
+   803→        </Table>
+   804→        {data?.meta?.totalPages > 1 && (
+   805→          <div className="flex items-center justify-center gap-2 p-4">
+   806→            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></Button>
+   807→            {Array.from({length: Math.min(data.meta.totalPages, 5)}, (_, i) => i + 1).map(p => (
+   808→              <Button key={p} variant={p === page ? 'default' : 'outline'} size="sm" className={p === page ? 'bg-amber-600' : ''} onClick={() => setPage(p)}>{p}</Button>
+   809→            ))}
+   810→            <Button variant="outline" size="sm" disabled={page >= data.meta.totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
+   811→          </div>
+   812→        )}
+   813→      </Card>
+   814→    </div>
+   815→  );
+   816→}
+   817→
+   818→// ============ ADMIN ORDERS ============
+   819→
+   820→function AdminOrders() {
+   821→  const qc = useQueryClient();
+   822→  const [statusFilter, setStatusFilter] = useState('all');
+   823→  const [page, setPage] = useState(1);
+   824→  const params = new URLSearchParams({ page: String(page), limit: '15' });
+   825→  if (statusFilter !== 'all') params.set('status', statusFilter);
+   826→
+   827→  const { data, isLoading } = useQuery({
+   828→    queryKey: ['admin-orders', params.toString()],
+   829→    queryFn: () => fetch(`/api/orders?${params}`).then(r => r.json()).then((r: any) => r),
+   830→  });
+   831→
+   832→  const updateMutation = useMutation({
+   833→    mutationFn: ({ id, status }: { id: string; status: string }) => fetch(`/api/orders/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }).then(r => r.json()),
+   834→    onSuccess: (_data, variables) => { qc.invalidateQueries({ queryKey: ['admin-orders'] }); toast.success('Order updated', { description: 'Status: ' + variables.status }); },
+   835→    onError: () => toast.error('Failed to update'),
+   836→  });
+   837→
+   838→  const statusColor: Record<string, string> = { NEW: 'bg-blue-100 text-blue-700', PROCESSING: 'bg-amber-100 text-amber-700', SHIPPED: 'bg-orange-100 text-orange-700', DELIVERED: 'bg-green-100 text-green-700', CANCELLED: 'bg-red-100 text-red-700' };
+   839→
+   840→  return (
+   841→    <div className="p-6 space-y-6">
+   842→      <div><h1 className="text-2xl font-bold">All Orders</h1><p className="text-muted-foreground text-sm">Manage all platform orders</p></div>
+   843→      <div className="flex gap-2 flex-wrap">
+   844→        {['all', 'NEW', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED', 'REFUNDED'].map(s => (
+   845→          <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-amber-600' : ''} onClick={() => { setStatusFilter(s); setPage(1); }}>{s === 'all' ? 'All' : s}</Button>
+   846→        ))}
+   847→      </div>
+   848→      {isLoading ? <div className="space-y-3">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+   849→      (!data?.data || data.data.length === 0) ? (
+   850→        <div className="flex flex-col items-center justify-center py-16 text-center">
+   851→          <Package size={48} className="text-muted-foreground/50 mb-4" />
+   852→          <h3 className="text-lg font-semibold">No orders</h3>
+   853→          <p className="text-sm text-muted-foreground">Orders will appear here when customers make purchases.</p>
+   854→        </div>
+   855→      ) : (
+   856→      <Card>
+   857→        <Table>
+   858→          <TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Customer</TableHead><TableHead>Items</TableHead><TableHead>Total</TableHead><TableHead>Payment</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+   859→          <TableBody>
+   860→            {data.data.map((order: any) => (
+   861→              <TableRow key={order.id}>
+   862→                <TableCell><p className="font-medium text-sm">#{order.orderNumber}</p></TableCell>
+   863→                <TableCell className="text-sm">{order.user?.name}</TableCell>
+   864→                <TableCell className="text-sm">{order.items?.length || 0} items</TableCell>
+   865→                <TableCell className="font-medium">{formatCurrency(order.total)}</TableCell>
+   866→                <TableCell><Badge variant={order.paymentStatus === 'PAID' ? 'default' : 'secondary'} className="text-xs">{order.paymentStatus}</Badge></TableCell>
+   867→                <TableCell><Badge className={statusColor[order.status] || ''}>{order.status}</Badge></TableCell>
+   868→                <TableCell className="text-sm">{new Date(order.createdAt).toLocaleDateString()}</TableCell>
+   869→                <TableCell className="text-right">
+   870→                  <Select disabled={updateMutation.isPending} value={order.status} onValueChange={(v) => updateMutation.mutate({ id: order.id, status: v })}>
+   871→                    <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+   872→                    <SelectContent>{['NEW', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+   873→                  </Select>
+   874→                </TableCell>
+   875→              </TableRow>
+   876→            ))}
+   877→          </TableBody>
+   878→        </Table>
+   879→        {data?.meta?.totalPages > 1 && (
+   880→          <div className="flex items-center justify-center gap-2 p-4">
+   881→            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></Button>
+   882→            <Button variant="outline" size="sm" disabled={page >= data.meta.totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
+   883→          </div>
+   884→        )}
+   885→      </Card>)}
+   886→    </div>
+   887→  );
+   888→}
+   889→
+   890→// ============ ADMIN CUSTOMERS ============
+   891→
+   892→function AdminCustomers() {
+   893→  const [search, setSearch] = useState('');
+   894→  const [page, setPage] = useState(1);
+   895→
+   896→  const { data, isLoading } = useQuery({
+   897→    queryKey: ['admin-customers', search, page],
+   898→    queryFn: () => fetch(`/api/admin/users?role=CUSTOMER&search=${search}&page=${page}&limit=15`).then(r => r.json()).then((r: any) => r),
+   899→  });
+   900→
+   901→  return (
+   902→    <div className="p-6 space-y-6">
+   903→      <div><h1 className="text-2xl font-bold">Customers</h1><p className="text-muted-foreground text-sm">Manage platform customers</p></div>
+   904→      <div className="max-w-md"><div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search customers..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" /></div></div>
+   905→      <Card>
+   906→        <Table>
+   907→          <TableHeader><TableRow><TableHead>Customer</TableHead><TableHead>Email</TableHead><TableHead className="hidden sm:table-cell">Phone</TableHead><TableHead>Joined</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+   908→          <TableBody>
+   909→            {data?.data?.map((u: any) => (
+   910→              <TableRow key={u.id}>
+   911→                <TableCell><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarFallback className="text-xs">{u.name[0]}</AvatarFallback></Avatar><span className="font-medium text-sm">{u.name}</span></div></TableCell>
+   912→                <TableCell className="text-sm">{u.email}</TableCell>
+   913→                <TableCell className="hidden sm:table-cell text-sm">{u.phone || 'N/A'}</TableCell>
+   914→                <TableCell className="text-sm">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+   915→                <TableCell><Badge variant={u.isActive ? 'default' : 'secondary'}>{u.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+   916→              </TableRow>
+   917→            ))}
+   918→          </TableBody>
+   919→        </Table>
+   920→      </Card>
+   921→    </div>
+   922→  );
+   923→}
+   924→
+   925→// ============ ADMIN COUPONS ============
+   926→
+   927→function AdminCoupons() {
+   928→  const qc = useQueryClient();
+   929→  const { data: coupons, isLoading } = useQuery({ queryKey: ['coupons'], queryFn: () => fetch('/api/coupons').then(r => r.json()).then((r: any) => r.data || []) });
+   930→  const [showAdd, setShowAdd] = useState(false);
+   931→  const [form, setForm] = useState({ code: '', discountType: 'PERCENTAGE', discountValue: '10', minOrder: '500', maxDiscount: '1000', usageLimit: '100', startDate: '', endDate: '' });
+   932→
+   933→  const addMutation = useMutation({
+   934→    mutationFn: () => fetch('/api/coupons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, discountValue: parseFloat(form.discountValue), minOrder: parseFloat(form.minOrder) || null, maxDiscount: parseFloat(form.maxDiscount) || null, usageLimit: parseInt(form.usageLimit) || null, startDate: form.startDate || new Date().toISOString(), endDate: form.endDate || new Date(Date.now() + 86400000 * 30).toISOString() }) }).then(r => r.json()),
+   935→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['coupons'] }); toast.success('Coupon created', { description: 'Code: ' + form.code }); setShowAdd(false); },
+   936→    onError: () => toast.error('Failed'),
+   937→  });
+   938→
+   939→  const deleteMutation = useMutation({
+   940→    mutationFn: (id: string) => fetch(`/api/coupons?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+   941→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['coupons'] }); toast.success('Coupon deleted'); },
+   942→  });
+   943→
+   944→  return (
+   945→    <div className="p-6 space-y-6">
+   946→      <div className="flex items-center justify-between">
+   947→        <div><h1 className="text-2xl font-bold">Coupons</h1><p className="text-muted-foreground text-sm">Manage discount coupons</p></div>
+   948→        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => setShowAdd(true)}><Plus size={16} className="mr-1.5" />Add Coupon</Button>
+   949→      </div>
+   950→      <Card>
+   951→        <Table>
+   952→          <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Discount</TableHead><TableHead>Min Order</TableHead><TableHead>Usage</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+   953→          <TableBody>
+   954→            {isLoading ? Array.from({length: 3}).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8" /></TableCell></TableRow>) :
+   955→            coupons?.map((c: any) => (
+   956→              <TableRow key={c.id}>
+   957→                <TableCell className="font-mono font-bold">{c.code}</TableCell>
+   958→                <TableCell>{c.discountType === 'PERCENTAGE' ? `${c.discountValue}%` : formatCurrency(c.discountValue)}{c.maxDiscount ? ` (max ${formatCurrency(c.maxDiscount)})` : ''}</TableCell>
+   959→                <TableCell>{c.minOrder ? formatCurrency(c.minOrder) : 'N/A'}</TableCell>
+   960→                <TableCell>{c.usedCount}/{c.usageLimit || '∞'}</TableCell>
+   961→                <TableCell><Badge variant={c.isActive ? 'default' : 'secondary'}>{c.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+   962→                <TableCell className="text-right"><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(c.id)}><Trash2 size={14} /></Button></TableCell>
+   963→              </TableRow>
+   964→            ))}
+   965→          </TableBody>
+   966→        </Table>
+   967→      </Card>
+   968→
+   969→      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+   970→        <DialogContent><DialogHeader><DialogTitle>Create Coupon</DialogTitle></DialogHeader>
+   971→          <div className="space-y-4">
+   972→            <div><Label>Code *</Label><Input value={form.code} onChange={e => setForm(f => ({...f, code: e.target.value.toUpperCase()}))} className="mt-1 uppercase" /></div>
+   973→            <div className="grid grid-cols-2 gap-4">
+   974→              <div><Label>Discount Type</Label><Select value={form.discountType} onValueChange={v => setForm(f => ({...f, discountType: v}))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PERCENTAGE">Percentage</SelectItem><SelectItem value="FIXED">Fixed Amount</SelectItem></SelectContent></Select></div>
+   975→              <div><Label>Discount Value *</Label><Input type="number" value={form.discountValue} onChange={e => setForm(f => ({...f, discountValue: e.target.value}))} className="mt-1" /></div>
+   976→              <div><Label>Min Order (₹)</Label><Input type="number" value={form.minOrder} onChange={e => setForm(f => ({...f, minOrder: e.target.value}))} className="mt-1" /></div>
+   977→              <div><Label>Max Discount (₹)</Label><Input type="number" value={form.maxDiscount} onChange={e => setForm(f => ({...f, maxDiscount: e.target.value}))} className="mt-1" /></div>
+   978→              <div><Label>Usage Limit</Label><Input type="number" value={form.usageLimit} onChange={e => setForm(f => ({...f, usageLimit: e.target.value}))} className="mt-1" /></div>
+   979→            </div>
+   980→          </div>
+   981→          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => addMutation.mutate()} disabled={addMutation.isPending || !form.code}>Create</Button></DialogFooter>
+   982→        </DialogContent>
+   983→      </Dialog>
+   984→    </div>
+   985→  );
+   986→}
+   987→
+   988→// ============ ADMIN BANNERS ============
+   989→
+   990→function AdminBanners() {
+   991→  const qc = useQueryClient();
+   992→  const { data: banners, isLoading } = useQuery({ queryKey: ['banners'], queryFn: () => fetch('/api/banners?position=HOME').then(r => r.json()).then((r: any) => r.data || []) });
+   993→  const [form, setForm] = useState({ title: '', image: '', link: '', position: 'HOME', sortOrder: '0' });
+   994→
+   995→  const addMutation = useMutation({
+   996→    mutationFn: () => fetch('/api/banners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, sortOrder: parseInt(form.sortOrder) }) }).then(r => r.json()),
+   997→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['banners'] }); toast.success('Banner added'); setForm({ title: '', image: '', link: '', position: 'HOME', sortOrder: '0' }); },
+   998→    onError: () => toast.error('Failed'),
+   999→  });
+  1000→
+  1001→  const deleteMutation = useMutation({
+  1002→    mutationFn: (id: string) => fetch(`/api/banners?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+  1003→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['banners'] }); toast.success('Banner deleted'); },
+  1004→  });
+  1005→
+  1006→  return (
+  1007→    <div className="p-6 space-y-6">
+  1008→      <div><h1 className="text-2xl font-bold">Banners</h1><p className="text-muted-foreground text-sm">Manage homepage banners and advertisements</p></div>
+  1009→
+  1010→      <Card className="p-6"><h3 className="font-semibold mb-4">Add New Banner</h3>
+  1011→        <div className="grid sm:grid-cols-2 gap-4">
+  1012→          <div><Label>Title</Label><Input value={form.title} onChange={e => setForm(f => ({...f, title: e.target.value}))} className="mt-1" /></div>
+  1013→          <div><Label>Image URL</Label><Input value={form.image} onChange={e => setForm(f => ({...f, image: e.target.value}))} className="mt-1" placeholder="https://..." /></div>
+  1014→          <div><Label>Link (optional)</Label><Input value={form.link} onChange={e => setForm(f => ({...f, link: e.target.value}))} className="mt-1" /></div>
+  1015→          <div><Label>Sort Order</Label><Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({...f, sortOrder: e.target.value}))} className="mt-1" /></div>
+  1016→        </div>
+  1017→        <Button className="mt-4 bg-amber-600 hover:bg-amber-700" onClick={() => addMutation.mutate()} disabled={addMutation.isPending || !form.title || !form.image}>Add Banner</Button>
+  1018→      </Card>
+  1019→
+  1020→      <div className="space-y-4">
+  1021→        {isLoading ? Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />) :
+  1022→        banners?.map((banner: any) => (
+  1023→          <Card key={banner.id} className="overflow-hidden">
+  1024→            <img src={banner.image} alt={banner.title} className="w-full h-32 md:h-48 object-cover" />
+  1025→            <div className="p-4 flex items-center justify-between">
+  1026→              <div><p className="font-medium">{banner.title}</p><p className="text-sm text-muted-foreground">Position: {banner.position} • Sort: {banner.sortOrder}</p></div>
+  1027→              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteMutation.mutate(banner.id)}><Trash2 size={16} /></Button>
+  1028→            </div>
+  1029→          </Card>
+  1030→        ))}
+  1031→      </div>
+  1032→    </div>
+  1033→  );
+  1034→}
+  1035→
+  1036→// ============ ADMIN REPORTS ============
+  1037→
+  1038→function AdminReports() {
+  1039→  const { data } = useQuery({ queryKey: ['admin-dashboard'], queryFn: () => fetch('/api/admin/dashboard').then(r => r.json()).then((r: any) => r.data ?? {}) });
+  1040→
+  1041→  return (
+  1042→    <div className="p-6 space-y-6">
+  1043→      <div><h1 className="text-2xl font-bold">Reports & Analytics</h1><p className="text-muted-foreground text-sm">Platform performance insights</p></div>
+  1044→
+  1045→      <div className="grid sm:grid-cols-3 gap-4">
+  1046→        <Card className="p-4"><p className="text-sm text-muted-foreground">Total Revenue</p><p className="text-2xl font-bold text-green-600">{formatCurrency(data?.totalRevenue || 0)}</p></Card>
+  1047→        <Card className="p-4"><p className="text-sm text-muted-foreground">Platform Earnings (Commission)</p><p className="text-2xl font-bold text-emerald-600">{formatCurrency(data?.platformEarnings || 0)}</p></Card>
+  1048→        <Card className="p-4"><p className="text-sm text-muted-foreground">Total Tax Collected</p><p className="text-2xl font-bold">{formatCurrency((data?.totalRevenue || 0) * 0.18)}</p></Card>
+  1049→      </div>
+  1050→
+  1051→      {data?.monthlySales && (
+  1052→        <Card className="p-6">
+  1053→          <CardHeader className="p-0 mb-4"><CardTitle>Revenue Breakdown</CardTitle></CardHeader>
+  1054→          <div className="h-64 flex items-end gap-3">
+  1055→            {data.monthlySales.map((ms: any, i: number) => {
+  1056→              const maxSale = Math.max(...data.monthlySales.map((m: any) => m.sales), 1);
+  1057→              return (
+  1058→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+  1059→                  <span className="text-xs font-medium">{formatCurrency(ms.sales)}</span>
+  1060→                  <div className="w-full rounded-t-md bg-gradient-to-t from-amber-700 to-amber-400" style={{ height: `${Math.max((ms.sales / maxSale) * 100, 4)}%` }} />
+  1061→                  <span className="text-xs text-muted-foreground">{ms.month}</span>
+  1062→                </div>
+  1063→              );
+  1064→            })}
+  1065→          </div>
+  1066→        </Card>
+  1067→      )}
+  1068→    </div>
+  1069→  );
+  1070→}
+  1071→
+  1072→// ============ ADMIN SETTINGS ============
+  1073→
+  1074→function AdminSettings() {
+  1075→  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: () => fetch('/api/settings').then(r => r.json()).then((r: any) => r.data ?? {}) });
+  1076→  const [form, setForm] = useState<any>({});
+  1077→
+  1078→  React.useEffect(() => { if (settings) setForm(settings); }, [settings]);
+  1079→
+  1080→  const saveMutation = useMutation({
+  1081→    mutationFn: () => fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).then(r => r.json()),
+  1082→    onSuccess: () => toast.success('Settings saved', { description: 'Changes applied successfully.' }),
+  1083→    onError: () => toast.error('Failed to save'),
+  1084→  });
+  1085→
+  1086→  return (
+  1087→    <div className="p-6 space-y-6">
+  1088→      <div><h1 className="text-2xl font-bold">Platform Settings</h1><p className="text-muted-foreground text-sm">Configure marketplace settings</p></div>
+  1089→      <Card className="p-6">
+  1090→        <div className="grid sm:grid-cols-2 gap-4">
+  1091→          <div><Label>Site Name</Label><Input value={form.siteName || ''} onChange={e => setForm(f => ({...f, siteName: e.target.value}))} className="mt-1" /></div>
+  1092→          <div><Label>Site Description</Label><Input value={form.siteDescription || ''} onChange={e => setForm(f => ({...f, siteDescription: e.target.value}))} className="mt-1" /></div>
+  1093→          <div><Label>Currency</Label><Input value={form.currency || ''} onChange={e => setForm(f => ({...f, currency: e.target.value}))} className="mt-1" /></div>
+  1094→          <div><Label>Currency Symbol</Label><Input value={form.currencySymbol || ''} onChange={e => setForm(f => ({...f, currencySymbol: e.target.value}))} className="mt-1" /></div>
+  1095→          <div><Label>Tax Rate (GST %)</Label><Input type="number" value={form.taxRate || ''} onChange={e => setForm(f => ({...f, taxRate: parseFloat(e.target.value)}))} className="mt-1" /></div>
+  1096→          <div><Label>Free Shipping Min (₹)</Label><Input type="number" value={form.freeShippingMin || ''} onChange={e => setForm(f => ({...f, freeShippingMin: parseFloat(e.target.value)}))} className="mt-1" /></div>
+  1097→          <div><Label>Contact Email</Label><Input value={form.contactEmail || ''} onChange={e => setForm(f => ({...f, contactEmail: e.target.value}))} className="mt-1" /></div>
+  1098→          <div><Label>Contact Phone</Label><Input value={form.contactPhone || ''} onChange={e => setForm(f => ({...f, contactPhone: e.target.value}))} className="mt-1" /></div>
+  1099→          <div className="sm:col-span-2"><Label>Address</Label><Textarea value={form.address || ''} onChange={e => setForm(f => ({...f, address: e.target.value}))} className="mt-1" /></div>
+  1100→        </div>
+  1101→        <Button className="mt-4 bg-amber-600 hover:bg-amber-700" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>Save Settings</Button>
+  1102→      </Card>
+  1103→    </div>
+  1104→  );
+  1105→}
+  1106→
+  1107→// ============ ADMIN RETURNS ============
+  1108→
+  1109→function AdminReturns() {
+  1110→  const [statusFilter, setStatusFilter] = useState('all');
+  1111→  const qc = useQueryClient();
+  1112→  const [rejectId, setRejectId] = useState<string | null>(null);
+  1113→  const [rejectNotes, setRejectNotes] = useState('');
+  1114→
+  1115→  const { data, isLoading } = useQuery({
+  1116→    queryKey: ['admin-returns', statusFilter],
+  1117→    queryFn: () => fetch(`/api/admin/returns${statusFilter !== 'all' ? `?status=${statusFilter}` : ''}`).then(r => r.json()),
+  1118→  });
+  1119→
+  1120→  const updateReturn = useMutation({
+  1121→    mutationFn: ({ id, status, adminNotes }: any) => fetch(`/api/admin/returns/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, adminNotes }) }).then(r => r.json()),
+  1122→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-returns'] }); toast.success('Return updated'); },
+  1123→    onError: () => toast.error('Failed to update return'),
+  1124→  });
+  1125→
+  1126→  const statusColor: Record<string, string> = {
+  1127→    PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30',
+  1128→    APPROVED: 'bg-blue-100 text-blue-700',
+  1129→    COMPLETED: 'bg-green-100 text-green-700',
+  1130→    REJECTED: 'bg-red-100 text-red-700',
+  1131→  };
+  1132→
+  1133→  return (
+  1134→    <div className="p-6 space-y-6">
+  1135→      <h1 className="text-2xl font-bold">Returns & Refunds</h1>
+  1136→      <div className="flex gap-2 flex-wrap">
+  1137→        {['all', 'PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'].map(s => (
+  1138→          <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-amber-600' : ''} onClick={() => setStatusFilter(s)}>{s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}</Button>
+  1139→        ))}
+  1140→      </div>
+  1141→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+  1142→        <Card><Table><TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Customer</TableHead><TableHead>Reason</TableHead><TableHead>Refund</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+  1143→          <TableBody>{(data?.data || []).map((r: any) => (
+  1144→            <TableRow key={r.id}><TableCell className="font-mono text-sm">#{r.orderId?.slice(-6)}</TableCell><TableCell>{r.userId || 'Guest'}</TableCell><TableCell className="max-w-[200px] truncate">{r.reason}</TableCell><TableCell>{r.refundAmount ? formatCurrency(r.refundAmount) : '—'}</TableCell>
+  1145→              <TableCell><Badge className={statusColor[r.status] || ''}>{r.status}</Badge></TableCell>
+  1146→              <TableCell className="text-sm text-muted-foreground">{new Date(r.createdAt).toLocaleDateString('en-IN')}</TableCell>
+  1147→              <TableCell><div className="flex gap-1">
+  1148→                {r.status === 'PENDING' && <><Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => updateReturn.mutate({ id: r.id, status: 'APPROVED' })}><CheckCircle2 size={16} /></Button><Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => setRejectId(r.id)}><XCircle size={16} /></Button></>}
+  1149→                {r.status === 'APPROVED' && <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => updateReturn.mutate({ id: r.id, status: 'COMPLETED' })}>Process Refund</Button>}
+  1150→              </div></TableCell></TableRow>
+  1151→          ))}</TableBody></Table></Card>}
+  1152→      <Dialog open={!!rejectId} onOpenChange={() => setRejectId(null)}>
+  1153→        <DialogContent><DialogHeader><DialogTitle>Reject Return</DialogTitle></DialogHeader>
+  1154→          <Textarea placeholder="Reason for rejection" value={rejectNotes} onChange={e => setRejectNotes(e.target.value)} />
+  1155→          <DialogFooter><Button variant="outline" onClick={() => setRejectId(null)}>Cancel</Button><Button variant="destructive" onClick={() => { updateReturn.mutate({ id: rejectId, status: 'REJECTED', adminNotes: rejectNotes }); setRejectId(null); setRejectNotes(''); }}>Reject</Button></DialogFooter>
+  1156→        </DialogContent>
+  1157→      </Dialog>
+  1158→    </div>
+  1159→  );
+  1160→}
+  1161→
+  1162→// ============ ADMIN PAYOUTS ============
+  1163→
+  1164→function AdminPayouts() {
+  1165→  const [statusFilter, setStatusFilter] = useState('all');
+  1166→  const qc = useQueryClient();
+  1167→  const [rejectId, setRejectId] = useState<string | null>(null);
+  1168→  const [rejectNotes, setRejectNotes] = useState('');
+  1169→
+  1170→  const { data, isLoading } = useQuery({
+  1171→    queryKey: ['admin-payouts', statusFilter],
+  1172→    queryFn: () => fetch(`/api/admin/payouts${statusFilter !== 'all' ? `?status=${statusFilter}` : ''}`).then(r => r.json()),
+  1173→  });
+  1174→
+  1175→  const updatePayout = useMutation({
+  1176→    mutationFn: ({ id, status, notes }: any) => fetch(`/api/admin/payouts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, notes }) }).then(r => r.json()),
+  1177→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-payouts'] }); toast.success('Payout updated'); },
+  1178→    onError: () => toast.error('Failed to update payout'),
+  1179→  });
+  1180→
+  1181→  const maskBank = (acc?: string | null) => acc ? '••••' + acc.slice(-4) : '—';
+  1182→
+  1183→  const statusColor: Record<string, string> = {
+  1184→    PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30',
+  1185→    APPROVED: 'bg-blue-100 text-blue-700',
+  1186→    PROCESSING: 'bg-purple-100 text-purple-700',
+  1187→    COMPLETED: 'bg-green-100 text-green-700',
+  1188→    FAILED: 'bg-red-100 text-red-700',
+  1189→  };
+  1190→
+  1191→  return (
+  1192→    <div className="p-6 space-y-6">
+  1193→      <h1 className="text-2xl font-bold">Vendor Payouts</h1>
+  1194→      <div className="flex gap-2 flex-wrap">
+  1195→        {['all', 'PENDING', 'APPROVED', 'PROCESSING', 'COMPLETED', 'FAILED'].map(s => (
+  1196→          <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-amber-600' : ''} onClick={() => setStatusFilter(s)}>{s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}</Button>
+  1197→        ))}
+  1198→      </div>
+  1199→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+  1200→        <Card><Table><TableHeader><TableRow><TableHead>Vendor</TableHead><TableHead>Amount</TableHead><TableHead>Bank</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+  1201→          <TableBody>{(data?.data || []).map((p: any) => (
+  1202→            <TableRow key={p.id}><TableCell className="font-medium text-sm">{p.vendor?.businessName || 'Unknown'}</TableCell><TableCell className="font-bold">{formatCurrency(p.amount)}</TableCell><TableCell className="text-sm text-muted-foreground">{p.bankName} ({maskBank(p.bankAccount)})</TableCell>
+  1203→              <TableCell><Badge className={statusColor[p.status] || ''}>{p.status}</Badge></TableCell>
+  1204→              <TableCell className="text-sm text-muted-foreground">{new Date(p.createdAt).toLocaleDateString('en-IN')}</TableCell>
+  1205→              <TableCell><div className="flex gap-1">
+  1206→                {p.status === 'PENDING' && <><Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => updatePayout.mutate({ id: p.id, status: 'APPROVED' })}><CheckCircle2 size={16} /></Button><Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => setRejectId(p.id)}><XCircle size={16} /></Button></>}
+  1207→                {p.status === 'APPROVED' && <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => updatePayout.mutate({ id: p.id, status: 'COMPLETED' })}>Complete</Button>}
+  1208→              </div></TableCell></TableRow>
+  1209→          ))}</TableBody></Table></Card>}
+  1210→      <Dialog open={!!rejectId} onOpenChange={() => setRejectId(null)}>
+  1211→        <DialogContent><DialogHeader><DialogTitle>Reject Payout</DialogTitle></DialogHeader>
+  1212→          <Textarea placeholder="Reason for rejection" value={rejectNotes} onChange={e => setRejectNotes(e.target.value)} />
+  1213→          <DialogFooter><Button variant="outline" onClick={() => setRejectId(null)}>Cancel</Button><Button variant="destructive" onClick={() => { updatePayout.mutate({ id: rejectId, status: 'FAILED', notes: rejectNotes }); setRejectId(null); setRejectNotes(''); }}>Reject</Button></DialogFooter>
+  1214→        </DialogContent>
+  1215→      </Dialog>
+  1216→    </div>
+  1217→  );
+  1218→}
+  1219→
+  1220→// ============ ADMIN ANALYTICS ============
+  1221→
+  1222→function AdminAnalytics() {
+  1223→  const { data, isLoading } = useQuery({
+  1224→    queryKey: ['admin-analytics'],
+  1225→    queryFn: () => fetch('/api/admin/analytics').then(r => r.json()).then((r: any) => r.data ?? {}),
+  1226→  });
+  1227→
+  1228→  if (isLoading) return <div className="p-6 space-y-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />)}</div>;
+  1229→
+  1230→  return (
+  1231→    <div className="p-6 space-y-6">
+  1232→      <div><h1 className="text-2xl font-bold">Analytics</h1><p className="text-muted-foreground text-sm">Deep platform insights and metrics</p></div>
+  1233→
+  1234→      {/* Average Order Value */}
+  1235→      <div className="grid sm:grid-cols-2 gap-4">
+  1236→      {data?.averageOrderValue > 0 && (
+  1237→        <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Average Order Value</p><p className="text-2xl font-bold">{formatCurrency(data.averageOrderValue)}</p></div><TrendingUp className="h-8 w-8 text-amber-500 bg-amber-100 dark:bg-amber-900/30 rounded-lg p-2" /></div></Card>
+  1238→      )}
+  1239→      <div className="bg-card border rounded-xl p-4">
+  1240→        <p className="text-sm text-muted-foreground">Conversion Rate</p>
+  1241→        <p className="text-2xl font-bold mt-1">{data?.conversionEstimate || 2.4}%</p>
+  1242→        <p className="text-xs text-green-600 mt-1">↑ Estimated from orders/visits</p>
+  1243→      </div>
+  1244→      </div>
+  1245→
+  1246→      <div className="grid lg:grid-cols-2 gap-6">
+  1247→        {/* Top Searches */}
+  1248→        <Card className="p-4">
+  1249→          <h3 className="font-semibold mb-3">Top Searches</h3>
+  1250→          <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Query</TableHead><TableHead className="text-right">Count</TableHead><TableHead className="text-right">Results</TableHead></TableRow></TableHeader>
+  1251→            <TableBody>{(data?.topSearches || []).map((s: any, i: number) => (
+  1252→              <TableRow key={i}><TableCell className="text-sm font-medium">{s.query}</TableCell><TableCell className="text-right text-sm">{s.searchCount}</TableCell><TableCell className="text-right text-sm text-muted-foreground">{s.resultCount}</TableCell></TableRow>
+  1253→            ))}</TableBody></Table></div>
+  1254→        </Card>
+  1255→
+  1256→        {/* Zero-Result Searches */}
+  1257→        <Card className="p-4">
+  1258→          <h3 className="font-semibold mb-3">Zero-Result Searches</h3>
+  1259→          <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Query</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
+  1260→            <TableBody>{(data?.zeroResultSearches || []).map((s: any, i: number) => (
+  1261→              <TableRow key={i}><TableCell className="text-sm font-medium text-red-600">{s.query}</TableCell><TableCell className="text-right text-sm">{s.searchCount}</TableCell></TableRow>
+  1262→            ))}</TableBody></Table></div>
+  1263→        </Card>
+  1264→      </div>
+  1265→
+  1266→      {/* Customer Growth Chart */}
+  1267→      {data?.customerGrowth && data.customerGrowth.length > 0 && (
+  1268→        <Card className="p-6">
+  1269→          <h3 className="font-semibold mb-4">Customer Growth (Monthly New Users)</h3>
+  1270→          <div className="h-48 flex items-end gap-3">
+  1271→            {data.customerGrowth.map((m: any, i: number) => {
+  1272→              const maxVal = Math.max(...data.customerGrowth.map((x: any) => x.count), 1);
+  1273→              return (
+  1274→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+  1275→                  <span className="text-xs font-medium">{m.count}</span>
+  1276→                  <div className="w-full rounded-t-md bg-gradient-to-t from-emerald-600 to-emerald-400 transition-all duration-500" style={{ height: `${Math.max((m.count / maxVal) * 100, 4)}%` }} />
+  1277→                  <span className="text-xs text-muted-foreground">{m.month}</span>
+  1278→                </div>
+  1279→              );
+  1280→            })}
+  1281→          </div>
+  1282→        </Card>
+  1283→      )}
+  1284→
+  1285→      {/* Vendor Performance */}
+  1286→      <Card className="p-4">
+  1287→        <h3 className="font-semibold mb-3">Vendor Performance</h3>
+  1288→        <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Vendor</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Orders</TableHead><TableHead className="text-right">Rating</TableHead></TableRow></TableHeader>
+  1289→          <TableBody>{(data?.vendorPerformance || []).map((v: any, i: number) => (
+  1290→            <TableRow key={i}><TableCell className="font-medium text-sm">{v.name}</TableCell><TableCell className="text-right font-medium">{formatCurrency(v.revenue)}</TableCell><TableCell className="text-right text-sm">{v.orders}</TableCell><TableCell className="text-right text-sm"><span className="inline-flex items-center gap-1"><Star className="h-3 w-3 text-amber-500" />{v.rating?.toFixed(1) || 'N/A'}</span></TableCell></TableRow>
+  1291→          ))}</TableBody></Table></div>
+  1292→      </Card>
+  1293→    </div>
+  1294→  );
+  1295→}
+  1296→
+  1297→// ============ ADMIN SUPPORT ============
+  1298→
+  1299→function AdminSupport() {
+  1300→  const qc = useQueryClient();
+  1301→  const [selectedTicket, setSelectedTicket] = useState<any>(null);
+  1302→  const [reply, setReply] = useState('');
+  1303→
+  1304→  const { data, isLoading } = useQuery({
+  1305→    queryKey: ['support-tickets'],
+  1306→    queryFn: () => fetch('/api/support/tickets').then(r => r.json()).then((r: any) => r.data ?? []),
+  1307→  });
+  1308→
+  1309→  const replyMutation = useMutation({
+  1310→    mutationFn: ({ ticketId, message }: { ticketId: string; message: string }) => fetch('/api/support/tickets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticketId, message, isStaff: true }) }).then(r => r.json()),
+  1311→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['support-tickets'] }); setReply(''); toast.success('Reply sent', { description: 'The customer will be notified.' }); },
+  1312→    onError: () => toast.error('Failed to send reply'),
+  1313→  });
+  1314→
+  1315→  const priorityColor: Record<string, string> = {
+  1316→    LOW: 'bg-gray-100 text-gray-700',
+  1317→    MEDIUM: 'bg-blue-100 text-blue-700',
+  1318→    HIGH: 'bg-orange-100 text-orange-700',
+  1319→    URGENT: 'bg-red-100 text-red-700',
+  1320→  };
+  1321→
+  1322→  const statusColor: Record<string, string> = {
+  1323→    OPEN: 'bg-green-100 text-green-700',
+  1324→    IN_PROGRESS: 'bg-blue-100 text-blue-700',
+  1325→    RESOLVED: 'bg-amber-100 text-amber-700',
+  1326→    CLOSED: 'bg-gray-100 text-gray-700',
+  1327→  };
+  1328→
+  1329→  return (
+  1330→    <div className="p-6 space-y-6">
+  1331→      <h1 className="text-2xl font-bold">Support Tickets</h1>
+  1332→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+  1333→        <Card><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Customer</TableHead><TableHead>Category</TableHead><TableHead>Priority</TableHead><TableHead>Status</TableHead><TableHead className="hidden sm:table-cell">Messages</TableHead><TableHead>Created</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+  1334→          <TableBody>{(Array.isArray(data) ? data : []).map((t: any) => (
+  1335→            <TableRow key={t.id}><TableCell className="font-medium text-sm max-w-[200px] truncate">{t.subject}</TableCell><TableCell className="text-sm">{t.user?.name || 'Guest'}</TableCell><TableCell className="text-sm">{t.category}</TableCell>
+  1336→              <TableCell><Badge className={priorityColor[t.priority] || ''}>{t.priority}</Badge></TableCell>
+  1337→              <TableCell><Badge className={statusColor[t.status] || ''}>{t.status.replace('_', ' ')}</Badge></TableCell>
+  1338→              <TableCell className="hidden sm:table-cell text-sm">{t._count?.messages || t.messages?.length || 0}</TableCell>
+  1339→              <TableCell className="text-sm text-muted-foreground">{new Date(t.createdAt).toLocaleDateString('en-IN')}</TableCell>
+  1340→              <TableCell><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedTicket(t)}><Eye size={14} /></Button></TableCell></TableRow>
+  1341→          ))}</TableBody></Table></div></Card>}
+  1342→
+  1343→      {/* Ticket Detail Dialog */}
+  1344→      <Dialog open={!!selectedTicket} onOpenChange={() => { setSelectedTicket(null); setReply(''); }}>
+  1345→        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+  1346→          <DialogHeader>
+  1347→            <DialogTitle>{selectedTicket?.subject}</DialogTitle>
+  1348→            <DialogDescription>{selectedTicket?.category} • {selectedTicket?.status} • {selectedTicket?.user?.name}</DialogDescription>
+  1349→          </DialogHeader>
+  1350→          <div className="flex-1 overflow-y-auto space-y-3 min-h-0">
+  1351→            {(selectedTicket?.messages || []).map((m: any) => (
+  1352→              <div key={m.id} className={`p-3 rounded-lg text-sm ${m.isStaff ? 'bg-amber-50 dark:bg-amber-900/10 ml-8' : 'bg-muted mr-8'}`}>
+  1353→                <div className="flex items-center gap-2 mb-1"><span className="font-medium text-xs">{m.isStaff ? 'Admin' : selectedTicket?.user?.name || 'Customer'}</span><span className="text-xs text-muted-foreground">{new Date(m.createdAt).toLocaleString('en-IN')}</span></div>
+  1354→                <p>{m.message}</p>
+  1355→              </div>
+  1356→            ))}
+  1357→          </div>
+  1358→          {selectedTicket?.status !== 'CLOSED' && selectedTicket?.status !== 'RESOLVED' && (
+  1359→            <div className="flex gap-2 pt-2 border-t">
+  1360→              <Input placeholder="Type your reply..." value={reply} onChange={e => setReply(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && reply.trim()) replyMutation.mutate({ ticketId: selectedTicket.id, message: reply }); }} className="flex-1" />
+  1361→              <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => replyMutation.mutate({ ticketId: selectedTicket.id, message: reply })} disabled={!reply.trim()}><Send size={16} /></Button>
+  1362→            </div>
+  1363→          )}
+  1364→        </DialogContent>
+  1365→      </Dialog>
+  1366→    </div>
+  1367→  );
+  1368→}
+  1369→
+  1370→// ============ ADMIN MARKETING ============
+  1371→
+  1372→function AdminMarketing() {
+  1373→  return (
+  1374→    <Tabs defaultValue="flash-sales" className="p-6 space-y-6">
+  1375→      <div><h1 className="text-2xl font-bold">Marketing</h1><p className="text-muted-foreground text-sm">Manage promotions and campaigns</p></div>
+  1376→      <TabsList className="flex-wrap h-auto gap-1"><TabsTrigger value="flash-sales">Flash Sales</TabsTrigger><TabsTrigger value="deals">Deals</TabsTrigger><TabsTrigger value="festival-offers">Festival Offers</TabsTrigger><TabsTrigger value="collections">Collections</TabsTrigger></TabsList>
+  1377→      <TabsContent value="flash-sales"><FlashSalesTab /></TabsContent>
+  1378→      <TabsContent value="deals"><DealsTab /></TabsContent>
+  1379→      <TabsContent value="festival-offers"><FestivalOffersTab /></TabsContent>
+  1380→      <TabsContent value="collections"><FeaturedCollectionsTab /></TabsContent>
+  1381→    </Tabs>
+  1382→  );
+  1383→}
+  1384→
+  1385→function FlashSalesTab() {
+  1386→  const qc = useQueryClient();
+  1387→  const [showCreate, setShowCreate] = useState(false);
+  1388→  const [form, setForm] = useState({ title: '', description: '', startDate: '', endDate: '' });
+  1389→
+  1390→  const { data, isLoading } = useQuery({
+  1391→    queryKey: ['flash-sales'],
+  1392→    queryFn: () => fetch('/api/flash-sales').then(r => r.json()).then((r: any) => r.data || []),
+  1393→  });
+  1394→
+  1395→  const createMutation = useMutation({
+  1396→    mutationFn: () => fetch('/api/flash-sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, isActive: true }) }).then(r => r.json()),
+  1397→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['flash-sales'] }); toast.success('Flash sale created'); setShowCreate(false); setForm({ title: '', description: '', startDate: '', endDate: '' }); },
+  1398→    onError: () => toast.error('Failed to create'),
+  1399→  });
+  1400→
+  1401→  return (
+  1402→    <div className="space-y-4">
+  1403→      <div className="flex items-center justify-between">
+  1404→        <h3 className="font-semibold">Flash Sales</h3>
+  1405→        <Button className="bg-amber-600 hover:bg-amber-700" size="sm" onClick={() => setShowCreate(true)}><Plus size={14} className="mr-1" />Create</Button>
+  1406→      </div>
+  1407→      {isLoading ? <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+  1408→        <div className="space-y-3">
+  1409→          {(data || []).map((fs: any) => (
+  1410→            <Card key={fs.id} className="p-4 flex items-center justify-between">
+  1411→              <div><p className="font-medium">{fs.title}</p><p className="text-sm text-muted-foreground flex items-center gap-1"><CalendarDays size={12} />{new Date(fs.startDate).toLocaleDateString('en-IN')} — {new Date(fs.endDate).toLocaleDateString('en-IN')}</p><p className="text-xs text-muted-foreground">{fs.items?.length || 0} products</p></div>
+  1412→              <Badge variant={fs.isActive ? 'default' : 'secondary'}>{fs.isActive ? 'Active' : 'Inactive'}</Badge>
+  1413→            </Card>
+  1414→          ))}
+  1415→          {(!data || data.length === 0) && <div className="flex flex-col items-center justify-center py-12 text-center"><Zap size={40} className="text-muted-foreground/40 mb-3" /><p className="text-muted-foreground font-medium">No flash sales yet</p><p className="text-muted-foreground text-sm mt-1">Create a flash sale to boost product visibility</p></div>}
+  1416→        </div>}
+  1417→      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+  1418→        <DialogContent><DialogHeader><DialogTitle>Create Flash Sale</DialogTitle></DialogHeader>
+  1419→          <div className="space-y-4">
+  1420→            <div><Label>Title *</Label><Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="mt-1" /></div>
+  1421→            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
+  1422→            <div className="grid grid-cols-2 gap-4">
+  1423→              <div><Label>Start Date *</Label><Input type="datetime-local" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="mt-1" /></div>
+  1424→              <div><Label>End Date *</Label><Input type="datetime-local" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} className="mt-1" /></div>
+  1425→            </div>
+  1426→          </div>
+  1427→          <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.title}>Create</Button></DialogFooter>
+  1428→        </DialogContent>
+  1429→      </Dialog>
+  1430→    </div>
+  1431→  );
+  1432→}
+  1433→
+  1434→function FestivalOffersTab() {
+  1435→  const { data: flashSales, isLoading } = useQuery({
+  1436→    queryKey: ['festival-offers'],
+  1437→    queryFn: () => fetch('/api/flash-sales').then(r => r.json()).then((r: any) => r.data || []),
+  1438→  });
+  1439→  const { data: deals, isLoading: dealsLoading } = useQuery({
+  1440→    queryKey: ['deals'],
+  1441→    queryFn: () => fetch('/api/deals').then(r => r.json()).then((r: any) => r.data || []),
+  1442→  });
+  1443→
+  1444→  const isLoadingCombined = isLoading || dealsLoading;
+  1445→  const festivalFlashSales = (flashSales || []).filter((fs: any) => fs.description?.toLowerCase().includes('festival') || fs.title?.toLowerCase().includes('festival'));
+  1446→  const festivalDeals = (deals || []).filter((d: any) => d.description?.toLowerCase().includes('festival') || d.title?.toLowerCase().includes('festival'));
+  1447→  const hasFestivalContent = festivalFlashSales.length > 0 || festivalDeals.length > 0;
+  1448→
+  1449→  return (
+  1450→    <div className="space-y-4">
+  1451→      <div className="flex items-center justify-between">
+  1452→        <h3 className="font-semibold">Festival Offers</h3>
+  1453→        <Badge variant="outline" className="text-xs">Filtered from Flash Sales & Deals</Badge>
+  1454→      </div>
+  1455→      {isLoadingCombined ? <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+  1456→      hasFestivalContent ? (
+  1457→        <div className="space-y-3">
+  1458→          {festivalFlashSales.length > 0 && <>
+  1459→            <h4 className="text-sm font-medium text-muted-foreground">Festival Flash Sales</h4>
+  1460→            {festivalFlashSales.map((fs: any) => (
+  1461→              <Card key={fs.id} className="p-4 flex items-center justify-between border-l-4 border-l-amber-500">
+  1462→                <div><p className="font-medium flex items-center gap-2"><Sparkles size={14} className="text-amber-500" />{fs.title}</p><p className="text-sm text-muted-foreground flex items-center gap-1"><CalendarDays size={12} />{new Date(fs.startDate).toLocaleDateString('en-IN')} — {new Date(fs.endDate).toLocaleDateString('en-IN')}</p><p className="text-xs text-muted-foreground">{fs.items?.length || 0} products</p></div>
+  1463→                <Badge variant={fs.isActive ? 'default' : 'secondary'}>{fs.isActive ? 'Active' : 'Inactive'}</Badge>
+  1464→              </Card>
+  1465→            ))}
+  1466→          </>}
+  1467→          {festivalDeals.length > 0 && <>
+  1468→            <h4 className="text-sm font-medium text-muted-foreground">Festival Deals</h4>
+  1469→            {festivalDeals.map((d: any) => (
+  1470→              <Card key={d.id} className="p-4 flex items-center justify-between border-l-4 border-l-green-500">
+  1471→                <div><p className="font-medium flex items-center gap-2"><Sparkles size={14} className="text-green-500" />{d.title}</p><p className="text-sm text-muted-foreground">{d.product?.name || d.productId} • {d.discountPercent}% off</p><p className="text-xs text-muted-foreground">{new Date(d.startDate).toLocaleDateString()} — {new Date(d.endDate).toLocaleDateString()}</p></div>
+  1472→                <Badge variant={d.isActive ? 'default' : 'secondary'}>{d.isActive ? 'Active' : 'Inactive'}</Badge>
+  1473→              </Card>
+  1474→            ))}
+  1475→          </>}
+  1476→        </div>
+  1477→      ) : (
+  1478→        <div className="text-center py-12">
+  1479→          <Sparkles className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+  1480→          <p className="text-muted-foreground">No festival offers yet</p>
+  1481→          <p className="text-xs text-muted-foreground mt-1">Create flash sales or deals with &quot;festival&quot; in the title or description to see them here</p>
+  1482→        </div>
+  1483→      )}
+  1484→    </div>
+  1485→  );
+  1486→}
+  1487→
+  1488→interface Collection {
+  1489→  id: string;
+  1490→  name: string;
+  1491→  description: string;
+  1492→  productIds: string[];
+  1493→  coverImage: string;
+  1494→  sortOrder: number;
+  1495→  createdAt: string;
+  1496→}
+  1497→
+  1498→function FeaturedCollectionsTab() {
+  1499→  const [collections, setCollections] = useState<Collection[]>(() => {
+  1500→    if (typeof window === 'undefined') return [];
+  1501→    try {
+  1502→      return JSON.parse(localStorage.getItem('marketplace-collections') || '[]');
+  1503→    } catch { return []; }
+  1504→  });
+  1505→  const [showCreate, setShowCreate] = useState(false);
+  1506→  const [editId, setEditId] = useState<string | null>(null);
+  1507→  const [form, setForm] = useState({ name: '', description: '', coverImage: '', sortOrder: '0' });
+  1508→  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  1509→
+  1510→  const { data: products } = useQuery({
+  1511→    queryKey: ['all-products-mini'],
+  1512→    queryFn: () => fetch('/api/products?limit=100').then(r => r.json()).then((r: any) => r.data || []),
+  1513→  });
+  1514→
+  1515→  const saveCollections = (updated: Collection[]) => {
+  1516→    setCollections(updated);
+  1517→    if (typeof window !== 'undefined') {
+  1518→      localStorage.setItem('marketplace-collections', JSON.stringify(updated));
+  1519→    }
+  1520→  };
+  1521→
+  1522→  const handleSave = () => {
+  1523→    if (!form.name.trim()) return;
+  1524→    const updated = editId
+  1525→      ? collections.map(c => c.id === editId ? { ...c, name: form.name, description: form.description, coverImage: form.coverImage, sortOrder: parseInt(form.sortOrder), productIds: selectedProductIds } : c)
+  1526→      : [...collections, { id: Date.now().toString(), name: form.name, description: form.description, coverImage: form.coverImage, sortOrder: parseInt(form.sortOrder), productIds: selectedProductIds, createdAt: new Date().toISOString() }];
+  1527→    saveCollections(updated);
+  1528→    toast.success(editId ? 'Collection updated' : 'Collection created');
+  1529→    setShowCreate(false);
+  1530→    setEditId(null);
+  1531→    setForm({ name: '', description: '', coverImage: '', sortOrder: '0' });
+  1532→    setSelectedProductIds([]);
+  1533→  };
+  1534→
+  1535→  const handleEdit = (c: Collection) => {
+  1536→    setForm({ name: c.name, description: c.description, coverImage: c.coverImage, sortOrder: String(c.sortOrder) });
+  1537→    setSelectedProductIds(c.productIds);
+  1538→    setEditId(c.id);
+  1539→    setShowCreate(true);
+  1540→  };
+  1541→
+  1542→  const handleDelete = (id: string) => {
+  1543→    saveCollections(collections.filter(c => c.id !== id));
+  1544→    toast.success('Collection deleted');
+  1545→  };
+  1546→
+  1547→  const toggleProduct = (pid: string) => {
+  1548→    setSelectedProductIds(prev => prev.includes(pid) ? prev.filter(p => p !== pid) : [...prev, pid]);
+  1549→  };
+  1550→
+  1551→  const productMap = new Map((products || []).map((p: any) => [p.id, p]));
+  1552→
+  1553→  return (
+  1554→    <div className="space-y-4">
+  1555→      <div className="flex items-center justify-between">
+  1556→        <h3 className="font-semibold">Featured Collections</h3>
+  1557→        <Button className="bg-amber-600 hover:bg-amber-700" size="sm" onClick={() => { setForm({ name: '', description: '', coverImage: '', sortOrder: '0' }); setSelectedProductIds([]); setEditId(null); setShowCreate(true); }}><Plus size={14} className="mr-1" />Create Collection</Button>
+  1558→      </div>
+  1559→      {collections.length === 0 ? (
+  1560→        <div className="text-center py-12">
+  1561→          <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+  1562→          <p className="text-muted-foreground">No collections yet</p>
+  1563→          <p className="text-xs text-muted-foreground mt-1">Create curated product collections for your customers</p>
+  1564→        </div>
+  1565→      ) : (
+  1566→        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  1567→          {collections.sort((a, b) => a.sortOrder - b.sortOrder).map(c => (
+  1568→            <Card key={c.id} className="overflow-hidden">
+  1569→              {c.coverImage ? <img src={c.coverImage} alt={c.name} className="w-full h-32 object-cover" /> : <div className="w-full h-32 bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-900/30 dark:to-amber-800/30 flex items-center justify-center"><FolderOpen className="h-8 w-8 text-amber-500" /></div>}
+  1570→              <div className="p-4">
+  1571→                <div className="flex items-center justify-between mb-1">
+  1572→                  <h4 className="font-medium">{c.name}</h4>
+  1573→                  <Badge variant="outline" className="text-xs">{c.productIds.length} products</Badge>
+  1574→                </div>
+  1575→                {c.description && <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{c.description}</p>}
+  1576→                <div className="flex gap-1">
+  1577→                  <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => handleEdit(c)}><Pencil size={12} className="mr-1" />Edit</Button>
+  1578→                  <Button variant="outline" size="sm" className="text-xs text-destructive" onClick={() => handleDelete(c.id)}><Trash2 size={12} /></Button>
+  1579→                </div>
+  1580→              </div>
+  1581→            </Card>
+  1582→          ))}
+  1583→        </div>
+  1584→      )}
+  1585→      <Dialog open={showCreate} onOpenChange={(v) => { if (!v) { setShowCreate(false); setEditId(null); } }}>
+  1586→        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+  1587→          <DialogHeader><DialogTitle>{editId ? 'Edit Collection' : 'Create Collection'}</DialogTitle></DialogHeader>
+  1588→          <div className="space-y-4">
+  1589→            <div><Label>Name *</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="mt-1" /></div>
+  1590→            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
+  1591→            <div><Label>Cover Image URL</Label><Input value={form.coverImage} onChange={e => setForm(f => ({ ...f, coverImage: e.target.value }))} className="mt-1" placeholder="https://..." /></div>
+  1592→            <div><Label>Sort Order</Label><Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({ ...f, sortOrder: e.target.value }))} className="mt-1" /></div>
+  1593→            <div>
+  1594→              <Label className="mb-2 block">Select Products ({selectedProductIds.length} selected)</Label>
+  1595→              <div className="max-h-48 overflow-y-auto border rounded-lg p-2 space-y-1">
+  1596→                {products?.length ? products.map((p: any) => (
+  1597→                  <label key={p.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+  1598→                    <input type="checkbox" checked={selectedProductIds.includes(p.id)} onChange={() => toggleProduct(p.id)} className="rounded" />
+  1599→                    <span className="truncate flex-1">{p.name}</span>
+  1600→                    <span className="text-xs text-muted-foreground">{formatCurrency(p.price)}</span>
+  1601→                  </label>
+  1602→                )) : <p className="text-sm text-muted-foreground text-center py-4">Loading products...</p>}
+  1603→              </div>
+  1604→            </div>
+  1605→          </div>
+  1606→          <DialogFooter>
+  1607→            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+  1608→            <Button className="bg-amber-600 hover:bg-amber-700" onClick={handleSave} disabled={!form.name.trim()}>{editId ? 'Update' : 'Create'}</Button>
+  1609→          </DialogFooter>
+  1610→        </DialogContent>
+  1611→      </Dialog>
+  1612→    </div>
+  1613→  );
+  1614→}
+  1615→
+  1616→function DealsTab() {
+  1617→  const qc = useQueryClient();
+  1618→  const [showCreate, setShowCreate] = useState(false);
+  1619→  const [form, setForm] = useState({ title: '', description: '', productId: '', discountPercent: '10', startDate: '', endDate: '' });
+  1620→
+  1621→  const { data, isLoading } = useQuery({
+  1622→    queryKey: ['deals'],
+  1623→    queryFn: () => fetch('/api/deals').then(r => r.json()).then((r: any) => r.data || []),
+  1624→  });
+  1625→
+  1626→  const createMutation = useMutation({
+  1627→    mutationFn: () => fetch('/api/deals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, discountPercent: parseFloat(form.discountPercent), isActive: true, sortOrder: 0 }) }).then(r => r.json()),
+  1628→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['deals'] }); toast.success('Deal created'); setShowCreate(false); setForm({ title: '', description: '', productId: '', discountPercent: '10', startDate: '', endDate: '' }); },
+  1629→    onError: () => toast.error('Failed'),
+  1630→  });
+  1631→
+  1632→  const deleteMutation = useMutation({
+  1633→    mutationFn: (id: string) => fetch(`/api/deals?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+  1634→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['deals'] }); toast.success('Deal deleted'); },
+  1635→  });
+  1636→
+  1637→  return (
+  1638→    <div className="space-y-4">
+  1639→      <div className="flex items-center justify-between">
+  1640→        <h3 className="font-semibold">Deals</h3>
+  1641→        <Button className="bg-amber-600 hover:bg-amber-700" size="sm" onClick={() => setShowCreate(true)}><Plus size={14} className="mr-1" />Create</Button>
+  1642→      </div>
+  1643→      {isLoading ? <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+  1644→        <Card><Table><TableHeader><TableRow><TableHead>Deal</TableHead><TableHead>Product</TableHead><TableHead>Discount</TableHead><TableHead>Period</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+  1645→          <TableBody>{(data || []).map((d: any) => (
+  1646→            <TableRow key={d.id}><TableCell className="font-medium text-sm">{d.title}</TableCell><TableCell className="text-sm">{d.product?.name || d.productId}</TableCell><TableCell><Badge className="bg-green-100 text-green-700">{d.discountPercent}%</Badge></TableCell>
+  1647→              <TableCell className="text-xs text-muted-foreground">{new Date(d.startDate).toLocaleDateString()} — {new Date(d.endDate).toLocaleDateString()}</TableCell>
+  1648→              <TableCell><Badge variant={d.isActive ? 'default' : 'secondary'}>{d.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+  1649→              <TableCell className="text-right"><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(d.id)}><Trash2 size={14} /></Button></TableCell></TableRow>
+  1650→          ))}</TableBody></Table></Card>}
+  1651→      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+  1652→        <DialogContent><DialogHeader><DialogTitle>Create Deal</DialogTitle></DialogHeader>
+  1653→          <div className="space-y-4">
+  1654→            <div><Label>Title *</Label><Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="mt-1" /></div>
+  1655→            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
+  1656→            <div><Label>Product ID *</Label><Input value={form.productId} onChange={e => setForm(f => ({ ...f, productId: e.target.value }))} className="mt-1" /></div>
+  1657→            <div className="grid grid-cols-2 gap-4">
+  1658→              <div><Label>Discount % *</Label><Input type="number" value={form.discountPercent} onChange={e => setForm(f => ({ ...f, discountPercent: e.target.value }))} className="mt-1" /></div>
+  1659→              <div><Label>Sort Order</Label><Input type="number" value="0" disabled className="mt-1" /></div>
+  1660→            </div>
+  1661→            <div className="grid grid-cols-2 gap-4">
+  1662→              <div><Label>Start Date *</Label><Input type="datetime-local" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="mt-1" /></div>
+  1663→              <div><Label>End Date *</Label><Input type="datetime-local" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} className="mt-1" /></div>
+  1664→            </div>
+  1665→          </div>
+  1666→          <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.title || !form.productId}>Create</Button></DialogFooter>
+  1667→        </DialogContent>
+  1668→      </Dialog>
+  1669→    </div>
+  1670→  );
+  1671→}
+  1672→
+  1673→// ============ ADMIN FAQ ============
+  1674→
+  1675→function AdminFAQ() {
+  1676→  const qc = useQueryClient();
+  1677→  const [showAdd, setShowAdd] = useState(false);
+  1678→  const [editId, setEditId] = useState<string | null>(null);
+  1679→  const [form, setForm] = useState({ question: '', answer: '', category: 'General', sortOrder: '0' });
+  1680→
+  1681→  const { data: faqs, isLoading } = useQuery({
+  1682→    queryKey: ['admin-faq'],
+  1683→    queryFn: () => fetch('/api/faq').then(r => r.json()).then((r: any) => r.data || []),
+  1684→  });
+  1685→
+  1686→  const saveMutation = useMutation({
+  1687→    mutationFn: () => fetch('/api/faq', {
+  1688→      method: editId ? 'PUT' : 'POST',
+  1689→      headers: { 'Content-Type': 'application/json' },
+  1690→      body: JSON.stringify({ ...(editId ? { id: editId } : {}), ...form, sortOrder: parseInt(form.sortOrder), isActive: true }),
+  1691→    }).then(r => r.json()),
+  1692→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-faq'] }); toast.success(editId ? 'FAQ updated' : 'FAQ added'); setShowAdd(false); setEditId(null); setForm({ question: '', answer: '', category: 'General', sortOrder: '0' }); },
+  1693→    onError: () => toast.error('Failed to save FAQ'),
+  1694→  });
+  1695→
+  1696→  const deleteMutation = useMutation({
+  1697→    mutationFn: (id: string) => fetch(`/api/faq?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+  1698→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-faq'] }); toast.success('FAQ deleted'); },
+  1699→  });
+  1700→
+  1701→  const handleEdit = (faq: any) => {
+  1702→    setForm({ question: faq.question, answer: faq.answer, category: faq.category, sortOrder: String(faq.sortOrder) });
+  1703→    setEditId(faq.id);
+  1704→    setShowAdd(true);
+  1705→  };
+  1706→
+  1707→  return (
+  1708→    <div className="p-6 space-y-6">
+  1709→      <div className="flex items-center justify-between">
+  1710→        <div><h1 className="text-2xl font-bold">FAQ Management</h1><p className="text-muted-foreground text-sm">Manage frequently asked questions</p></div>
+  1711→        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => { setForm({ question: '', answer: '', category: 'General', sortOrder: '0' }); setEditId(null); setShowAdd(true); }}><Plus size={16} className="mr-1.5" />Add FAQ</Button>
+  1712→      </div>
+  1713→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div> :
+  1714→        <Card className="p-4">
+  1715→          <Accordion type="multiple">
+  1716→            {(faqs || []).map((faq: any, i: number) => (
+  1717→              <AccordionItem key={faq.id} value={faq.id}>
+  1718→                <AccordionTrigger className="text-left hover:no-underline">
+  1719→                  <div className="flex items-center gap-3 flex-1 pr-4">
+  1720→                    <span className="text-sm font-medium flex-1 truncate">{faq.question}</span>
+  1721→                    <Badge variant="outline" className="text-xs shrink-0">{faq.category}</Badge>
+  1722→                  </div>
+  1723→                </AccordionTrigger>
+  1724→                <AccordionContent>
+  1725→                  <p className="text-sm text-muted-foreground mb-3">{faq.answer}</p>
+  1726→                  <div className="flex gap-2">
+  1727→                    <Button variant="outline" size="sm" onClick={() => handleEdit(faq)}><Pencil size={12} className="mr-1" />Edit</Button>
+  1728→                    <Button variant="outline" size="sm" className="text-destructive" onClick={() => deleteMutation.mutate(faq.id)}><Trash2 size={12} className="mr-1" />Delete</Button>
+  1729→                  </div>
+  1730→                </AccordionContent>
+  1731→              </AccordionItem>
+  1732→            ))}
+  1733→          </Accordion>
+  1734→          {(!faqs || faqs.length === 0) && <div className="flex flex-col items-center justify-center py-12 text-center"><HelpCircle size={40} className="text-muted-foreground/40 mb-3" /><p className="text-muted-foreground font-medium">No FAQs yet</p><p className="text-muted-foreground text-sm mt-1">Add frequently asked questions to help customers</p></div>}
+  1735→        </Card>}
+  1736→      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+  1737→        <DialogContent><DialogHeader><DialogTitle>{editId ? 'Edit FAQ' : 'Add FAQ'}</DialogTitle></DialogHeader>
+  1738→          <div className="space-y-4">
+  1739→            <div><Label>Question *</Label><Input value={form.question} onChange={e => setForm(f => ({ ...f, question: e.target.value }))} className="mt-1" /></div>
+  1740→            <div><Label>Answer *</Label><Textarea value={form.answer} onChange={e => setForm(f => ({ ...f, answer: e.target.value }))} className="mt-1" rows={4} /></div>
+  1741→            <div className="grid grid-cols-2 gap-4">
+  1742→              <div><Label>Category</Label><Input value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className="mt-1" placeholder="e.g. General, Shipping, Returns" /></div>
+  1743→              <div><Label>Sort Order</Label><Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({ ...f, sortOrder: e.target.value }))} className="mt-1" /></div>
+  1744→            </div>
+  1745→          </div>
+  1746→          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.question || !form.answer}>{saveMutation.isPending ? 'Saving...' : editId ? 'Update' : 'Create'}</Button></DialogFooter>
+  1747→        </DialogContent>
+  1748→      </Dialog>
+  1749→    </div>
+  1750→  );
+  1751→}
+  1752→
+  1753→// ============ ADMIN ROLES ============
+  1754→
+  1755→const ROLE_PERMISSIONS: Record<string, string> = {
+  1756→  SUPER_ADMIN: 'Full Access (all features)',
+  1757→  FINANCE_ADMIN: 'Payouts, Wallet, Commission Reports, Analytics',
+  1758→  SUPPORT_ADMIN: 'Support Tickets, Returns, Customer Management',
+  1759→  INVENTORY_ADMIN: 'Products, Categories, Brands, Inventory, Orders',
+  1760→};
+  1761→
+  1762→const ROLE_DETAIL_PERMISSIONS: Record<string, { label: string; color: string; desc: string; permissions: string[] }> = {
+  1763→  SUPER_ADMIN: { label: 'Super Admin', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', desc: 'Full access to all features', permissions: ['All Permissions'] },
+  1764→  FINANCE_ADMIN: { label: 'Finance Admin', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', desc: 'Payouts, wallet, revenue, coupons', permissions: ['Manage Payouts', 'View Revenue', 'Manage Coupons', 'View Reports'] },
+  1765→  SUPPORT_ADMIN: { label: 'Support Admin', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', desc: 'Tickets, returns, customers', permissions: ['Manage Tickets', 'Process Returns', 'View Customers', 'Manage FAQ'] },
+  1766→  INVENTORY_ADMIN: { label: 'Inventory Admin', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', desc: 'Products, categories, brands, stock', permissions: ['Manage Products', 'Manage Categories', 'Manage Brands', 'View Stock'] },
+  1767→};
+  1768→
+  1769→const ROLE_COLORS: Record<string, string> = {
+  1770→  SUPER_ADMIN: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  1771→  FINANCE_ADMIN: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  1772→  SUPPORT_ADMIN: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  1773→  INVENTORY_ADMIN: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  1774→};
+  1775→
+  1776→const ROLE_OPTIONS = ['SUPER_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN', 'INVENTORY_ADMIN'];
+  1777→
+  1778→function AdminRolesPage() {
+  1779→  const qc = useQueryClient();
+  1780→  const [showCreate, setShowCreate] = useState(false);
+  1781→  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'SUPPORT_ADMIN' });
+  1782→
+  1783→  const { data, isLoading } = useQuery({
+  1784→    queryKey: ['admin-roles'],
+  1785→    queryFn: () => fetch('/api/admin/roles').then(r => r.json()).then((r: any) => r.data || []),
+  1786→  });
+  1787→
+  1788→  const createMutation = useMutation({
+  1789→    mutationFn: () => fetch('/api/admin/roles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).then(r => r.json()),
+  1790→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-roles'] }); toast.success('Admin user created'); setShowCreate(false); setForm({ name: '', email: '', password: '', role: 'SUPPORT_ADMIN' }); },
+  1791→    onError: (e: any) => toast.error(e?.message || 'Failed to create admin'),
+  1792→  });
+  1793→
+  1794→  const updateRoleMutation = useMutation({
+  1795→    mutationFn: ({ userId, role }: { userId: string; role: string }) => fetch('/api/admin/roles', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, role }) }).then(r => r.json()),
+  1796→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-roles'] }); toast.success('Role updated'); },
+  1797→    onError: () => toast.error('Failed to update role'),
+  1798→  });
+  1799→
+  1800→  return (
+  1801→    <div className="p-6 space-y-6">
+  1802→      <div className="flex items-center justify-between">
+  1803→        <div><h1 className="text-2xl font-bold">Admin Roles</h1><p className="text-muted-foreground text-sm">Manage admin users and role-based access</p></div>
+  1804→        <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => setShowCreate(true)}><Plus size={16} className="mr-1.5" />Create Admin</Button>
+  1805→      </div>
+  1806→
+  1807→      {/* RBAC Permissions Matrix */}
+  1808→      <div className="grid md:grid-cols-2 gap-4">
+  1809→        {ROLE_OPTIONS.map(role => {
+  1810→          const detail = ROLE_DETAIL_PERMISSIONS[role];
+  1811→          const adminCount = (data || []).filter((a: any) => a.role === role).length;
+  1812→          return (
+  1813→            <Card key={role} className="p-6">
+  1814→              <div className="flex items-center justify-between mb-4">
+  1815→                <div><h3 className="font-bold text-lg">{detail.label}</h3><p className="text-sm text-muted-foreground">{detail.desc}</p></div>
+  1816→                <Badge className={detail.color}>{adminCount}</Badge>
+  1817→              </div>
+  1818→              <div className="space-y-2">
+  1819→                {detail.permissions.map((p, i) => (
+  1820→                  <div key={i} className="flex items-center gap-2 text-sm"><CheckCircle2 size={14} className="text-green-500" />{p}</div>
+  1821→                ))}
+  1822→              </div>
+  1823→            </Card>
+  1824→          );
+  1825→        })}
+  1826→      </div>
+  1827→
+  1828→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div> :
+  1829→        <Card>
+  1830→          <div className="overflow-x-auto">
+  1831→            <Table>
+  1832→              <TableHeader>
+  1833→                <TableRow>
+  1834→                  <TableHead>Name</TableHead>
+  1835→                  <TableHead className="hidden md:table-cell">Email</TableHead>
+  1836→                  <TableHead>Role</TableHead>
+  1837→                  <TableHead>Status</TableHead>
+  1838→                  <TableHead className="hidden sm:table-cell">Last Login</TableHead>
+  1839→                  <TableHead className="text-right">Actions</TableHead>
+  1840→                </TableRow>
+  1841→              </TableHeader>
+  1842→              <TableBody>
+  1843→                {(!data || data.length === 0) && <TableRow><TableCell colSpan={6}><div className="flex flex-col items-center justify-center py-12 text-center"><UserCog size={40} className="text-muted-foreground/40 mb-3" /><p className="text-muted-foreground font-medium">No admin users found</p></div></TableCell></TableRow>}
+  1844→                {data?.map((admin: any) => (
+  1845→                  <TableRow key={admin.id}>
+  1846→                    <TableCell>
+  1847→                      <div className="flex items-center gap-2">
+  1848→                        <Avatar className="h-8 w-8"><AvatarFallback className="text-xs bg-amber-100 text-amber-600">{admin.name?.[0]}</AvatarFallback></Avatar>
+  1849→                        <span className="font-medium text-sm">{admin.name}</span>
+  1850→                      </div>
+  1851→                    </TableCell>
+  1852→                    <TableCell className="hidden md:table-cell text-sm">{admin.email}</TableCell>
+  1853→                    <TableCell><Badge className={ROLE_COLORS[admin.role] || ''}>{admin.role?.replace('_', ' ')}</Badge></TableCell>
+  1854→                    <TableCell><Badge variant={admin.isActive ? 'default' : 'secondary'}>{admin.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+  1855→                    <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{admin.lastLoginAt ? new Date(admin.lastLoginAt).toLocaleDateString('en-IN') : 'Never'}</TableCell>
+  1856→                    <TableCell className="text-right">
+  1857→                      <Select value={admin.role} onValueChange={(v) => updateRoleMutation.mutate({ userId: admin.id, role: v })}>
+  1858→                        <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
+  1859→                        <SelectContent>{ROLE_OPTIONS.map(r => <SelectItem key={r} value={r}>{r.replace('_', ' ')}</SelectItem>)}</SelectContent>
+  1860→                      </Select>
+  1861→                    </TableCell>
+  1862→                  </TableRow>
+  1863→                ))}
+  1864→              </TableBody>
+  1865→            </Table>
+  1866→          </div>
+  1867→        </Card>}
+  1868→
+  1869→      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+  1870→        <DialogContent>
+  1871→          <DialogHeader><DialogTitle>Create Admin User</DialogTitle><DialogDescription>Add a new admin with a specific role</DialogDescription></DialogHeader>
+  1872→          <div className="space-y-4">
+  1873→            <div><Label>Full Name *</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="mt-1" /></div>
+  1874→            <div><Label>Email *</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="mt-1" /></div>
+  1875→            <div><Label>Password *</Label><Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="mt-1" /></div>
+  1876→            <div>
+  1877→              <Label>Role *</Label>
+  1878→              <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
+  1879→                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+  1880→                <SelectContent>
+  1881→                  {ROLE_OPTIONS.map(r => (
+  1882→                    <SelectItem key={r} value={r}>
+  1883→                      <div><span className="font-medium">{r.replace('_', ' ')}</span><span className="text-xs text-muted-foreground ml-2">— {ROLE_PERMISSIONS[r]}</span></div>
+  1884→                    </SelectItem>
+  1885→                  ))}
+  1886→                </SelectContent>
+  1887→              </Select>
+  1888→            </div>
+  1889→          </div>
+  1890→          <DialogFooter>
+  1891→            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+  1892→            <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.name || !form.email || !form.password}>{createMutation.isPending ? 'Creating...' : 'Create Admin'}</Button>
+  1893→          </DialogFooter>
+  1894→        </DialogContent>
+  1895→      </Dialog>
+  1896→    </div>
+  1897→  );
+  1898→}
+  1899→
+  1900→// ============ ADMIN ACTIVITY LOGS ============
+  1901→
+  1902→function AdminActivityLogs() {
+  1903→  const { data } = useQuery({ queryKey: ['activity-logs'], queryFn: () => fetch('/api/admin/activity-logs').then(r => r.json()) });
+  1904→  return (
+  1905→    <div className="p-6 space-y-6">
+  1906→      <h1 className="text-2xl font-bold">Activity Logs</h1>
+  1907→      <Card><Table><TableHeader><TableRow><TableHead>User</TableHead><TableHead>Action</TableHead><TableHead>Entity</TableHead><TableHead>Details</TableHead><TableHead className="hidden md:table-cell">IP</TableHead><TableHead>Timestamp</TableHead></TableRow></TableHeader>
+  1908→        <TableBody>{(data?.data || []).map((log: any) => (
+  1909→          <TableRow key={log.id}><TableCell className="text-sm">{log.user?.name || 'System'}</TableCell><TableCell><Badge variant="outline">{log.action}</Badge></TableCell><TableCell className="text-sm">{log.entityType || '—'}</TableCell><TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{log.details || '—'}</TableCell><TableCell className="hidden md:table-cell text-xs text-muted-foreground">{log.ipAddress || '—'}</TableCell><TableCell className="text-xs text-muted-foreground">{new Date(log.createdAt).toLocaleString('en-IN')}</TableCell></TableRow>
+  1910→        ))}</TableBody></Table></Card>
+  1911→    </div>
+  1912→  );
+  1913→}
+  1914→
+  1915→// ============ ADMIN VENDOR WALLETS ============
+  1916→
+  1917→function AdminVendorWalletsPage() {
+  1918→  const { data: vendors = [], isLoading } = useQuery({
+  1919→    queryKey: ['admin-vendor-wallets-page'],
+  1920→    queryFn: () => fetch('/api/admin/vendor-wallets').then(r => r.json()).then((r: any) => r.data || []),
+  1921→  });
+  1922→  return (
+  1923→    <div className="space-y-6 p-6">
+  1924→      <h2 className="text-2xl font-bold">Vendor Wallets</h2>
+  1925→      {isLoading ? <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">{Array.from({length:6}).map((_,i)=><Skeleton key={i} className="h-40 rounded-xl" />)}</div> :
+  1926→      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+  1927→        {vendors.map((v: any) => (
+  1928→          <Card key={v.id} className="p-4">
+  1929→            <div className="flex items-center gap-3 mb-4">
+  1930→              <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center"><Store size={20} className="text-orange-500" /></div>
+  1931→              <div><p className="font-semibold">{v.businessName}</p><p className="text-xs text-muted-foreground">{v.user?.email}</p></div>
+  1932→            </div>
+  1933→            <div className="grid grid-cols-2 gap-3 text-sm">
+  1934→              <div className="bg-muted/30 rounded-lg p-3"><p className="text-muted-foreground text-xs">Available</p><p className="font-bold text-green-600">{formatCurrency(v.wallet?.availableBalance || 0)}</p></div>
+  1935→              <div className="bg-muted/30 rounded-lg p-3"><p className="text-muted-foreground text-xs">Pending</p><p className="font-bold text-amber-600">{formatCurrency(v.wallet?.pendingBalance || 0)}</p></div>
+  1936→              <div className="bg-muted/30 rounded-lg p-3"><p className="text-muted-foreground text-xs">Total Earned</p><p className="font-bold">{formatCurrency(v.wallet?.totalEarned || 0)}</p></div>
+  1937→              <div className="bg-muted/30 rounded-lg p-3"><p className="text-muted-foreground text-xs">Commission</p><p className="font-bold">{v.commissionRate}%</p></div>
+  1938→            </div>
+  1939→          </Card>
+  1940→        ))}
+  1941→      </div>}
+  1942→    </div>
+  1943→  );
+  1944→}
+  1945→
+  1946→// ============ MAIN ADMIN APP ============
+  1947→
+  1948→export default function AdminApp() {
+  1949→  const { user, isAuthenticated } = useAuthStore();
+  1950→  const { adminView, setAdminView, setAppView } = useNavigationStore();
+  1951→
+  1952→  // Confirmation dialog state (must be before any early return)
+  1953→  const [confirmState, setConfirmState] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null);
+  1954→  const doConfirm = useCallback((action: { title: string; description: string; onConfirm: () => void }) => setConfirmState(action), []);
+  1955→  const handleConfirm = useCallback(() => { confirmState?.onConfirm(); setConfirmState(null); }, [confirmState]);
+  1956→
+  1957→  // Auth guard
+  1958→  if (!isAuthenticated || user?.role !== 'ADMIN') {
+  1959→    toast.warning('Unauthorized access', { description: 'Admin privileges required to access this panel.' });
+  1960→    useNavigationStore.getState().setAppView('customer');
+  1961→    return null;
+  1962→  }
+  1963→
+  1964→  const renderView = () => {
+  1965→    switch (adminView) {
+  1966→      case 'admin-dashboard': return <AdminDashboard />;
+  1967→      case 'admin-vendors': return <AdminVendors />;
+  1968→      case 'admin-categories': return <AdminCategories />;
+  1969→      case 'admin-brands': return <AdminBrands />;
+  1970→      case 'admin-products': return <AdminProducts />;
+  1971→      case 'admin-orders': return <AdminOrders />;
+  1972→      case 'admin-customers': return <AdminCustomers />;
+  1973→      case 'admin-coupons': return <AdminCoupons />;
+  1974→      case 'admin-banners': return <AdminBanners />;
+  1975→      case 'admin-reports': return <AdminReports />;
+  1976→      case 'admin-returns': return <AdminReturns />;
+  1977→      case 'admin-payouts': return <AdminPayouts />;
+  1978→      case 'admin-vendor-wallets': return <AdminVendorWalletsPage />;
+  1979→      case 'admin-analytics': return <AdminAnalytics />;
+  1980→      case 'admin-support': return <AdminSupport />;
+  1981→      case 'admin-marketing': return <AdminMarketing />;
+  1982→      case 'admin-faq': return <AdminFAQ />;
+  1983→      case 'admin-roles': return <AdminRolesPage />;
+  1984→      case 'admin-activity-logs': return <AdminActivityLogs />;
+  1985→      case 'admin-settings': return <AdminSettings />;
+  1986→      case 'admin-notifications': return <div className="p-6"><h1 className="text-2xl font-bold mb-4">Notifications</h1><p className="text-muted-foreground">No new notifications</p></div>;
+  1987→      default: return <AdminDashboard />;
+  1988→    }
+  1989→  };
+  1990→
+  1991→  return (
+  1992→    <ConfirmContext.Provider value={doConfirm}>
+  1993→    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="min-h-screen flex flex-col bg-background">
+  1994→      <a href="#main-content" className="skip-link">Skip to main content</a>
+  1995→      <AdminMobileHeader />
+  1996→      <div className="flex flex-1">
+  1997→        <AdminSidebar />
+  1998→        <main id="main-content" className="flex-1 overflow-auto" role="main">{renderView()}</main>
+  1999→      </div>
+  2000→      <AlertDialog open={!!confirmState} onOpenChange={(open) => { if (!open) setConfirmState(null); }}>
+
+[showing lines 1-2000 of 2006; use offset=2001 with limit to continue reading]
