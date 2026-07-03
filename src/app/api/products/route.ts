@@ -84,10 +84,64 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+
+    // Validate required foreign keys exist
+    if (!body.vendorId) {
+      return NextResponse.json({ success: false, error: 'Vendor ID is required. Please ensure your vendor account is set up.' }, { status: 400 });
+    }
+    if (!body.categoryId) {
+      return NextResponse.json({ success: false, error: 'Category is required. Please select a category.' }, { status: 400 });
+    }
+
+    const [vendorExists, categoryExists] = await Promise.all([
+      db.vendor.count({ where: { id: body.vendorId } }),
+      db.category.count({ where: { id: body.categoryId } }),
+    ]);
+
+    if (!vendorExists) {
+      return NextResponse.json({ success: false, error: 'Vendor account not found. Please contact support.' }, { status: 400 });
+    }
+    if (!categoryExists) {
+      return NextResponse.json({ success: false, error: 'Selected category does not exist. Please choose a valid category.' }, { status: 400 });
+    }
+    if (body.brandId) {
+      const brandExists = await db.brand.count({ where: { id: body.brandId } });
+      if (!brandExists) {
+        return NextResponse.json({ success: false, error: 'Selected brand does not exist. Please choose a valid brand.' }, { status: 400 });
+      }
+    }
+
     const product = await db.product.create({
       data: {
-        ...body,
+        vendorId: body.vendorId,
+        categoryId: body.categoryId,
+        brandId: body.brandId || null,
+        name: body.name,
         slug: body.slug || body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+        description: body.description || null,
+        shortDescription: body.shortDescription || null,
+        sku: body.sku || null,
+        barcode: body.barcode || null,
+        price: body.price,
+        compareAtPrice: body.compareAtPrice ?? null,
+        costPrice: body.costPrice ?? null,
+        stock: body.stock ?? 0,
+        lowStockAlert: body.lowStockAlert ?? 5,
+        weight: body.weight ?? null,
+        length: body.length ?? null,
+        width: body.width ?? null,
+        height: body.height ?? null,
+        warranty: body.warranty ?? null,
+        returnPolicy: body.returnPolicy ?? null,
+        shippingCost: body.shippingCost ?? 0,
+        isFeatured: body.isFeatured ?? false,
+        isActive: body.isActive ?? true,
+        productStatus: body.productStatus || 'PUBLISHED',
+        badge: body.badge || null,
+        estimatedDeliveryDays: body.estimatedDeliveryDays ?? 7,
+        seoTitle: body.seoTitle || null,
+        seoDescription: body.seoDescription || null,
+        seoKeywords: body.seoKeywords || null,
         images: body.images ? { create: body.images } : undefined,
         variants: body.variants ? { create: body.variants } : undefined,
         specs: body.specs ? { create: body.specs } : undefined,
