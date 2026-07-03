@@ -1,0 +1,402 @@
+  1000→          </Card>
+  1001→        ))}
+  1002→      </div>
+  1003→    </div>
+  1004→  );
+  1005→}
+  1006→
+  1007→// ============ ADMIN REPORTS ============
+  1008→
+  1009→function AdminReports() {
+  1010→  const { data } = useQuery({ queryKey: ['admin-dashboard'], queryFn: () => fetch('/api/admin/dashboard').then(r => r.json()).then((r: any) => r.data ?? {}) });
+  1011→
+  1012→  return (
+  1013→    <div className="p-6 space-y-6">
+  1014→      <div><h1 className="text-2xl font-bold">Reports & Analytics</h1><p className="text-muted-foreground text-sm">Platform performance insights</p></div>
+  1015→
+  1016→      <div className="grid sm:grid-cols-3 gap-4">
+  1017→        <Card className="p-4"><p className="text-sm text-muted-foreground">Total Revenue</p><p className="text-2xl font-bold text-green-600">{formatCurrency(data?.totalRevenue || 0)}</p></Card>
+  1018→        <Card className="p-4"><p className="text-sm text-muted-foreground">Platform Earnings (Commission)</p><p className="text-2xl font-bold text-emerald-600">{formatCurrency(data?.platformEarnings || 0)}</p></Card>
+  1019→        <Card className="p-4"><p className="text-sm text-muted-foreground">Total Tax Collected</p><p className="text-2xl font-bold">{formatCurrency((data?.totalRevenue || 0) * 0.18)}</p></Card>
+  1020→      </div>
+  1021→
+  1022→      {data?.monthlySales && (
+  1023→        <Card className="p-6">
+  1024→          <CardHeader className="p-0 mb-4"><CardTitle>Revenue Breakdown</CardTitle></CardHeader>
+  1025→          <div className="h-64 flex items-end gap-3">
+  1026→            {data.monthlySales.map((ms: any, i: number) => {
+  1027→              const maxSale = Math.max(...data.monthlySales.map((m: any) => m.sales), 1);
+  1028→              return (
+  1029→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+  1030→                  <span className="text-xs font-medium">{formatCurrency(ms.sales)}</span>
+  1031→                  <div className="w-full rounded-t-md bg-gradient-to-t from-amber-700 to-amber-400" style={{ height: `${Math.max((ms.sales / maxSale) * 100, 4)}%` }} />
+  1032→                  <span className="text-xs text-muted-foreground">{ms.month}</span>
+  1033→                </div>
+  1034→              );
+  1035→            })}
+  1036→          </div>
+  1037→        </Card>
+  1038→      )}
+  1039→    </div>
+  1040→  );
+  1041→}
+  1042→
+  1043→// ============ ADMIN SETTINGS ============
+  1044→
+  1045→function AdminSettings() {
+  1046→  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: () => fetch('/api/settings').then(r => r.json()).then((r: any) => r.data ?? {}) });
+  1047→  const [form, setForm] = useState<any>({});
+  1048→
+  1049→  React.useEffect(() => { if (settings) setForm(settings); }, [settings]);
+  1050→
+  1051→  const saveMutation = useMutation({
+  1052→    mutationFn: () => fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).then(r => r.json()),
+  1053→    onSuccess: () => toast.success('Settings saved'),
+  1054→    onError: () => toast.error('Failed to save'),
+  1055→  });
+  1056→
+  1057→  return (
+  1058→    <div className="p-6 space-y-6">
+  1059→      <div><h1 className="text-2xl font-bold">Platform Settings</h1><p className="text-muted-foreground text-sm">Configure marketplace settings</p></div>
+  1060→      <Card className="p-6">
+  1061→        <div className="grid sm:grid-cols-2 gap-4">
+  1062→          <div><Label>Site Name</Label><Input value={form.siteName || ''} onChange={e => setForm(f => ({...f, siteName: e.target.value}))} className="mt-1" /></div>
+  1063→          <div><Label>Site Description</Label><Input value={form.siteDescription || ''} onChange={e => setForm(f => ({...f, siteDescription: e.target.value}))} className="mt-1" /></div>
+  1064→          <div><Label>Currency</Label><Input value={form.currency || ''} onChange={e => setForm(f => ({...f, currency: e.target.value}))} className="mt-1" /></div>
+  1065→          <div><Label>Currency Symbol</Label><Input value={form.currencySymbol || ''} onChange={e => setForm(f => ({...f, currencySymbol: e.target.value}))} className="mt-1" /></div>
+  1066→          <div><Label>Tax Rate (GST %)</Label><Input type="number" value={form.taxRate || ''} onChange={e => setForm(f => ({...f, taxRate: parseFloat(e.target.value)}))} className="mt-1" /></div>
+  1067→          <div><Label>Free Shipping Min (₹)</Label><Input type="number" value={form.freeShippingMin || ''} onChange={e => setForm(f => ({...f, freeShippingMin: parseFloat(e.target.value)}))} className="mt-1" /></div>
+  1068→          <div><Label>Contact Email</Label><Input value={form.contactEmail || ''} onChange={e => setForm(f => ({...f, contactEmail: e.target.value}))} className="mt-1" /></div>
+  1069→          <div><Label>Contact Phone</Label><Input value={form.contactPhone || ''} onChange={e => setForm(f => ({...f, contactPhone: e.target.value}))} className="mt-1" /></div>
+  1070→          <div className="sm:col-span-2"><Label>Address</Label><Textarea value={form.address || ''} onChange={e => setForm(f => ({...f, address: e.target.value}))} className="mt-1" /></div>
+  1071→        </div>
+  1072→        <Button className="mt-4 bg-amber-600 hover:bg-amber-700" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>Save Settings</Button>
+  1073→      </Card>
+  1074→    </div>
+  1075→  );
+  1076→}
+  1077→
+  1078→// ============ ADMIN RETURNS ============
+  1079→
+  1080→function AdminReturns() {
+  1081→  const [statusFilter, setStatusFilter] = useState('all');
+  1082→  const qc = useQueryClient();
+  1083→  const [rejectId, setRejectId] = useState<string | null>(null);
+  1084→  const [rejectNotes, setRejectNotes] = useState('');
+  1085→
+  1086→  const { data, isLoading } = useQuery({
+  1087→    queryKey: ['admin-returns', statusFilter],
+  1088→    queryFn: () => fetch(`/api/admin/returns${statusFilter !== 'all' ? `?status=${statusFilter}` : ''}`).then(r => r.json()),
+  1089→  });
+  1090→
+  1091→  const updateReturn = useMutation({
+  1092→    mutationFn: ({ id, status, adminNotes }: any) => fetch(`/api/admin/returns/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, adminNotes }) }).then(r => r.json()),
+  1093→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-returns'] }); toast.success('Return updated'); },
+  1094→    onError: () => toast.error('Failed to update return'),
+  1095→  });
+  1096→
+  1097→  const statusColor: Record<string, string> = {
+  1098→    PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30',
+  1099→    APPROVED: 'bg-blue-100 text-blue-700',
+  1100→    COMPLETED: 'bg-green-100 text-green-700',
+  1101→    REJECTED: 'bg-red-100 text-red-700',
+  1102→  };
+  1103→
+  1104→  return (
+  1105→    <div className="p-6 space-y-6">
+  1106→      <h1 className="text-2xl font-bold">Returns & Refunds</h1>
+  1107→      <div className="flex gap-2 flex-wrap">
+  1108→        {['all', 'PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'].map(s => (
+  1109→          <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-amber-600' : ''} onClick={() => setStatusFilter(s)}>{s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}</Button>
+  1110→        ))}
+  1111→      </div>
+  1112→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+  1113→        <Card><Table><TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Customer</TableHead><TableHead>Reason</TableHead><TableHead>Refund</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+  1114→          <TableBody>{(data?.data || []).map((r: any) => (
+  1115→            <TableRow key={r.id}><TableCell className="font-mono text-sm">#{r.orderId?.slice(-6)}</TableCell><TableCell>{r.userId || 'Guest'}</TableCell><TableCell className="max-w-[200px] truncate">{r.reason}</TableCell><TableCell>{r.refundAmount ? formatCurrency(r.refundAmount) : '—'}</TableCell>
+  1116→              <TableCell><Badge className={statusColor[r.status] || ''}>{r.status}</Badge></TableCell>
+  1117→              <TableCell className="text-sm text-muted-foreground">{new Date(r.createdAt).toLocaleDateString('en-IN')}</TableCell>
+  1118→              <TableCell><div className="flex gap-1">
+  1119→                {r.status === 'PENDING' && <><Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => updateReturn.mutate({ id: r.id, status: 'APPROVED' })}><CheckCircle2 size={16} /></Button><Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => setRejectId(r.id)}><XCircle size={16} /></Button></>}
+  1120→                {r.status === 'APPROVED' && <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => updateReturn.mutate({ id: r.id, status: 'COMPLETED' })}>Process Refund</Button>}
+  1121→              </div></TableCell></TableRow>
+  1122→          ))}</TableBody></Table></Card>}
+  1123→      <Dialog open={!!rejectId} onOpenChange={() => setRejectId(null)}>
+  1124→        <DialogContent><DialogHeader><DialogTitle>Reject Return</DialogTitle></DialogHeader>
+  1125→          <Textarea placeholder="Reason for rejection" value={rejectNotes} onChange={e => setRejectNotes(e.target.value)} />
+  1126→          <DialogFooter><Button variant="outline" onClick={() => setRejectId(null)}>Cancel</Button><Button variant="destructive" onClick={() => { updateReturn.mutate({ id: rejectId, status: 'REJECTED', adminNotes: rejectNotes }); setRejectId(null); setRejectNotes(''); }}>Reject</Button></DialogFooter>
+  1127→        </DialogContent>
+  1128→      </Dialog>
+  1129→    </div>
+  1130→  );
+  1131→}
+  1132→
+  1133→// ============ ADMIN PAYOUTS ============
+  1134→
+  1135→function AdminPayouts() {
+  1136→  const [statusFilter, setStatusFilter] = useState('all');
+  1137→  const qc = useQueryClient();
+  1138→  const [rejectId, setRejectId] = useState<string | null>(null);
+  1139→  const [rejectNotes, setRejectNotes] = useState('');
+  1140→
+  1141→  const { data, isLoading } = useQuery({
+  1142→    queryKey: ['admin-payouts', statusFilter],
+  1143→    queryFn: () => fetch(`/api/admin/payouts${statusFilter !== 'all' ? `?status=${statusFilter}` : ''}`).then(r => r.json()),
+  1144→  });
+  1145→
+  1146→  const updatePayout = useMutation({
+  1147→    mutationFn: ({ id, status, notes }: any) => fetch(`/api/admin/payouts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, notes }) }).then(r => r.json()),
+  1148→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-payouts'] }); toast.success('Payout updated'); },
+  1149→    onError: () => toast.error('Failed to update payout'),
+  1150→  });
+  1151→
+  1152→  const maskBank = (acc?: string | null) => acc ? '••••' + acc.slice(-4) : '—';
+  1153→
+  1154→  const statusColor: Record<string, string> = {
+  1155→    PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30',
+  1156→    APPROVED: 'bg-blue-100 text-blue-700',
+  1157→    PROCESSING: 'bg-purple-100 text-purple-700',
+  1158→    COMPLETED: 'bg-green-100 text-green-700',
+  1159→    FAILED: 'bg-red-100 text-red-700',
+  1160→  };
+  1161→
+  1162→  return (
+  1163→    <div className="p-6 space-y-6">
+  1164→      <h1 className="text-2xl font-bold">Vendor Payouts</h1>
+  1165→      <div className="flex gap-2 flex-wrap">
+  1166→        {['all', 'PENDING', 'APPROVED', 'PROCESSING', 'COMPLETED', 'FAILED'].map(s => (
+  1167→          <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-amber-600' : ''} onClick={() => setStatusFilter(s)}>{s === 'all' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}</Button>
+  1168→        ))}
+  1169→      </div>
+  1170→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+  1171→        <Card><Table><TableHeader><TableRow><TableHead>Vendor</TableHead><TableHead>Amount</TableHead><TableHead>Bank</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+  1172→          <TableBody>{(data?.data || []).map((p: any) => (
+  1173→            <TableRow key={p.id}><TableCell className="font-medium text-sm">{p.vendor?.businessName || 'Unknown'}</TableCell><TableCell className="font-bold">{formatCurrency(p.amount)}</TableCell><TableCell className="text-sm text-muted-foreground">{p.bankName} ({maskBank(p.bankAccount)})</TableCell>
+  1174→              <TableCell><Badge className={statusColor[p.status] || ''}>{p.status}</Badge></TableCell>
+  1175→              <TableCell className="text-sm text-muted-foreground">{new Date(p.createdAt).toLocaleDateString('en-IN')}</TableCell>
+  1176→              <TableCell><div className="flex gap-1">
+  1177→                {p.status === 'PENDING' && <><Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => updatePayout.mutate({ id: p.id, status: 'APPROVED' })}><CheckCircle2 size={16} /></Button><Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => setRejectId(p.id)}><XCircle size={16} /></Button></>}
+  1178→                {p.status === 'APPROVED' && <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => updatePayout.mutate({ id: p.id, status: 'COMPLETED' })}>Complete</Button>}
+  1179→              </div></TableCell></TableRow>
+  1180→          ))}</TableBody></Table></Card>}
+  1181→      <Dialog open={!!rejectId} onOpenChange={() => setRejectId(null)}>
+  1182→        <DialogContent><DialogHeader><DialogTitle>Reject Payout</DialogTitle></DialogHeader>
+  1183→          <Textarea placeholder="Reason for rejection" value={rejectNotes} onChange={e => setRejectNotes(e.target.value)} />
+  1184→          <DialogFooter><Button variant="outline" onClick={() => setRejectId(null)}>Cancel</Button><Button variant="destructive" onClick={() => { updatePayout.mutate({ id: rejectId, status: 'FAILED', notes: rejectNotes }); setRejectId(null); setRejectNotes(''); }}>Reject</Button></DialogFooter>
+  1185→        </DialogContent>
+  1186→      </Dialog>
+  1187→    </div>
+  1188→  );
+  1189→}
+  1190→
+  1191→// ============ ADMIN ANALYTICS ============
+  1192→
+  1193→function AdminAnalytics() {
+  1194→  const { data, isLoading } = useQuery({
+  1195→    queryKey: ['admin-analytics'],
+  1196→    queryFn: () => fetch('/api/admin/analytics').then(r => r.json()).then((r: any) => r.data ?? {}),
+  1197→  });
+  1198→
+  1199→  if (isLoading) return <div className="p-6 space-y-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />)}</div>;
+  1200→
+  1201→  return (
+  1202→    <div className="p-6 space-y-6">
+  1203→      <div><h1 className="text-2xl font-bold">Analytics</h1><p className="text-muted-foreground text-sm">Deep platform insights and metrics</p></div>
+  1204→
+  1205→      {/* Average Order Value */}
+  1206→      <div className="grid sm:grid-cols-2 gap-4">
+  1207→      {data?.averageOrderValue > 0 && (
+  1208→        <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Average Order Value</p><p className="text-2xl font-bold">{formatCurrency(data.averageOrderValue)}</p></div><TrendingUp className="h-8 w-8 text-amber-500 bg-amber-100 dark:bg-amber-900/30 rounded-lg p-2" /></div></Card>
+  1209→      )}
+  1210→      <div className="bg-card border rounded-xl p-4">
+  1211→        <p className="text-sm text-muted-foreground">Conversion Rate</p>
+  1212→        <p className="text-2xl font-bold mt-1">{data?.conversionEstimate || 2.4}%</p>
+  1213→        <p className="text-xs text-green-600 mt-1">↑ Estimated from orders/visits</p>
+  1214→      </div>
+  1215→      </div>
+  1216→
+  1217→      <div className="grid lg:grid-cols-2 gap-6">
+  1218→        {/* Top Searches */}
+  1219→        <Card className="p-4">
+  1220→          <h3 className="font-semibold mb-3">Top Searches</h3>
+  1221→          <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Query</TableHead><TableHead className="text-right">Count</TableHead><TableHead className="text-right">Results</TableHead></TableRow></TableHeader>
+  1222→            <TableBody>{(data?.topSearches || []).map((s: any, i: number) => (
+  1223→              <TableRow key={i}><TableCell className="text-sm font-medium">{s.query}</TableCell><TableCell className="text-right text-sm">{s.searchCount}</TableCell><TableCell className="text-right text-sm text-muted-foreground">{s.resultCount}</TableCell></TableRow>
+  1224→            ))}</TableBody></Table></div>
+  1225→        </Card>
+  1226→
+  1227→        {/* Zero-Result Searches */}
+  1228→        <Card className="p-4">
+  1229→          <h3 className="font-semibold mb-3">Zero-Result Searches</h3>
+  1230→          <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Query</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
+  1231→            <TableBody>{(data?.zeroResultSearches || []).map((s: any, i: number) => (
+  1232→              <TableRow key={i}><TableCell className="text-sm font-medium text-red-600">{s.query}</TableCell><TableCell className="text-right text-sm">{s.searchCount}</TableCell></TableRow>
+  1233→            ))}</TableBody></Table></div>
+  1234→        </Card>
+  1235→      </div>
+  1236→
+  1237→      {/* Customer Growth Chart */}
+  1238→      {data?.customerGrowth && data.customerGrowth.length > 0 && (
+  1239→        <Card className="p-6">
+  1240→          <h3 className="font-semibold mb-4">Customer Growth (Monthly New Users)</h3>
+  1241→          <div className="h-48 flex items-end gap-3">
+  1242→            {data.customerGrowth.map((m: any, i: number) => {
+  1243→              const maxVal = Math.max(...data.customerGrowth.map((x: any) => x.count), 1);
+  1244→              return (
+  1245→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+  1246→                  <span className="text-xs font-medium">{m.count}</span>
+  1247→                  <div className="w-full rounded-t-md bg-gradient-to-t from-emerald-600 to-emerald-400 transition-all duration-500" style={{ height: `${Math.max((m.count / maxVal) * 100, 4)}%` }} />
+  1248→                  <span className="text-xs text-muted-foreground">{m.month}</span>
+  1249→                </div>
+  1250→              );
+  1251→            })}
+  1252→          </div>
+  1253→        </Card>
+  1254→      )}
+  1255→
+  1256→      {/* Vendor Performance */}
+  1257→      <Card className="p-4">
+  1258→        <h3 className="font-semibold mb-3">Vendor Performance</h3>
+  1259→        <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Vendor</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Orders</TableHead><TableHead className="text-right">Rating</TableHead></TableRow></TableHeader>
+  1260→          <TableBody>{(data?.vendorPerformance || []).map((v: any, i: number) => (
+  1261→            <TableRow key={i}><TableCell className="font-medium text-sm">{v.name}</TableCell><TableCell className="text-right font-medium">{formatCurrency(v.revenue)}</TableCell><TableCell className="text-right text-sm">{v.orders}</TableCell><TableCell className="text-right text-sm"><span className="inline-flex items-center gap-1"><Star className="h-3 w-3 text-amber-500" />{v.rating?.toFixed(1) || 'N/A'}</span></TableCell></TableRow>
+  1262→          ))}</TableBody></Table></div>
+  1263→      </Card>
+  1264→    </div>
+  1265→  );
+  1266→}
+  1267→
+  1268→// ============ ADMIN SUPPORT ============
+  1269→
+  1270→function AdminSupport() {
+  1271→  const qc = useQueryClient();
+  1272→  const [selectedTicket, setSelectedTicket] = useState<any>(null);
+  1273→  const [reply, setReply] = useState('');
+  1274→
+  1275→  const { data, isLoading } = useQuery({
+  1276→    queryKey: ['support-tickets'],
+  1277→    queryFn: () => fetch('/api/support/tickets').then(r => r.json()).then((r: any) => r.data ?? []),
+  1278→  });
+  1279→
+  1280→  const replyMutation = useMutation({
+  1281→    mutationFn: ({ ticketId, message }: { ticketId: string; message: string }) => fetch('/api/support/tickets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticketId, message, isStaff: true }) }).then(r => r.json()),
+  1282→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['support-tickets'] }); setReply(''); toast.success('Reply sent'); },
+  1283→    onError: () => toast.error('Failed to send reply'),
+  1284→  });
+  1285→
+  1286→  const priorityColor: Record<string, string> = {
+  1287→    LOW: 'bg-gray-100 text-gray-700',
+  1288→    MEDIUM: 'bg-blue-100 text-blue-700',
+  1289→    HIGH: 'bg-orange-100 text-orange-700',
+  1290→    URGENT: 'bg-red-100 text-red-700',
+  1291→  };
+  1292→
+  1293→  const statusColor: Record<string, string> = {
+  1294→    OPEN: 'bg-green-100 text-green-700',
+  1295→    IN_PROGRESS: 'bg-blue-100 text-blue-700',
+  1296→    RESOLVED: 'bg-amber-100 text-amber-700',
+  1297→    CLOSED: 'bg-gray-100 text-gray-700',
+  1298→  };
+  1299→
+  1300→  return (
+  1301→    <div className="p-6 space-y-6">
+  1302→      <h1 className="text-2xl font-bold">Support Tickets</h1>
+  1303→      {isLoading ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div> :
+  1304→        <Card><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Customer</TableHead><TableHead>Category</TableHead><TableHead>Priority</TableHead><TableHead>Status</TableHead><TableHead className="hidden sm:table-cell">Messages</TableHead><TableHead>Created</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+  1305→          <TableBody>{(Array.isArray(data) ? data : []).map((t: any) => (
+  1306→            <TableRow key={t.id}><TableCell className="font-medium text-sm max-w-[200px] truncate">{t.subject}</TableCell><TableCell className="text-sm">{t.user?.name || 'Guest'}</TableCell><TableCell className="text-sm">{t.category}</TableCell>
+  1307→              <TableCell><Badge className={priorityColor[t.priority] || ''}>{t.priority}</Badge></TableCell>
+  1308→              <TableCell><Badge className={statusColor[t.status] || ''}>{t.status.replace('_', ' ')}</Badge></TableCell>
+  1309→              <TableCell className="hidden sm:table-cell text-sm">{t._count?.messages || t.messages?.length || 0}</TableCell>
+  1310→              <TableCell className="text-sm text-muted-foreground">{new Date(t.createdAt).toLocaleDateString('en-IN')}</TableCell>
+  1311→              <TableCell><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedTicket(t)}><Eye size={14} /></Button></TableCell></TableRow>
+  1312→          ))}</TableBody></Table></div></Card>}
+  1313→
+  1314→      {/* Ticket Detail Dialog */}
+  1315→      <Dialog open={!!selectedTicket} onOpenChange={() => { setSelectedTicket(null); setReply(''); }}>
+  1316→        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+  1317→          <DialogHeader>
+  1318→            <DialogTitle>{selectedTicket?.subject}</DialogTitle>
+  1319→            <DialogDescription>{selectedTicket?.category} • {selectedTicket?.status} • {selectedTicket?.user?.name}</DialogDescription>
+  1320→          </DialogHeader>
+  1321→          <div className="flex-1 overflow-y-auto space-y-3 min-h-0">
+  1322→            {(selectedTicket?.messages || []).map((m: any) => (
+  1323→              <div key={m.id} className={`p-3 rounded-lg text-sm ${m.isStaff ? 'bg-amber-50 dark:bg-amber-900/10 ml-8' : 'bg-muted mr-8'}`}>
+  1324→                <div className="flex items-center gap-2 mb-1"><span className="font-medium text-xs">{m.isStaff ? 'Admin' : selectedTicket?.user?.name || 'Customer'}</span><span className="text-xs text-muted-foreground">{new Date(m.createdAt).toLocaleString('en-IN')}</span></div>
+  1325→                <p>{m.message}</p>
+  1326→              </div>
+  1327→            ))}
+  1328→          </div>
+  1329→          {selectedTicket?.status !== 'CLOSED' && selectedTicket?.status !== 'RESOLVED' && (
+  1330→            <div className="flex gap-2 pt-2 border-t">
+  1331→              <Input placeholder="Type your reply..." value={reply} onChange={e => setReply(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && reply.trim()) replyMutation.mutate({ ticketId: selectedTicket.id, message: reply }); }} className="flex-1" />
+  1332→              <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => replyMutation.mutate({ ticketId: selectedTicket.id, message: reply })} disabled={!reply.trim()}><Send size={16} /></Button>
+  1333→            </div>
+  1334→          )}
+  1335→        </DialogContent>
+  1336→      </Dialog>
+  1337→    </div>
+  1338→  );
+  1339→}
+  1340→
+  1341→// ============ ADMIN MARKETING ============
+  1342→
+  1343→function AdminMarketing() {
+  1344→  return (
+  1345→    <Tabs defaultValue="flash-sales" className="p-6 space-y-6">
+  1346→      <div><h1 className="text-2xl font-bold">Marketing</h1><p className="text-muted-foreground text-sm">Manage promotions and campaigns</p></div>
+  1347→      <TabsList className="flex-wrap h-auto gap-1"><TabsTrigger value="flash-sales">Flash Sales</TabsTrigger><TabsTrigger value="deals">Deals</TabsTrigger><TabsTrigger value="festival-offers">Festival Offers</TabsTrigger><TabsTrigger value="collections">Collections</TabsTrigger></TabsList>
+  1348→      <TabsContent value="flash-sales"><FlashSalesTab /></TabsContent>
+  1349→      <TabsContent value="deals"><DealsTab /></TabsContent>
+  1350→      <TabsContent value="festival-offers"><FestivalOffersTab /></TabsContent>
+  1351→      <TabsContent value="collections"><FeaturedCollectionsTab /></TabsContent>
+  1352→    </Tabs>
+  1353→  );
+  1354→}
+  1355→
+  1356→function FlashSalesTab() {
+  1357→  const qc = useQueryClient();
+  1358→  const [showCreate, setShowCreate] = useState(false);
+  1359→  const [form, setForm] = useState({ title: '', description: '', startDate: '', endDate: '' });
+  1360→
+  1361→  const { data, isLoading } = useQuery({
+  1362→    queryKey: ['flash-sales'],
+  1363→    queryFn: () => fetch('/api/flash-sales').then(r => r.json()).then((r: any) => r.data || []),
+  1364→  });
+  1365→
+  1366→  const createMutation = useMutation({
+  1367→    mutationFn: () => fetch('/api/flash-sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, isActive: true }) }).then(r => r.json()),
+  1368→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['flash-sales'] }); toast.success('Flash sale created'); setShowCreate(false); setForm({ title: '', description: '', startDate: '', endDate: '' }); },
+  1369→    onError: () => toast.error('Failed to create'),
+  1370→  });
+  1371→
+  1372→  return (
+  1373→    <div className="space-y-4">
+  1374→      <div className="flex items-center justify-between">
+  1375→        <h3 className="font-semibold">Flash Sales</h3>
+  1376→        <Button className="bg-amber-600 hover:bg-amber-700" size="sm" onClick={() => setShowCreate(true)}><Plus size={14} className="mr-1" />Create</Button>
+  1377→      </div>
+  1378→      {isLoading ? <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+  1379→        <div className="space-y-3">
+  1380→          {(data || []).map((fs: any) => (
+  1381→            <Card key={fs.id} className="p-4 flex items-center justify-between">
+  1382→              <div><p className="font-medium">{fs.title}</p><p className="text-sm text-muted-foreground flex items-center gap-1"><CalendarDays size={12} />{new Date(fs.startDate).toLocaleDateString('en-IN')} — {new Date(fs.endDate).toLocaleDateString('en-IN')}</p><p className="text-xs text-muted-foreground">{fs.items?.length || 0} products</p></div>
+  1383→              <Badge variant={fs.isActive ? 'default' : 'secondary'}>{fs.isActive ? 'Active' : 'Inactive'}</Badge>
+  1384→            </Card>
+  1385→          ))}
+  1386→          {(!data || data.length === 0) && <p className="text-muted-foreground text-sm text-center py-8">No flash sales yet</p>}
+  1387→        </div>}
+  1388→      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+  1389→        <DialogContent><DialogHeader><DialogTitle>Create Flash Sale</DialogTitle></DialogHeader>
+  1390→          <div className="space-y-4">
+  1391→            <div><Label>Title *</Label><Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="mt-1" /></div>
+  1392→            <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
+  1393→            <div className="grid grid-cols-2 gap-4">
+  1394→              <div><Label>Start Date *</Label><Input type="datetime-local" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="mt-1" /></div>
+  1395→              <div><Label>End Date *</Label><Input type="datetime-local" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} className="mt-1" /></div>
+  1396→            </div>
+  1397→          </div>
+  1398→          <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.title}>Create</Button></DialogFooter>
+  1399→        </DialogContent>
+
+[showing lines 1000-1399 of 1959; use offset=1400 with limit to continue reading]

@@ -78,6 +78,33 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { userId, items, shippingAddress, paymentMethod, couponId } = body;
 
+    // Validate required fields
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ success: false, error: 'Items are required and must be a non-empty array' }, { status: 400 });
+    }
+
+    if (!shippingAddress) {
+      return NextResponse.json({ success: false, error: 'Shipping address is required' }, { status: 400 });
+    }
+
+    const addr = typeof shippingAddress === 'string' ? JSON.parse(shippingAddress) : shippingAddress;
+
+    if (!addr.name || !addr.address || !addr.city || !addr.pincode || !addr.phone) {
+      return NextResponse.json({ success: false, error: 'Shipping address must include name, address, city, pincode, and phone' }, { status: 400 });
+    }
+
+    if (!/^\d{6}$/.test(String(addr.pincode))) {
+      return NextResponse.json({ success: false, error: 'Pincode must be exactly 6 digits' }, { status: 400 });
+    }
+
+    if (!/^\d{10,}$/.test(String(addr.phone).replace(/\D/g, ''))) {
+      return NextResponse.json({ success: false, error: 'Phone number must be at least 10 digits' }, { status: 400 });
+    }
+
+    if (!paymentMethod) {
+      return NextResponse.json({ success: false, error: 'Payment method is required' }, { status: 400 });
+    }
+
     const user = await db.user.findUnique({ where: { id: userId } });
     if (!user) return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
 

@@ -11,6 +11,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Email and password required' }, { status: 400 });
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json({ success: false, error: 'Invalid email format' }, { status: 400 });
+    }
+
     const user = await db.user.findUnique({
       where: { email },
       include: { vendor: true, customerProfile: true },
@@ -80,6 +85,15 @@ export async function PUT(req: NextRequest) {
     const { name, email, password, phone } = await req.json();
     if (!name || !email || !password) {
       return NextResponse.json({ success: false, error: 'Name, email, and password required' }, { status: 400 });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json({ success: false, error: 'Invalid email format' }, { status: 400 });
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json({ success: false, error: 'Password must be at least 6 characters' }, { status: 400 });
     }
 
     const existing = await db.user.findUnique({ where: { email } });

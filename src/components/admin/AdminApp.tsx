@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useContext } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { authToast } from '@/lib/auth-toast';
 import {
   BarChart3, Users, Package, ShoppingCart, Store, DollarSign, TrendingUp,
   Settings, LogOut, Menu, X, ChevronLeft, ChevronRight, Search, Eye,
@@ -28,6 +29,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -36,6 +38,9 @@ import { useAuthStore, useNavigationStore } from '@/stores';
 import type { Product, Category, Brand, Vendor, Order, Coupon, Banner, AdminDashboardStats } from '@/types';
 
 const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+const ConfirmContext = React.createContext<((action: { title: string; description: string; onConfirm: () => void }) => void)>(() => {});
+const useConfirm = () => useContext(ConfirmContext);
 
 // ============ ADMIN NAV ============
 
@@ -94,7 +99,7 @@ function AdminSidebar() {
         </nav>
       </ScrollArea>
       <div className="p-3 border-t space-y-1">
-        <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 text-muted-foreground ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => { logout(); setAppView('customer'); toast.success('Logged out'); }}>
+        <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 text-muted-foreground ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => { logout(); setAppView('customer'); authToast.logoutSuccess(); }}>
           <LogOut size={18} />{!collapsed && <span>Logout</span>}
         </Button>
       </div>
@@ -126,7 +131,7 @@ function AdminMobileHeader() {
               </Button>
             ))}
             <Separator />
-            <Button variant="ghost" className="w-full justify-start gap-3 text-destructive" onClick={() => { logout(); setAppView('customer'); }}><LogOut size={18} />Logout</Button>
+            <Button variant="ghost" className="w-full justify-start gap-3 text-destructive" onClick={() => { authToast.logoutSuccess(); logout(); setAppView('customer'); }}><LogOut size={18} />Logout</Button>
           </div>
         </div>
       )}
@@ -259,6 +264,7 @@ function AdminDashboard() {
 // ============ VENDOR MANAGEMENT ============
 
 function AdminVendors() {
+  const confirm = useConfirm();
   const [statusFilter, setStatusFilter] = useState('all');
   const qc = useQueryClient();
   const [detailVendor, setDetailVendor] = useState<Vendor | null>(null);
@@ -358,7 +364,7 @@ function AdminVendors() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {!data?.data?.length && <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No vendors found</TableCell></TableRow>}
+                {!data?.data?.length && <TableRow><TableCell colSpan={8}><div className="flex flex-col items-center justify-center py-12 text-center"><Store size={40} className="text-muted-foreground/40 mb-3" /><p className="text-muted-foreground font-medium">No vendors found</p><p className="text-muted-foreground text-sm mt-1">Vendors will appear here when they register</p></div></TableCell></TableRow>}
                 {data?.data?.map((vendor: Vendor) => (
                   <TableRow key={vendor.id} className={vendor.status === 'PENDING' ? 'bg-amber-50/50 dark:bg-amber-900/5' : ''}>
                     <TableCell>
@@ -387,12 +393,12 @@ function AdminVendors() {
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailVendor(vendor)}><Eye size={14} /></Button>
                         {vendor.status === 'PENDING' && (
                           <>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20" onClick={() => { updateVendor.mutate({ id: vendor.id, status: 'APPROVED' }); toast.success(`${vendor.businessName} approved!`); }}><CheckCircle size={16} /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20" onClick={() => { updateVendor.mutate({ id: vendor.id, status: 'APPROVED' }); toast.success('Vendor approved', { description: vendor.businessName + ' can now sell.' }); }}><CheckCircle size={16} /></Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => openRejectDialog(vendor.id)}><XCircle size={16} /></Button>
                           </>
                         )}
                         {vendor.status === 'APPROVED' && (
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600" onClick={() => updateVendor.mutate({ id: vendor.id, status: 'SUSPENDED' })}><XCircle size={14} /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600" disabled={updateVendor.isPending} onClick={() => { confirm({ title: 'Suspend Vendor?', description: 'This will prevent ' + vendor.businessName + ' from accessing the vendor panel.', onConfirm: () => updateVendor.mutate({ id: vendor.id, status: 'SUSPENDED' }) }); }}><XCircle size={14} /></Button>
                         )}
                         {vendor.status === 'SUSPENDED' && (
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600" onClick={() => updateVendor.mutate({ id: vendor.id, status: 'APPROVED' })}><CheckCircle size={14} /></Button>
@@ -549,16 +555,16 @@ function AdminVendors() {
               <div className="flex gap-2 flex-wrap">
                 {detailVendor.status === 'PENDING' && (
                   <>
-                    <Button className="bg-green-600 hover:bg-green-700" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); toast.success(`${detailVendor.businessName} has been approved!`); }}>
+                    <Button className="bg-green-600 hover:bg-green-700" disabled={updateVendor.isPending} onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); toast.success('Vendor approved', { description: detailVendor.businessName + ' can now sell.' }); }}>
                       <CheckCircle size={16} className="mr-1.5" />Approve Vendor
                     </Button>
-                    <Button variant="destructive" onClick={() => { openRejectDialog(detailVendor.id); }}>
+                    <Button variant="destructive" disabled={updateVendor.isPending} onClick={() => { openRejectDialog(detailVendor.id); }}>
                       <XCircle size={16} className="mr-1.5" />Reject Application
                     </Button>
                   </>
                 )}
                 {detailVendor.status === 'APPROVED' && (
-                  <Button variant="destructive" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'SUSPENDED' }); setDetailVendor(null); }}>
+                  <Button variant="destructive" disabled={updateVendor.isPending} onClick={() => { confirm({ title: 'Suspend Vendor?', description: 'This will prevent ' + detailVendor.businessName + ' from accessing the vendor panel.', onConfirm: () => { updateVendor.mutate({ id: detailVendor.id, status: 'SUSPENDED' }); setDetailVendor(null); } }); }}>
                     <XCircle size={16} className="mr-1.5" />Suspend Vendor
                   </Button>
                 )}
@@ -568,7 +574,7 @@ function AdminVendors() {
                   </Button>
                 )}
                 {detailVendor.status === 'REJECTED' && (
-                  <Button className="bg-green-600 hover:bg-green-700" onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); toast.success(`${detailVendor.businessName} has been approved!`); }}>
+                  <Button className="bg-green-600 hover:bg-green-700" disabled={updateVendor.isPending} onClick={() => { updateVendor.mutate({ id: detailVendor.id, status: 'APPROVED' }); setDetailVendor(null); toast.success('Vendor approved', { description: detailVendor.businessName + ' can now sell.' }); }}>
                     <CheckCircle size={16} className="mr-1.5" />Approve Now
                   </Button>
                 )}
@@ -612,6 +618,7 @@ function AdminVendors() {
 // ============ CATEGORY MANAGEMENT ============
 
 function AdminCategories() {
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const { data: categories, isLoading } = useQuery({
     queryKey: ['categories'],
@@ -629,7 +636,7 @@ function AdminCategories() {
       }
       return fetch('/api/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, description: form.description, parentId: form.parentId || null, sortOrder: parseInt(form.sortOrder) }) }).then(r => r.json());
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success(editId ? 'Category updated' : 'Category created'); setShowAdd(false); setEditId(null); setForm({ name: '', description: '', parentId: '', sortOrder: '0' }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success(editId ? 'Category updated' : 'Category created', { description: editId ? undefined : form.name + ' added.' }); setShowAdd(false); setEditId(null); setForm({ name: '', description: '', parentId: '', sortOrder: '0' }); },
     onError: () => toast.error('Failed to save category'),
   });
 
@@ -649,6 +656,14 @@ function AdminCategories() {
       </div>
 
       {isLoading ? <div className="space-y-3">{Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div> :
+      (!categories || categories.length === 0) ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <FolderOpen size={48} className="text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-semibold">No categories yet</h3>
+          <p className="text-sm text-muted-foreground mb-4">Create your first product category to get started.</p>
+          <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => { setForm({ name: '', description: '', parentId: '', sortOrder: '0' }); setEditId(null); setShowAdd(true); }}><Plus size={16} className="mr-1.5" />Add Category</Button>
+        </div>
+      ) : (
       <div className="space-y-2">
         {categories?.map((cat: any) => (
           <div key={cat.id}>
@@ -659,7 +674,7 @@ function AdminCategories() {
               </div>
               <div className="flex items-center gap-1">
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(cat)}><Pencil size={14} /></Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(cat.id)}><Trash2 size={14} /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" disabled={deleteMutation.isPending} onClick={() => { confirm({ title: 'Delete Category?', description: 'Are you sure you want to delete "' + cat.name + '"? This action cannot be undone.', onConfirm: () => deleteMutation.mutate(cat.id) }); }}><Trash2 size={14} /></Button>
               </div>
             </Card>
             {cat.children?.map((child: any) => (
@@ -670,13 +685,13 @@ function AdminCategories() {
                 </div>
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(child)}><Pencil size={12} /></Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(child.id)}><Trash2 size={12} /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" disabled={deleteMutation.isPending} onClick={() => { confirm({ title: 'Delete Category?', description: 'Are you sure you want to delete "' + child.name + '"? This action cannot be undone.', onConfirm: () => deleteMutation.mutate(child.id) }); }}><Trash2 size={12} /></Button>
                 </div>
               </Card>
             ))}
           </div>
         ))}
-      </div>}
+      </div>)}
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent><DialogHeader><DialogTitle>{editId ? 'Edit Category' : 'Add Category'}</DialogTitle></DialogHeader>
@@ -686,7 +701,7 @@ function AdminCategories() {
             <div><Label>Parent Category</Label><Select value={form.parentId} onValueChange={v => setForm(f => ({...f, parentId: v}))}><SelectTrigger className="mt-1"><SelectValue placeholder="None (Root Category)" /></SelectTrigger><SelectContent><SelectItem value="none">None (Root Category)</SelectItem>{categories?.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>Sort Order</Label><Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({...f, sortOrder: e.target.value}))} className="mt-1" /></div>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.name}>{saveMutation.isPending ? 'Saving...' : editId ? 'Update' : 'Create'}</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => { if (!form.name.trim()) { toast.error('Name is required'); return; } saveMutation.mutate(); }} disabled={saveMutation.isPending || !form.name}>{saveMutation.isPending ? 'Saving...' : editId ? 'Update' : 'Create'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -696,6 +711,7 @@ function AdminCategories() {
 // ============ BRAND MANAGEMENT ============
 
 function AdminBrands() {
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const { data: brands, isLoading } = useQuery({
     queryKey: ['brands'],
@@ -707,8 +723,7 @@ function AdminBrands() {
 
   const addMutation = useMutation({
     mutationFn: () => fetch('/api/brands', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['brands'] }); toast.success('Brand created'); setShowAdd(false); setForm({ name: '', description: '' }); },
-    onError: () => toast.error('Failed to create brand'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['brands'] }); toast.success('Brand created', { description: form.name + ' has been added.' }); setShowAdd(false); setForm({ name: '', description: '' }); },
   });
 
   const deleteMutation = useMutation({
@@ -724,15 +739,23 @@ function AdminBrands() {
         <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => setShowAdd(true)}><Plus size={16} className="mr-1.5" />Add Brand</Button>
       </div>
 
+      {isLoading ? <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">{Array.from({length: 8}).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+      (!brands || brands.length === 0) ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Tag size={48} className="text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-semibold">No brands yet</h3>
+          <p className="text-sm text-muted-foreground mb-4">Add your first product brand.</p>
+          <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => setShowAdd(true)}><Plus size={16} className="mr-1.5" />Add Brand</Button>
+        </div>
+      ) : (
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {isLoading ? Array.from({length: 8}).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />) :
-        brands?.map((brand: any) => (
+        {brands.map((brand: any) => (
           <Card key={brand.id} className="p-4 flex items-center justify-between">
             <div><p className="font-medium">{brand.name}</p><p className="text-sm text-muted-foreground">{brand._count?.products || 0} products</p></div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive shrink-0" onClick={() => deleteMutation.mutate(brand.id)}><Trash2 size={14} /></Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive shrink-0" disabled={deleteMutation.isPending} onClick={() => { confirm({ title: 'Delete Brand?', description: 'Are you sure you want to delete "' + brand.name + '"? This action cannot be undone.', onConfirm: () => deleteMutation.mutate(brand.id) }); }}><Trash2 size={14} /></Button>
           </Card>
         ))}
-      </div>
+      </div>)}
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent><DialogHeader><DialogTitle>Add Brand</DialogTitle></DialogHeader>
@@ -740,7 +763,7 @@ function AdminBrands() {
             <div><Label>Brand Name *</Label><Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /></div>
             <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} className="mt-1" /></div>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => addMutation.mutate()} disabled={addMutation.isPending || !form.name}>Create</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button><Button className="bg-amber-600 hover:bg-amber-700" onClick={() => { if (!form.name.trim()) { toast.error('Name is required'); return; } addMutation.mutate(); }} disabled={addMutation.isPending || !form.name}>Create</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -808,7 +831,7 @@ function AdminOrders() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => fetch(`/api/orders/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-orders'] }); toast.success('Order updated'); },
+    onSuccess: (_data, variables) => { qc.invalidateQueries({ queryKey: ['admin-orders'] }); toast.success('Order updated', { description: 'Status: ' + variables.status }); },
     onError: () => toast.error('Failed to update'),
   });
 
@@ -823,11 +846,18 @@ function AdminOrders() {
         ))}
       </div>
       {isLoading ? <div className="space-y-3">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+      (!data?.data || data.data.length === 0) ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Package size={48} className="text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-semibold">No orders</h3>
+          <p className="text-sm text-muted-foreground">Orders will appear here when customers make purchases.</p>
+        </div>
+      ) : (
       <Card>
         <Table>
           <TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Customer</TableHead><TableHead>Items</TableHead><TableHead>Total</TableHead><TableHead>Payment</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
           <TableBody>
-            {data?.data?.map((order: any) => (
+            {data.data.map((order: any) => (
               <TableRow key={order.id}>
                 <TableCell><p className="font-medium text-sm">#{order.orderNumber}</p></TableCell>
                 <TableCell className="text-sm">{order.user?.name}</TableCell>
@@ -837,7 +867,7 @@ function AdminOrders() {
                 <TableCell><Badge className={statusColor[order.status] || ''}>{order.status}</Badge></TableCell>
                 <TableCell className="text-sm">{new Date(order.createdAt).toLocaleDateString()}</TableCell>
                 <TableCell className="text-right">
-                  <Select value={order.status} onValueChange={(v) => updateMutation.mutate({ id: order.id, status: v })}>
+                  <Select disabled={updateMutation.isPending} value={order.status} onValueChange={(v) => updateMutation.mutate({ id: order.id, status: v })}>
                     <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>{['NEW', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                   </Select>
@@ -852,7 +882,7 @@ function AdminOrders() {
             <Button variant="outline" size="sm" disabled={page >= data.meta.totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
           </div>
         )}
-      </Card>}
+      </Card>)}
     </div>
   );
 }
@@ -902,7 +932,7 @@ function AdminCoupons() {
 
   const addMutation = useMutation({
     mutationFn: () => fetch('/api/coupons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, discountValue: parseFloat(form.discountValue), minOrder: parseFloat(form.minOrder) || null, maxDiscount: parseFloat(form.maxDiscount) || null, usageLimit: parseInt(form.usageLimit) || null, startDate: form.startDate || new Date().toISOString(), endDate: form.endDate || new Date(Date.now() + 86400000 * 30).toISOString() }) }).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['coupons'] }); toast.success('Coupon created'); setShowAdd(false); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['coupons'] }); toast.success('Coupon created', { description: 'Code: ' + form.code }); setShowAdd(false); },
     onError: () => toast.error('Failed'),
   });
 
@@ -1049,7 +1079,7 @@ function AdminSettings() {
 
   const saveMutation = useMutation({
     mutationFn: () => fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).then(r => r.json()),
-    onSuccess: () => toast.success('Settings saved'),
+    onSuccess: () => toast.success('Settings saved', { description: 'Changes applied successfully.' }),
     onError: () => toast.error('Failed to save'),
   });
 
@@ -1278,7 +1308,7 @@ function AdminSupport() {
 
   const replyMutation = useMutation({
     mutationFn: ({ ticketId, message }: { ticketId: string; message: string }) => fetch('/api/support/tickets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticketId, message, isStaff: true }) }).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['support-tickets'] }); setReply(''); toast.success('Reply sent'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['support-tickets'] }); setReply(''); toast.success('Reply sent', { description: 'The customer will be notified.' }); },
     onError: () => toast.error('Failed to send reply'),
   });
 
@@ -1382,7 +1412,7 @@ function FlashSalesTab() {
               <Badge variant={fs.isActive ? 'default' : 'secondary'}>{fs.isActive ? 'Active' : 'Inactive'}</Badge>
             </Card>
           ))}
-          {(!data || data.length === 0) && <p className="text-muted-foreground text-sm text-center py-8">No flash sales yet</p>}
+          {(!data || data.length === 0) && <div className="flex flex-col items-center justify-center py-12 text-center"><Zap size={40} className="text-muted-foreground/40 mb-3" /><p className="text-muted-foreground font-medium">No flash sales yet</p><p className="text-muted-foreground text-sm mt-1">Create a flash sale to boost product visibility</p></div>}
         </div>}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent><DialogHeader><DialogTitle>Create Flash Sale</DialogTitle></DialogHeader>
@@ -1701,7 +1731,7 @@ function AdminFAQ() {
               </AccordionItem>
             ))}
           </Accordion>
-          {(!faqs || faqs.length === 0) && <p className="text-muted-foreground text-sm text-center py-8">No FAQs yet</p>}
+          {(!faqs || faqs.length === 0) && <div className="flex flex-col items-center justify-center py-12 text-center"><HelpCircle size={40} className="text-muted-foreground/40 mb-3" /><p className="text-muted-foreground font-medium">No FAQs yet</p><p className="text-muted-foreground text-sm mt-1">Add frequently asked questions to help customers</p></div>}
         </Card>}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent><DialogHeader><DialogTitle>{editId ? 'Edit FAQ' : 'Add FAQ'}</DialogTitle></DialogHeader>
@@ -1810,7 +1840,7 @@ function AdminRolesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(!data || data.length === 0) && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No admin users found</TableCell></TableRow>}
+                {(!data || data.length === 0) && <TableRow><TableCell colSpan={6}><div className="flex flex-col items-center justify-center py-12 text-center"><UserCog size={40} className="text-muted-foreground/40 mb-3" /><p className="text-muted-foreground font-medium">No admin users found</p></div></TableCell></TableRow>}
                 {data?.map((admin: any) => (
                   <TableRow key={admin.id}>
                     <TableCell>
@@ -1916,7 +1946,20 @@ function AdminVendorWalletsPage() {
 // ============ MAIN ADMIN APP ============
 
 export default function AdminApp() {
-  const { adminView, setAdminView } = useNavigationStore();
+  const { user, isAuthenticated } = useAuthStore();
+  const { adminView, setAdminView, setAppView } = useNavigationStore();
+
+  // Confirmation dialog state (must be before any early return)
+  const [confirmState, setConfirmState] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null);
+  const doConfirm = useCallback((action: { title: string; description: string; onConfirm: () => void }) => setConfirmState(action), []);
+  const handleConfirm = useCallback(() => { confirmState?.onConfirm(); setConfirmState(null); }, [confirmState]);
+
+  // Auth guard
+  if (!isAuthenticated || user?.role !== 'ADMIN') {
+    toast.warning('Unauthorized access', { description: 'Admin privileges required to access this panel.' });
+    useNavigationStore.getState().setAppView('customer');
+    return null;
+  }
 
   const renderView = () => {
     switch (adminView) {
@@ -1946,13 +1989,18 @@ export default function AdminApp() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <ConfirmContext.Provider value={doConfirm}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="min-h-screen flex flex-col bg-background">
       <a href="#main-content" className="skip-link">Skip to main content</a>
       <AdminMobileHeader />
       <div className="flex flex-1">
         <AdminSidebar />
         <main id="main-content" className="flex-1 overflow-auto" role="main">{renderView()}</main>
       </div>
-    </div>
+      <AlertDialog open={!!confirmState} onOpenChange={(open) => { if (!open) setConfirmState(null); }}>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{confirmState?.title}</AlertDialogTitle><AlertDialogDescription>{confirmState?.description}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleConfirm}>Confirm</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+      </AlertDialog>
+    </motion.div>
+    </ConfirmContext.Provider>
   );
 }

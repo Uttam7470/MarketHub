@@ -1,0 +1,402 @@
+   300→   300→      if (result.success) {
+   301→   301→        const d = result.data;
+   302→   302→        toast.success(`Imported ${d.successCount}/${d.totalProducts} products successfully`);
+   303→   303→        if (d.errors.length > 0) toast.error(`${d.errors.length} errors occurred`);
+   304→   304→        qc.invalidateQueries({ queryKey: ['vendor-products'] });
+   305→   305→        setImportOpen(false);
+   306→   306→        setImportFile(null);
+   307→   307→      } else {
+   308→   308→        toast.error(result.error || 'Import failed');
+   309→   309→      }
+   310→   310→    } catch {
+   311→   311→      toast.error('Failed to parse CSV file');
+   312→   312→    }
+   313→   313→    setImporting(false);
+   314→   314→  };
+   315→   315→
+   316→   316→  const downloadTemplate = () => {
+   317→   317→    const csv = 'name,description,price,compareAtPrice,stock,sku,categoryId,brandId,weight\nSample Product,Sample description,999,1299,50,SKU001,cat_id_here,brand_id_here,0.5\n';
+   318→   318→    const blob = new Blob([csv], { type: 'text/csv' });
+   319→   319→    const url = URL.createObjectURL(blob);
+   320→   320→    const a = document.createElement('a');
+   321→   321→    a.href = url; a.download = 'product_import_template.csv'; a.click();
+   322→   322→    URL.revokeObjectURL(url);
+   323→   323→  };
+   324→   324→
+   325→   325→  const handleBulkExport = async () => {
+   326→   326→    try {
+   327→   327→      const params = new URLSearchParams({ vendorId: vendorId || '', page: '1', limit: '9999', search: '' });
+   328→   328→      const res = await fetch(`/api/products?${params}`);
+   329→   329→      const json = await res.json();
+   330→   330→      const products: Product[] = json.data || [];
+   331→   331→      if (products.length === 0) { toast.error('No products to export'); return; }
+   332→   332→      const headers = ['name', 'sku', 'price', 'stock', 'status', 'category'];
+   333→   333→      const rows = products.map(p => [
+   334→   334→        `"${p.name}"`, `"${p.sku || ''}"`, String(p.price), String(p.stock),
+   335→   335→        p.productStatus, `"${p.category?.name || ''}"`
+   336→   336→      ].join(','));
+   337→   337→      const csv = [headers.join(','), ...rows].join('\n');
+   338→   338→      const blob = new Blob([csv], { type: 'text/csv' });
+   339→   339→      const url = URL.createObjectURL(blob);
+   340→   340→      const a = document.createElement('a');
+   341→   341→      a.href = url; a.download = `products_export_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+   342→   342→      URL.revokeObjectURL(url);
+   343→   343→      toast.success(`Exported ${products.length} products`);
+   344→   344→    } catch {
+   345→   345→      toast.error('Failed to export products');
+   346→   346→    }
+   347→   347→  };
+   348→   348→
+   349→   349→  const statusColor: Record<string, string> = {
+   350→   350→    PUBLISHED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+   351→   351→    DRAFT: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+   352→   352→    ARCHIVED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+   353→   353→  };
+   354→   354→
+   355→   355→  const statusFilters = ['all', 'PUBLISHED', 'DRAFT', 'ARCHIVED'];
+   356→   356→
+   357→   357→  return (
+   358→   358→    <div className="p-6 space-y-6">
+   359→   359→      <div className="flex flex-wrap items-center justify-between gap-4">
+   360→   360→        <div><h1 className="text-2xl font-bold">Products</h1><p className="text-muted-foreground text-sm">Manage your product catalog</p></div>
+   361→   361→        <div className="flex items-center gap-2 flex-wrap">
+   362→   362→          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setVendorView('vendor-add-product')}><Plus size={16} className="mr-1.5" />Add Product</Button>
+   363→   363→          <Button variant="outline" onClick={() => setImportOpen(true)}><Upload size={16} className="mr-1.5" />Bulk Import</Button>
+   364→   364→          <Button variant="outline" onClick={handleBulkExport}><Download size={16} className="mr-1.5" />Bulk Export</Button>
+   365→   365→        </div>
+   366→   366→      </div>
+   367→   367→
+   368→   368→      <div className="flex flex-col sm:flex-row gap-3">
+   369→   369→        <div className="relative flex-1 max-w-md"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search products..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" /></div>
+   370→   370→        <div className="flex gap-2 flex-wrap">
+   371→   371→          {statusFilters.map(s => (
+   372→   372→            <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-orange-500 hover:bg-orange-600' : ''} onClick={() => { setStatusFilter(s); setPage(1); }}>
+   373→   373→              {s === 'all' ? 'All' : s}
+   374→   374→            </Button>
+   375→   375→          ))}
+   376→   376→        </div>
+   377→   377→      </div>
+   378→   378→
+   379→   379→      {isLoading ? <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{Array.from({length: 6}).map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}</div> :
+   380→   380→      <Card>
+   381→   381→        <Table>
+   382→   382→          <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="hidden md:table-cell">Category</TableHead><TableHead>Price</TableHead><TableHead>Stock</TableHead><TableHead className="hidden sm:table-cell">Status</TableHead><TableHead className="hidden sm:table-cell">Rating</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+   383→   383→          <TableBody>
+   384→   384→            {!data?.data?.length && <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No products found</TableCell></TableRow>}
+   385→   385→            {data?.data?.map(product => (
+   386→   386→              <TableRow key={product.id}>
+   387→   387→                <TableCell>
+   388→   388→                  <div className="flex items-center gap-3">
+   389→   389→                    <div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">
+   390→   390→                      {product.images?.[0]?.url ? <img src={product.images[0].url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={16} /></div>}
+   391→   391→                    </div>
+   392→   392→                    <div className="min-w-0"><p className="font-medium text-sm truncate max-w-48">{product.name}</p><p className="text-xs text-muted-foreground">SKU: {product.sku || 'N/A'}</p></div>
+   393→   393→                  </div>
+   394→   394→                </TableCell>
+   395→   395→                <TableCell className="hidden md:table-cell"><Badge variant="secondary">{product.category?.name}</Badge></TableCell>
+   396→   396→                <TableCell>
+   397→   397→                  <div><span className="font-medium">{formatCurrency(product.price)}</span></div>
+   398→   398→                  {product.compareAtPrice && <span className="text-xs text-muted-foreground line-through">{formatCurrency(product.compareAtPrice)}</span>}
+   399→   399→                </TableCell>
+   400→   400→                <TableCell>
+   401→   401→                  <span className={`font-medium ${product.stock < 5 ? 'text-red-600' : product.stock < 20 ? 'text-amber-600' : 'text-green-600'}`}>{product.stock}</span>
+   402→   402→                </TableCell>
+   403→   403→                <TableCell className="hidden sm:table-cell">
+   404→   404→                  <Badge variant="secondary" className={statusColor[product.productStatus] || ''}>{product.productStatus}</Badge>
+   405→   405→                </TableCell>
+   406→   406→                <TableCell className="hidden sm:table-cell"><div className="flex items-center gap-1"><StarRating rating={product.rating} size={12} /><span className="text-sm">{product.rating}</span></div></TableCell>
+   407→   407→                <TableCell className="text-right">
+   408→   408→                  <div className="flex items-center justify-end gap-1">
+   409→   409→                    <TooltipProvider delayDuration={0}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateMutation.mutate(product.id)} disabled={duplicateMutation.isPending}><Copy size={14} /></Button></TooltipTrigger><TooltipContent>Duplicate</TooltipContent></Tooltip></TooltipProvider>
+   410→   410→                    <TooltipProvider delayDuration={0}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectedProductId(product.id); setVendorView('vendor-add-product'); }}><Pencil size={14} /></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip></TooltipProvider>
+   411→   411→                    <TooltipProvider delayDuration={0}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(product.id)}><Trash2 size={14} /></Button></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip></TooltipProvider>
+   412→   412→                  </div>
+   413→   413→                </TableCell>
+   414→   414→              </TableRow>
+   415→   415→            ))}
+   416→   416→          </TableBody>
+   417→   417→        </Table>
+   418→   418→        {data?.meta && data.meta.totalPages > 1 && (
+   419→   419→          <div className="flex items-center justify-center gap-2 p-4">
+   420→   420→            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></Button>
+   421→   421→            {Array.from({ length: Math.min(data.meta.totalPages, 5) }, (_, i) => i + 1).map(p => (
+   422→   422→              <Button key={p} variant={p === page ? 'default' : 'outline'} size="sm" className={p === page ? 'bg-orange-500' : ''} onClick={() => setPage(p)}>{p}</Button>
+   423→   423→            ))}
+   424→   424→            <Button variant="outline" size="sm" disabled={page >= data.meta.totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
+   425→   425→          </div>
+   426→   426→        )}
+   427→   427→      </Card>}
+   428→   428→
+   429→   429→      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+   430→   430→        <DialogContent><DialogHeader><DialogTitle>Delete Product</DialogTitle><DialogDescription>Are you sure? This action cannot be undone.</DialogDescription></DialogHeader>
+   431→   431→          <DialogFooter><Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button><Button variant="destructive" onClick={() => deleteId && deleteMutation.mutate(deleteId)} disabled={deleteMutation.isPending}>Delete</Button></DialogFooter>
+   432→   432→        </DialogContent>
+   433→   433→      </Dialog>
+   434→   434→
+   435→   435→      {/* Bulk Import Dialog */}
+   436→   436→      <Dialog open={importOpen} onOpenChange={(open) => { setImportOpen(open); if (!open) setImportFile(null); }}>
+   437→   437→        <DialogContent>
+   438→   438→          <DialogHeader>
+   439→   439→            <DialogTitle className="flex items-center gap-2"><FileSpreadsheet size={20} />Bulk Import Products</DialogTitle>
+   440→   440→            <DialogDescription>Upload a CSV file to import products in bulk.</DialogDescription>
+   441→   441→          </DialogHeader>
+   442→   442→          <div className="space-y-4">
+   443→   443→            <div className="border-2 border-dashed rounded-lg p-6 text-center space-y-2">
+   444→   444→              <Upload size={32} className="mx-auto text-muted-foreground" />
+   445→   445→              <p className="text-sm text-muted-foreground">
+   446→   446→                {importFile ? <span className="font-medium text-foreground">{importFile.name}</span> : 'Drag & drop or click to select a CSV file'}
+   447→   447→              </p>
+   448→   448→              <Input
+   449→   449→                type="file"
+   450→   450→                accept=".csv"
+   451→   451→                className="max-w-xs mx-auto"
+   452→   452→                onChange={e => setImportFile(e.target.files?.[0] || null)}
+   453→   453→              />
+   454→   454→            </div>
+   455→   455→            <div className="text-sm text-muted-foreground space-y-1">
+   456→   456→              <p>Required columns: <span className="font-medium text-foreground">name, price, categoryId</span></p>
+   457→   457→              <p>Optional columns: description, compareAtPrice, stock, sku, brandId, weight</p>
+   458→   458→            </div>
+   459→   459→            <Button variant="link" className="p-0 h-auto text-orange-600" onClick={downloadTemplate}>
+   460→   460→              <Download size={14} className="mr-1" />Download CSV Template
+   461→   461→            </Button>
+   462→   462→          </div>
+   463→   463→          <DialogFooter>
+   464→   464→            <Button variant="outline" onClick={() => { setImportOpen(false); setImportFile(null); }}>Cancel</Button>
+   465→   465→            <Button className="bg-orange-500 hover:bg-orange-600" onClick={handleBulkImport} disabled={!importFile || importing}>
+   466→   466→              {importing ? 'Importing...' : 'Import Products'}
+   467→   467→            </Button>
+   468→   468→          </DialogFooter>
+   469→   469→        </DialogContent>
+   470→   470→      </Dialog>
+   471→   471→    </div>
+   472→   472→  );
+   473→   473→}
+   474→   474→
+   475→   475→// ============ ADD/EDIT PRODUCT ============
+   476→   476→
+   477→   477→function VendorAddProduct() {
+   478→   478→  const { vendorId } = useAuthStore();
+   479→   479→  const { selectedProductId, setVendorView } = useNavigationStore();
+   480→   480→  const qc = useQueryClient();
+   481→   481→  const isEditing = !!selectedProductId;
+   482→   482→
+   483→   483→  const { data: product } = useQuery({
+   484→   484→    queryKey: ['product', selectedProductId],
+   485→   485→    queryFn: () => fetch(`/api/products/${selectedProductId}`).then(r => r.json()).then((r: ApiResponse<Product>) => r.data),
+   486→   486→    enabled: isEditing,
+   487→   487→  });
+   488→   488→
+   489→   489→  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: any) => { const flat: any[] = []; (r.data || []).forEach((c: any) => { flat.push(c); c.children?.forEach((ch: any) => flat.push(ch)); }); return flat; }) });
+   490→   490→  const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: any) => r.data || []) });
+   491→   491→
+   492→   492→  const [form, setForm] = useState({
+   493→   493→    name: '', slug: '', description: '', shortDescription: '', sku: '', barcode: '',
+   494→   494→    price: '', compareAtPrice: '', costPrice: '', stock: '10', weight: '', warranty: '', returnPolicy: '',
+   495→   495→    categoryId: '', brandId: '', isFeatured: false, seoTitle: '', seoDescription: '', seoKeywords: '',
+   496→   496→    productStatus: 'DRAFT', badge: 'NONE', estimatedDeliveryDays: '7',
+   497→   497→  });
+   498→   498→  const [images, setImages] = useState<Array<{ url: string; alt: string; sortOrder: number }>>([]);
+   499→   499→  const [urlInput, setUrlInput] = useState('');
+   500→   500→  const fileInputRef = React.useRef<HTMLInputElement>(null);
+   501→   501→
+   502→   502→  React.useEffect(() => {
+   503→   503→    if (product) {
+   504→   504→      setForm({
+   505→   505→        name: product.name || '', slug: product.slug || '', description: product.description || '', shortDescription: product.shortDescription || '',
+   506→   506→        sku: product.sku || '', barcode: product.barcode || '', price: String(product.price || ''), compareAtPrice: String(product.compareAtPrice || ''),
+   507→   507→        costPrice: String(product.costPrice || ''), stock: String(product.stock || '10'), weight: String(product.weight || ''), warranty: product.warranty || '',
+   508→   508→        returnPolicy: product.returnPolicy || '', categoryId: product.categoryId || '', brandId: product.brandId || '',
+   509→   509→        isFeatured: product.isFeatured || false, seoTitle: product.seoTitle || '', seoDescription: product.seoDescription || '', seoKeywords: product.seoKeywords || '',
+   510→   510→        productStatus: product.productStatus || 'DRAFT', badge: product.badge || 'NONE', estimatedDeliveryDays: String(product.estimatedDeliveryDays || 7),
+   511→   511→      });
+   512→   512→      setImages(product.images?.map(img => ({ url: img.url, alt: img.alt || '', sortOrder: img.sortOrder })) || []);
+   513→   513→    }
+   514→   514→  }, [product]);
+   515→   515→
+   516→   516→  const saveMutation = useMutation({
+   517→   517→    mutationFn: async () => {
+   518→   518→      const finalImages = images.length > 0
+   519→   519→        ? images.map((img, idx) => ({ url: img.url, alt: img.alt || form.name, sortOrder: idx }))
+   520→   520→        : [{ url: `https://placehold.co/600x600/f97316/ffffff?text=${encodeURIComponent(form.name.substring(0, 15))}`, alt: form.name, sortOrder: 0 }];
+   521→   521→      const body = {
+   522→   522→        vendorId,
+   523→   523→        ...form,
+   524→   524→        price: parseFloat(form.price) || 0,
+   525→   525→        compareAtPrice: parseFloat(form.compareAtPrice) || null,
+   526→   526→        costPrice: parseFloat(form.costPrice) || null,
+   527→   527→        stock: parseInt(form.stock) || 0,
+   528→   528→        weight: parseFloat(form.weight) || null,
+   529→   529→        estimatedDeliveryDays: parseInt(form.estimatedDeliveryDays) || 7,
+   530→   530→        badge: form.badge === 'NONE' ? null : form.badge,
+   531→   531→        images: finalImages,
+   532→   532→        specs: [{ key: 'Warranty', value: form.warranty || 'Standard' }],
+   533→   533→      };
+   534→   534→      if (isEditing) {
+   535→   535→        const res = await fetch('/api/products', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedProductId, ...body }) });
+   536→   536→        return res.json();
+   537→   537→      }
+   538→   538→      const res = await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+   539→   539→      return res.json();
+   540→   540→    },
+   541→   541→    onSuccess: (data) => {
+   542→   542→      if (data.success) { toast.success(isEditing ? 'Product updated!' : 'Product created!'); qc.invalidateQueries({ queryKey: ['vendor-products'] }); setVendorView('vendor-products'); }
+   543→   543→      else toast.error(data.error || 'Failed to save product');
+   544→   544→    },
+   545→   545→    onError: () => toast.error('Failed to save product'),
+   546→   546→  });
+   547→   547→
+   548→   548→  const update = (key: string, value: string | boolean) => setForm(f => ({ ...f, [key]: value }));
+   549→   549→
+   550→   550→  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   551→   551→    const files = e.target.files;
+   552→   552→    if (!files) return;
+   553→   553→    const remaining = 5 - images.length;
+   554→   554→    if (remaining <= 0) { toast.error('Maximum 5 images allowed'); e.target.value = ''; return; }
+   555→   555→    const toProcess = Array.from(files).slice(0, remaining);
+   556→   556→    toProcess.forEach(file => {
+   557→   557→      if (file.size > 5 * 1024 * 1024) { toast.error(`${file.name} exceeds 5MB limit`); return; }
+   558→   558→      const reader = new FileReader();
+   559→   559→      reader.onload = () => {
+   560→   560→        setImages(prev => [...prev, { url: reader.result as string, alt: form.name || file.name, sortOrder: prev.length }]);
+   561→   561→      };
+   562→   562→      reader.readAsDataURL(file);
+   563→   563→    });
+   564→   564→    e.target.value = '';
+   565→   565→  };
+   566→   566→
+   567→   567→  const addImageUrl = () => {
+   568→   568→    if (!urlInput.trim()) return;
+   569→   569→    if (images.length >= 5) { toast.error('Maximum 5 images allowed'); return; }
+   570→   570→    try { new URL(urlInput); } catch { toast.error('Please enter a valid URL'); return; }
+   571→   571→    setImages(prev => [...prev, { url: urlInput.trim(), alt: form.name || '', sortOrder: prev.length }]);
+   572→   572→    setUrlInput('');
+   573→   573→  };
+   574→   574→
+   575→   575→  const removeImage = (index: number) => setImages(prev => prev.filter((_, i) => i !== index).map((img, i) => ({ ...img, sortOrder: i })));
+   576→   576→  const moveImage = (index: number, direction: 'up' | 'down') => {
+   577→   577→    const newImages = [...images];
+   578→   578→    const target = direction === 'up' ? index - 1 : index + 1;
+   579→   579→    if (target < 0 || target >= newImages.length) return;
+   580→   580→    [newImages[index], newImages[target]] = [newImages[target], newImages[index]];
+   581→   581→    setImages(newImages.map((img, i) => ({ ...img, sortOrder: i })));
+   582→   582→  };
+   583→   583→
+   584→   584→  return (
+   585→   585→    <div className="p-6 space-y-6">
+   586→   586→      <div className="flex items-center gap-4">
+   587→   587→        <Button variant="ghost" size="icon" onClick={() => { setVendorView('vendor-products'); useNavigationStore.getState().setSelectedProductId(null); }}><ChevronLeft size={20} /></Button>
+   588→   588→        <div><h1 className="text-2xl font-bold">{isEditing ? 'Edit Product' : 'Add New Product'}</h1><p className="text-muted-foreground text-sm">{isEditing ? 'Update product details' : 'Fill in the product information'}</p></div>
+   589→   589→      </div>
+   590→   590→
+   591→   591→      <div className="grid lg:grid-cols-3 gap-6">
+   592→   592→        <div className="lg:col-span-2 space-y-6">
+   593→   593→          <Card className="p-6"><h3 className="font-semibold mb-4">Basic Information</h3>
+   594→   594→            <div className="space-y-4">
+   595→   595→              <div><Label>Product Name *</Label><Input value={form.name} onChange={e => { update('name', e.target.value); update('slug', e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-')); }} className="mt-1" placeholder="Product name" /></div>
+   596→   596→              <div><Label>Slug</Label><Input value={form.slug} onChange={e => update('slug', e.target.value)} className="mt-1" /></div>
+   597→   597→              <div><Label>Short Description</Label><Input value={form.shortDescription} onChange={e => update('shortDescription', e.target.value)} className="mt-1" placeholder="Brief product summary" /></div>
+   598→   598→              <div><Label>Full Description</Label><Textarea value={form.description} onChange={e => update('description', e.target.value)} className="mt-1" rows={4} placeholder="Detailed product description" /></div>
+   599→   599→            </div>
+   600→   600→          </Card>
+   601→   601→
+   602→   602→          <Card className="p-6"><h3 className="font-semibold mb-4 flex items-center gap-2"><ImageIcon size={18} />Product Images</h3>
+   603→   603→            <div className="space-y-4">
+   604→   604→              <p className="text-sm text-muted-foreground">Add up to 5 images. The first image will be the main product photo.</p>
+   605→   605→
+   606→   606→              {/* Upload buttons */}
+   607→   607→              <div className="flex gap-3 flex-wrap">
+   608→   608→                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} />
+   609→   609→                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={images.length >= 5}>
+   610→   610→                  <Upload size={16} className="mr-2" />Upload Images
+   611→   611→                </Button>
+   612→   612→              </div>
+   613→   613→
+   614→   614→              {/* URL input */}
+   615→   615→              <div className="flex gap-2">
+   616→   616→                <div className="relative flex-1">
+   617→   617→                  <Link size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+   618→   618→                  <Input placeholder="Paste image URL (https://...)" value={urlInput} onChange={e => setUrlInput(e.target.value)} className="pl-9" onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addImageUrl())} />
+   619→   619→                </div>
+   620→   620→                <Button type="button" variant="outline" onClick={addImageUrl} disabled={!urlInput.trim() || images.length >= 5}>
+   621→   621→                  <ImagePlus size={16} className="mr-1" />Add URL
+   622→   622→                </Button>
+   623→   623→              </div>
+   624→   624→
+   625→   625→              {/* Image preview grid */}
+   626→   626→              {images.length > 0 && (
+   627→   627→                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+   628→   628→                  {images.map((img, index) => (
+   629→   629→                    <div key={index} className="relative group border rounded-lg overflow-hidden bg-muted aspect-square">
+   630→   630→                      <img src={img.url} alt={img.alt} className="w-full h-full object-cover" />
+   631→   631→                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+   632→   632→                        {index > 0 && <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={() => moveImage(index, 'up')}><ArrowUp size={14} /></Button>}
+   633→   633→                        {index < images.length - 1 && <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={() => moveImage(index, 'down')}><ArrowDown size={14} /></Button>}
+   634→   634→                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-red-500/80" onClick={() => removeImage(index)}><Trash2 size={14} /></Button>
+   635→   635→                      </div>
+   636→   636→                      {index === 0 && <Badge className="absolute top-1 left-1 text-[10px] bg-orange-500">Main</Badge>}
+   637→   637→                      <Badge variant="secondary" className="absolute top-1 right-1 text-[10px]">{index + 1}</Badge>
+   638→   638→                    </div>
+   639→   639→                  ))}
+   640→   640→                </div>
+   641→   641→              )}
+   642→   642→
+   643→   643→              {images.length === 0 && (
+   644→   644→                <div className="border-2 border-dashed rounded-lg p-8 text-center text-muted-foreground">
+   645→   645→                  <ImagePlus size={32} className="mx-auto mb-2 opacity-50" />
+   646→   646→                  <p className="text-sm">No images added yet</p>
+   647→   647→                  <p className="text-xs mt-1">Upload files or paste image URLs above</p>
+   648→   648→                </div>
+   649→   649→              )}
+   650→   650→            </div>
+   651→   651→          </Card>
+   652→   652→
+   653→   653→          <Card className="p-6"><h3 className="font-semibold mb-4">Pricing & Inventory</h3>
+   654→   654→            <div className="grid sm:grid-cols-2 gap-4">
+   655→   655→              <div><Label>Price * (₹)</Label><Input type="number" value={form.price} onChange={e => update('price', e.target.value)} className="mt-1" /></div>
+   656→   656→              <div><Label>Compare at Price (₹)</Label><Input type="number" value={form.compareAtPrice} onChange={e => update('compareAtPrice', e.target.value)} className="mt-1" /></div>
+   657→   657→              <div><Label>Cost Price (₹)</Label><Input type="number" value={form.costPrice} onChange={e => update('costPrice', e.target.value)} className="mt-1" /></div>
+   658→   658→              <div><Label>Stock Quantity *</Label><Input type="number" value={form.stock} onChange={e => update('stock', e.target.value)} className="mt-1" /></div>
+   659→   659→              <div><Label>SKU</Label><Input value={form.sku} onChange={e => update('sku', e.target.value)} className="mt-1" /></div>
+   660→   660→              <div><Label>Barcode</Label><Input value={form.barcode} onChange={e => update('barcode', e.target.value)} className="mt-1" /></div>
+   661→   661→              <div><Label>Weight (kg)</Label><Input type="number" value={form.weight} onChange={e => update('weight', e.target.value)} className="mt-1" /></div>
+   662→   662→            </div>
+   663→   663→          </Card>
+   664→   664→
+   665→   665→          <Card className="p-6"><h3 className="font-semibold mb-4">SEO</h3>
+   666→   666→            <div className="space-y-4">
+   667→   667→              <div><Label>SEO Title</Label><Input value={form.seoTitle} onChange={e => update('seoTitle', e.target.value)} className="mt-1" /></div>
+   668→   668→              <div><Label>SEO Description</Label><Textarea value={form.seoDescription} onChange={e => update('seoDescription', e.target.value)} className="mt-1" rows={2} /></div>
+   669→   669→              <div><Label>SEO Keywords</Label><Input value={form.seoKeywords} onChange={e => update('seoKeywords', e.target.value)} className="mt-1" /></div>
+   670→   670→            </div>
+   671→   671→          </Card>
+   672→   672→
+   673→   673→          {/* SEO Preview */}
+   674→   674→          <Card className="p-4 border bg-muted/30">
+   675→   675→            <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2"><Search size={14} />SEO Preview</h3>
+   676→   676→            <div className="bg-white dark:bg-background rounded-lg p-4 border">
+   677→   677→              <p className="text-blue-700 dark:text-blue-400 text-lg font-medium hover:underline cursor-pointer truncate" style={{ maxWidth: '600px' }}>
+   678→   678→                {form.seoTitle || form.name || 'Product Title'}{" "}<span className="text-xs text-muted-foreground">— MarketHub</span>
+   679→   679→              </p>
+   680→   680→              <p className="text-sm text-green-700 dark:text-green-500 mt-0.5">
+   681→   681→                markethub.com/products/{form.slug || 'product-slug'}
+   682→   682→              </p>
+   683→   683→              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+   684→   684→                {form.seoDescription || form.shortDescription || 'No description provided. Add a SEO description to improve search visibility.'}
+   685→   685→              </p>
+   686→   686→            </div>
+   687→   687→          </Card>
+   688→   688→        </div>
+   689→   689→
+   690→   690→        <div className="space-y-6">
+   691→   691→          <Card className="p-6"><h3 className="font-semibold mb-4">Organization</h3>
+   692→   692→            <div className="space-y-4">
+   693→   693→              <div><Label>Category *</Label><Select value={form.categoryId} onValueChange={v => update('categoryId', v)}><SelectTrigger className="mt-1"><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent>{categories?.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+   694→   694→              <div><Label>Brand</Label><Select value={form.brandId} onValueChange={v => update('brandId', v)}><SelectTrigger className="mt-1"><SelectValue placeholder="Select brand" /></SelectTrigger><SelectContent>{brands?.map((b: any) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select></div>
+   695→   695→            </div>
+   696→   696→          </Card>
+   697→   697→
+   698→   698→          <Card className="p-6"><h3 className="font-semibold mb-4">Publishing</h3>
+   699→   699→            <div className="space-y-4">
+
+[showing lines 300-699 of 1477; use offset=700 with limit to continue reading]

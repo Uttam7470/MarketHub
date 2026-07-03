@@ -1,0 +1,502 @@
+   965→                <AlertDialogTitle>Remove from wishlist?</AlertDialogTitle>
+   966→                <AlertDialogDescription>{product.name} will be removed from your wishlist.</AlertDialogDescription>
+   967→              </AlertDialogHeader>
+   968→              <AlertDialogFooter>
+   969→                <AlertDialogCancel>Cancel</AlertDialogCancel>
+   970→                <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => { toggleItem(product.id); toast.info('Removed from wishlist'); setShowWishlistConfirm(false); }}>Remove</AlertDialogAction>
+   971→              </AlertDialogFooter>
+   972→            </AlertDialogContent>
+   973→          </AlertDialog>
+   974→
+   975→          {/* Share Buttons */}
+   976→          <div className="flex items-center gap-2 mt-3">
+   977→            <span className="text-sm text-muted-foreground">Share:</span>
+   978→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(product.name + ' ' + window.location.href)}`)}><MessageCircle size={14} /></Button>
+   979→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`)}><Facebook size={14} /></Button>
+   980→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(product.name)}&url=${encodeURIComponent(window.location.href)}`)}><Twitter size={14} /></Button>
+   981→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success('Link copied!'); }}><LinkIcon size={14} /></Button>
+   982→          </div>
+   983→
+   984→          {/* Features */}
+   985→          <div className="grid grid-cols-1 gap-3 pt-2">
+   986→            <div className="flex items-center gap-2 text-sm"><Truck size={16} className="text-orange-500" /><span>Estimated delivery: {product.estimatedDeliveryDays || 5}-{(product.estimatedDeliveryDays || 5) + 3} business days</span></div>
+   987→            <div className="grid grid-cols-2 gap-3">
+   988→            {[
+   989→              { icon: <Truck size={16} />, text: 'Free delivery above ₹500' },
+   990→              { icon: <RefreshCw size={16} />, text: '7-day easy returns' },
+   991→              { icon: <Shield size={16} />, text: 'Secure transactions' },
+   992→              { icon: <Package size={16} />, text: product.warranty || 'Standard warranty' },
+   993→            ].map((f, i) => (
+   994→              <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground"><span className="text-orange-500">{f.icon}</span>{f.text}</div>
+   995→            ))}
+   996→            </div>
+   997→          </div>
+   998→        </div>
+   999→      </div>
+  1000→
+  1001→      {/* Tabs: Description, Specs, Reviews, Q&A */}
+  1002→      <div className="mt-10">
+  1003→        <Tabs value={activeTab} onValueChange={setActiveTab}>
+  1004→          <TabsList className="w-full justify-start border-b rounded-none h-auto p-0">
+  1005→            {['specs', 'description', 'reviews', 'qa'].map(t => (
+  1006→              <TabsTrigger key={t} value={t} className="rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:shadow-none px-6 py-3 capitalize">{t === 'qa' ? 'Q&A' : t}</TabsTrigger>
+  1007→            ))}
+  1008→          </TabsList>
+  1009→          <TabsContent value="specs" className="pt-4">
+  1010→            {product.specs && product.specs.length > 0 ? (
+  1011→              <div className="max-w-2xl"><Table><TableBody>{product.specs.map(s => (
+  1012→                <TableRow key={s.id}><TableCell className="font-medium w-40 bg-muted/30">{s.key}</TableCell><TableCell>{s.value}</TableCell></TableRow>
+  1013→              ))}</TableBody></Table></div>
+  1014→            ) : <p className="text-muted-foreground">No specifications available</p>}
+  1015→          </TabsContent>
+  1016→          <TabsContent value="description" className="pt-4">
+  1017→            <div className="max-w-3xl prose dark:prose-invert" dangerouslySetInnerHTML={{ __html: product.description || '<p>No description available</p>' }} />
+  1018→          </TabsContent>
+  1019→          <TabsContent value="reviews" className="pt-4">
+  1020→            <ReviewsSection productId={product.id} reviews={product.reviews || []} reviewCount={product._count?.reviews || 0} rating={product.rating} />
+  1021→          </TabsContent>
+  1022→          <TabsContent value="qa" className="pt-4">
+  1023→            <ProductQASection productId={product.id} qaList={qaList} />
+  1024→          </TabsContent>
+  1025→        </Tabs>
+  1026→      </div>
+  1027→
+  1028→      {/* Similar Products */}
+  1029→      {similarProducts.length > 0 && (
+  1030→        <div className="mt-10">
+  1031→          <h2 className="text-xl font-bold mb-4">Similar Products</h2>
+  1032→          <ProductGrid products={similarProducts} />
+  1033→        </div>
+  1034→      )}
+  1035→
+  1036→      {/* Frequently Bought Together */}
+  1037→      {frequentlyBought.length > 0 && (
+  1038→        <div className="mt-10">
+  1039→          <h2 className="text-xl font-bold mb-4">Frequently Bought Together</h2>
+  1040→          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+  1041→            {frequentlyBought.map(p => <ProductCard key={p.id} product={p} />)}
+  1042→          </div>
+  1043→        </div>
+  1044→      )}
+  1045→
+  1046→      {/* Customers Also Bought */}
+  1047→      <div className="mt-10">
+  1048→        <h2 className="text-xl font-bold mb-4">Customers Also Bought</h2>
+  1049→        <CustomersAlsoBought productId={product.id} />
+  1050→      </div>
+  1051→    </div>
+  1052→  );
+  1053→}
+  1054→
+  1055→function Table({ children, className }: { children: React.ReactNode; className?: string }) {
+  1056→  return <div className={`rounded-lg border overflow-hidden ${className || ''}`}><table className="w-full text-sm">{children}</table></div>;
+  1057→}
+  1058→function TableBody({ children }: { children: React.ReactNode }) { return <tbody>{children}</tbody>; }
+  1059→function TableRow({ children, className }: { children: React.ReactNode; className?: string }) { return <tr className={`border-b last:border-0 ${className || ''}`}>{children}</tr>; }
+  1060→function TableCell({ children, className }: { children: React.ReactNode; className?: string }) { return <td className={`px-4 py-3 ${className || ''}`}>{children}</td>; }
+  1061→
+  1062→function CustomersAlsoBought({ productId }: { productId: string }) {
+  1063→  const { data: products = [], isLoading } = useQuery({
+  1064→    queryKey: ['customers-also-bought', productId],
+  1065→    queryFn: () => fetch(`/api/products?limit=8&exclude=${productId}`).then(r => r.json()).then((r: any) => (r.data || []).sort(() => Math.random() - 0.5).slice(0, 4)),
+  1066→    enabled: !!productId,
+  1067→  });
+  1068→  if (isLoading) return <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{Array.from({length:4}).map((_,i)=><Skeleton key={i} className="aspect-square rounded-xl" />)}</div>;
+  1069→  if (!products.length) return null;
+  1070→  return <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{products.map(p => <ProductCard key={p.id} product={p} />)}</div>;
+  1071→}
+  1072→
+  1073→function ReviewsSection({ productId, reviews, reviewCount, rating }: { productId: string; reviews: any[]; reviewCount: number; rating: number }) {
+  1074→  const { isAuthenticated, user } = useAuthStore();
+  1075→  const queryClient = useQueryClient();
+  1076→  const requireAuth = useRequireAuth();
+  1077→  const [showForm, setShowForm] = useState(false);
+  1078→  const [form, setForm] = useState({ rating: 5, title: '', comment: '', images: '' });
+  1079→  const [sortBy, setSortBy] = useState('latest');
+  1080→  const sortedReviews = useMemo(() => {
+  1081→    const r = [...reviews];
+  1082→    switch(sortBy) {
+  1083→      case 'highest': return r.sort((a,b) => b.rating - a.rating);
+  1084→      case 'lowest': return r.sort((a,b) => a.rating - b.rating);
+  1085→      case 'helpful': return r.sort((a,b) => (b.helpfulCount||0) - (a.helpfulCount||0));
+  1086→      default: return r.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  1087→    }
+  1088→  }, [reviews, sortBy]);
+  1089→
+  1090→  const submitReview = useMutation({
+  1091→    mutationFn: async () => {
+  1092→      const res = await fetch('/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user!.id, productId, rating: form.rating, title: form.title, comment: form.comment, images: form.images.trim() || undefined }) });
+  1093→      return res.json();
+  1094→    },
+  1095→    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['product', productId] }); toast.success('Review submitted!'); setShowForm(false); setForm({ rating: 5, title: '', comment: '', images: '' }); },
+  1096→    onError: () => toast.error('Failed to submit review'),
+  1097→  });
+  1098→
+  1099→  return (
+  1100→    <div className="space-y-6">
+  1101→      <div className="flex items-center justify-between">
+  1102→        <div className="flex items-center gap-4">
+  1103→          <div className="text-center"><div className="text-4xl font-bold">{rating}</div><StarRating rating={rating} size={16} /><p className="text-sm text-muted-foreground mt-1">{reviewCount} reviews</p></div>
+  1104→        </div>
+  1105→        {isAuthenticated && <Button variant="outline" onClick={() => { if (!requireAuth('write a review')) return; setShowForm(!showForm); }}>{showForm ? 'Cancel' : 'Write a Review'}</Button>}
+  1106→      </div>
+  1107→
+  1108→      {showForm && (
+  1109→        <Card className="p-4 space-y-4">
+  1110→          <div><Label>Rating</Label><div className="flex gap-1 mt-1">{[1,2,3,4,5].map(s => <button key={s} aria-label={`Rate ${s} out of 5 stars`} onClick={() => setForm(f => ({...f, rating: s}))}><Star size={24} className={s <= form.rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'} /></button>)}</div></div>
+  1111→          <div><Label>Title</Label><Input placeholder="Summary of your experience" value={form.title} onChange={e => setForm(f => ({...f, title: e.target.value}))} className="mt-1" /></div>
+  1112→          <div><Label>Review</Label><Textarea placeholder="Tell us more..." value={form.comment} onChange={e => setForm(f => ({...f, comment: e.target.value}))} className="mt-1" rows={3} /></div>
+  1113→          <div><Label>Images (URLs, one per line)</Label><Textarea placeholder="Paste image URLs here..." value={form.images} onChange={e => setForm(f => ({...f, images: e.target.value}))} className="mt-1" rows={2} /></div>
+  1114→          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => submitReview.mutate()} disabled={submitReview.isPending || !form.comment.trim()}>{submitReview.isPending ? 'Submitting...' : 'Submit Review'}</Button>
+  1115→        </Card>
+  1116→      )}
+  1117→
+  1118→      <div className="space-y-4">
+  1119→        <div className="flex items-center justify-between">
+  1120→          <span className="text-sm text-muted-foreground">Sort by:</span>
+  1121→          <Select value={sortBy} onValueChange={setSortBy}>
+  1122→            <SelectTrigger aria-label="Sort reviews" className="w-40 h-8 text-sm"><SelectValue /></SelectTrigger>
+  1123→            <SelectContent>
+  1124→              <SelectItem value="latest">Latest</SelectItem>
+  1125→              <SelectItem value="highest">Highest Rated</SelectItem>
+  1126→              <SelectItem value="lowest">Lowest Rated</SelectItem>
+  1127→              <SelectItem value="helpful">Most Helpful</SelectItem>
+  1128→            </SelectContent>
+  1129→          </Select>
+  1130→        </div>
+  1131→        {sortedReviews.length === 0 && <p className="text-muted-foreground text-center py-8">No reviews yet. Be the first to review!</p>}
+  1132→        {sortedReviews.map((review: any) => (
+  1133→          <Card key={review.id} className="p-4">
+  1134→            <div className="flex items-start justify-between">
+  1135→              <div className="flex items-center gap-3">
+  1136→                <Avatar className="h-10 w-10"><AvatarFallback>{review.user?.name?.[0] || 'U'}</AvatarFallback></Avatar>
+  1137→                <div>
+  1138→                  <p className="font-medium text-sm">{review.user?.name || 'Anonymous'}</p>
+  1139→                  {review.verifiedPurchase && <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs ml-2">✓ Verified Purchase</Badge>}
+  1140→                  <div className="flex items-center gap-2"><StarRating rating={review.rating} size={12} /><span className="text-xs text-muted-foreground">{new Date(review.createdAt).toLocaleDateString()}</span></div>
+  1141→                </div>
+  1142→              </div>
+  1143→            </div>
+  1144→            {review.title && <p className="font-medium mt-2">{review.title}</p>}
+  1145→            {review.comment && <p className="text-sm text-muted-foreground mt-1">{review.comment}</p>}
+  1146→            {review.images && (
+  1147→              <div className="flex gap-2 mt-2 flex-wrap">
+  1148→                {review.images.split(',').filter(Boolean).map((img: string, i: number) => (
+  1149→                  <img key={i} src={img.trim()} alt="Review" className="w-16 h-16 rounded-lg object-cover border" />
+  1150→                ))}
+  1151→              </div>
+  1152→            )}
+  1153→          </Card>
+  1154→        ))}
+  1155→      </div>
+  1156→    </div>
+  1157→  );
+  1158→}
+  1159→
+  1160→function ProductQASection({ productId, qaList }: { productId: string; qaList: any[] }) {
+  1161→  const { isAuthenticated, user } = useAuthStore();
+  1162→  const queryClient = useQueryClient();
+  1163→  const [showDialog, setShowDialog] = useState(false);
+  1164→  const [question, setQuestion] = useState('');
+  1165→
+  1166→  const submitQuestion = useMutation({
+  1167→    mutationFn: async () => {
+  1168→      const res = await fetch(`/api/products/${productId}/qa`, {
+  1169→        method: 'POST',
+  1170→        headers: { 'Content-Type': 'application/json' },
+  1171→        body: JSON.stringify({ userId: user!.id, question }),
+  1172→      });
+  1173→      return res.json();
+  1174→    },
+  1175→    onSuccess: () => {
+  1176→      queryClient.invalidateQueries({ queryKey: ['product-qa', productId] });
+  1177→      toast.success('Question submitted!');
+  1178→      setShowDialog(false);
+  1179→      setQuestion('');
+  1180→    },
+  1181→    onError: () => toast.error('Failed to submit question'),
+  1182→  });
+  1183→
+  1184→  return (
+  1185→    <div className="space-y-6">
+  1186→      <div className="flex items-center justify-between">
+  1187→        <div className="flex items-center gap-2">
+  1188→          <HelpCircle size={20} className="text-orange-500" />
+  1189→          <h3 className="text-lg font-bold">Questions & Answers</h3>
+  1190→          <Badge variant="secondary">{qaList.length}</Badge>
+  1191→        </div>
+  1192→        <Button variant="outline" onClick={() => { if (!isAuthenticated) { toast.info('Please login to ask a question'); return; } setShowDialog(true); }}>
+  1193→          <Send size={14} className="mr-1.5" />Ask Question
+  1194→        </Button>
+  1195→      </div>
+  1196→
+  1197→      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+  1198→        <DialogContent>
+  1199→          <DialogHeader>
+  1200→            <DialogTitle>Ask a Question</DialogTitle>
+  1201→            <DialogDescription>Get answers from the community and seller</DialogDescription>
+  1202→          </DialogHeader>
+  1203→          <div className="space-y-4 py-2">
+  1204→            <div>
+  1205→              <Label>Your Question</Label>
+  1206→              <Textarea placeholder="What would you like to know about this product?" value={question} onChange={e => setQuestion(e.target.value)} className="mt-1" rows={3} />
+  1207→            </div>
+  1208→          </div>
+  1209→          <DialogFooter>
+  1210→            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
+  1211→            <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => submitQuestion.mutate()} disabled={!question.trim() || submitQuestion.isPending}>
+  1212→              {submitQuestion.isPending ? 'Submitting...' : 'Submit Question'}
+  1213→            </Button>
+  1214→          </DialogFooter>
+  1215→        </DialogContent>
+  1216→      </Dialog>
+  1217→
+  1218→      <div className="space-y-4">
+  1219→        {qaList.length === 0 && (
+  1220→          <p className="text-muted-foreground text-center py-8">No questions yet. Be the first to ask!</p>
+  1221→        )}
+  1222→        {qaList.map((qa: any) => (
+  1223→          <Card key={qa.id} className="p-4">
+  1224→            <div className="flex items-start gap-3">
+  1225→              <Avatar className="h-8 w-8 shrink-0"><AvatarFallback className="text-xs">{qa.user?.name?.[0] || 'U'}</AvatarFallback></Avatar>
+  1226→              <div className="flex-1 min-w-0">
+  1227→                <div className="flex items-center gap-2">
+  1228→                  <p className="font-medium text-sm">{qa.user?.name || 'Anonymous'}</p>
+  1229→                  <span className="text-xs text-muted-foreground">{new Date(qa.createdAt).toLocaleDateString()}</span>
+  1230→                </div>
+  1231→                <p className="text-sm mt-1">{qa.question}</p>
+  1232→                {qa.answer && (
+  1233→                  <div className="mt-3 ml-4 pl-4 border-l-2 border-orange-500 bg-orange-50 dark:bg-orange-900/10 rounded-r-lg p-3">
+  1234→                    <div className="flex items-center gap-2 mb-1">
+  1235→                      <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Seller Answer</span>
+  1236→                    </div>
+  1237→                    <p className="text-sm text-muted-foreground">{qa.answer}</p>
+  1238→                  </div>
+  1239→                )}
+  1240→                {!qa.answer && (
+  1241→                  <p className="text-xs text-muted-foreground mt-1 italic">No answer yet</p>
+  1242→                )}
+  1243→              </div>
+  1244→            </div>
+  1245→          </Card>
+  1246→        ))}
+  1247→      </div>
+  1248→    </div>
+  1249→  );
+  1250→}
+  1251→
+  1252→// ============ CART PAGE ============
+  1253→
+  1254→function CartPage() {
+  1255→  const { items, removeItem, updateQuantity, getSubtotal, getShipping, getTax, getTotal, couponCode, couponDiscount, applyCoupon, removeCoupon, clearCart, addItem } = useCartStore();
+  1256→  const { navigateTo, isAuthenticated } = useNavigationStore();
+  1257→  const { data: coupons } = useQuery({ queryKey: ['coupons'], queryFn: () => fetch('/api/coupons').then(r => r.json()).then((r: ApiResponse<any[]>) => r.data || []) });
+  1258→  const [couponInput, setCouponInput] = useState('');
+  1259→  const [savedForLater, setSavedForLater] = useState<any[]>([]);
+  1260→  const qc = useQueryClient();
+  1261→
+  1262→  const handleApplyCoupon = () => {
+  1263→    const coupon = coupons?.find(c => c.code.toUpperCase() === couponInput.toUpperCase());
+  1264→    if (!coupon) { toast.error('Invalid coupon code'); return; }
+  1265→    const subtotal = getSubtotal();
+  1266→    if (coupon.minOrder && subtotal < coupon.minOrder) { toast.error(`Minimum order ₹${coupon.minOrder} required`); return; }
+  1267→    let discount = 0;
+  1268→    if (coupon.discountType === 'PERCENTAGE') discount = (subtotal * coupon.discountValue) / 100;
+  1269→    else discount = coupon.discountValue;
+  1270→    if (coupon.maxDiscount) discount = Math.min(discount, coupon.maxDiscount);
+  1271→    applyCoupon(coupon.code, discount);
+  1272→    toast.success(`Coupon applied! You save ${formatCurrency(discount)}`);
+  1273→  };
+  1274→
+  1275→  if (items.length === 0) {
+  1276→    return (
+  1277→      <div className="container mx-auto px-4 py-16 text-center">
+  1278→        <ShoppingCart size={64} className="mx-auto text-muted-foreground/30 mb-4" />
+  1279→        <h2 className="text-xl font-bold">Your cart is empty</h2>
+  1280→        <p className="text-muted-foreground mt-2">Add items to your cart to see them here</p>
+  1281→        <Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Continue Shopping</Button>
+  1282→      </div>
+  1283→    );
+  1284→  }
+  1285→
+  1286→  return (
+  1287→    <div className="container mx-auto px-4 py-6">
+  1288→      <h1 className="text-2xl font-bold mb-6">Shopping Cart ({items.length} items)</h1>
+  1289→      <div className="grid lg:grid-cols-3 gap-6">
+  1290→        <div className="lg:col-span-2 space-y-4">
+  1291→          {items.map(item => (
+  1292→            <Card key={item.productId} className="flex gap-4 p-4">
+  1293→              <div className="w-24 h-24 rounded-lg overflow-hidden bg-muted shrink-0">
+  1294→                {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={24} /></div>}
+  1295→              </div>
+  1296→              <div className="flex-1 min-w-0">
+  1297→                <h3 className="font-medium">{item.name}</h3>
+  1298→                <p className="text-sm text-muted-foreground">{item.vendorName}</p>
+  1299→                <p className="text-lg font-bold text-orange-500 mt-1">{formatCurrency(item.price)}</p>
+  1300→                <div className="flex items-center gap-3 mt-2">
+  1301→                  <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.productId, item.quantity - 1)}><Minus size={14} /></Button>
+  1302→                  <span className="w-8 text-center">{item.quantity}</span>
+  1303→                  <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.productId, Math.min(item.stock, item.quantity + 1))}><Plus size={14} /></Button>
+  1304→                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { removeItem(item.productId); toast.success('Removed'); }}><Trash2 size={16} className="mr-1" />Remove</Button>
+  1305→                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => { setSavedForLater(prev => [...prev, item]); removeItem(item.productId); toast.success('Saved for later'); }}>
+  1306→                    <Bookmark size={14} className="mr-1" />Save for Later
+  1307→                  </Button>
+  1308→                </div>
+  1309→              </div>
+  1310→              <div className="text-right shrink-0"><p className="font-bold">{formatCurrency(item.price * item.quantity)}</p></div>
+  1311→            </Card>
+  1312→          ))}
+  1313→        </div>
+  1314→        {savedForLater.length > 0 && (
+  1315→          <Card className="p-4 mt-4">
+  1316→            <h3 className="font-bold mb-3">Saved for Later ({savedForLater.length})</h3>
+  1317→            <div className="space-y-2">
+  1318→              {savedForLater.map(item => (
+  1319→                <div key={item.productId} className="flex items-center gap-3 p-2 border rounded-lg">
+  1320→                  {item.image && <img src={item.image} className="w-12 h-12 object-cover rounded" alt="" />}
+  1321→                  <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{item.name}</p><p className="text-sm text-orange-500 font-bold">₹{item.price.toLocaleString('en-IN')}</p></div>
+  1322→                  <Button size="sm" onClick={() => { setSavedForLater(prev => prev.filter(i => i.productId !== item.productId)); addItem(item); toast.success('Moved to cart'); }}>Move to Cart</Button>
+  1323→                </div>
+  1324→              ))}
+  1325→            </div>
+  1326→          </Card>
+  1327→        )}
+  1328→        <div>
+  1329→          <Card className="p-6 sticky top-24 space-y-4">
+  1330→            <h3 className="font-bold text-lg">Order Summary</h3>
+  1331→            <div className="space-y-2 text-sm">
+  1332→              <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(getSubtotal())}</span></div>
+  1333→              <div className="flex justify-between"><span>Shipping</span><span>{getShipping() === 0 ? <span className="text-green-600 font-medium">FREE</span> : formatCurrency(getShipping())}</span></div>
+  1334→              <div className="flex justify-between"><span>Tax (GST 18%)</span><span>{formatCurrency(getTax())}</span></div>
+  1335→              {couponDiscount > 0 && <div className="flex justify-between text-green-600"><span>Coupon Discount</span><span>-{formatCurrency(couponDiscount)}</span></div>}
+  1336→              <Separator />
+  1337→              <div className="flex justify-between text-lg font-bold"><span>Total</span><span className="text-orange-500">{formatCurrency(getTotal())}</span></div>
+  1338→            </div>
+  1339→            {!couponCode ? (
+  1340→              <div className="flex gap-2"><Input placeholder="Coupon code" value={couponInput} onChange={e => setCouponInput(e.target.value)} className="uppercase" /><Button variant="outline" onClick={handleApplyCoupon}>Apply</Button></div>
+  1341→            ) : (
+  1342→              <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 p-2 rounded"><span className="text-sm text-green-600">Code: {couponCode}</span><Button variant="ghost" size="sm" className="text-destructive h-6" onClick={removeCoupon}>Remove</Button></div>
+  1343→            )}
+  1344→            <div className="mt-3">
+  1345→              <p className="text-xs text-muted-foreground mb-2">Available Coupons:</p>
+  1346→              <div className="flex flex-wrap gap-2">
+  1347→                {coupons?.filter((c: any) => c.isActive).slice(0, 3).map((c: any) => (
+  1348→                  <Badge key={c.id} variant="outline" className="cursor-pointer hover:bg-orange-50 text-xs" onClick={() => setCouponInput(c.code)}>
+  1349→                    {c.code} - {c.discountType === 'PERCENTAGE' ? `${c.discountValue}% off` : `₹${c.discountValue} off`}
+  1350→                  </Badge>
+  1351→                ))}
+  1352→              </div>
+  1353→            </div>
+  1354→            <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 text-lg" onClick={() => { if (!isAuthenticated) { navigateTo('login'); toast.info('Please login first'); return; } navigateTo('checkout'); }}>
+  1355→              Proceed to Checkout
+  1356→            </Button>
+  1357→            <Button variant="ghost" className="w-full" onClick={() => navigateTo('home')}>Continue Shopping</Button>
+  1358→          </Card>
+  1359→        </div>
+  1360→      </div>
+  1361→    </div>
+  1362→  );
+  1363→}
+  1364→
+  1365→// ============ CHECKOUT PAGE ============
+  1366→
+  1367→function CheckoutPage() {
+  1368→  const { user, isAuthenticated } = useAuthStore();
+  1369→  const { items, getSubtotal, getShipping, getTax, getTotal, clearCart, couponDiscount } = useCartStore();
+  1370→  const { navigateTo } = useNavigationStore();
+  1371→  const [paymentMethod, setPaymentMethod] = useState('COD');
+  1372→  const [address, setAddress] = useState({ fullName: user?.name || '', phone: user?.phone || '', addressLine1: '', city: '', state: '', pincode: '' });
+  1373→  const [placing, setPlacing] = useState(false);
+  1374→  const [isGuest, setIsGuest] = useState(!isAuthenticated);
+  1375→  const [guestInfo, setGuestInfo] = useState({ email: '', phone: '' });
+  1376→  const [sameAddress, setSameAddress] = useState(true);
+  1377→  const [billingForm, setBillingForm] = useState({ fullName: '', phone: '', address: '', city: '', state: '', pincode: '' });
+  1378→  const qc = useQueryClient();
+  1379→
+  1380→  useEffect(() => { if (items.length === 0) navigateTo('cart'); }, [items.length, navigateTo]);
+  1381→  if (items.length === 0) return null;
+  1382→  if (!isAuthenticated && !isGuest) {
+  1383→    return (
+  1384→      <div className="container mx-auto px-4 py-16 max-w-lg text-center space-y-4">
+  1385→        <Package size={64} className="mx-auto text-muted-foreground/30" />
+  1386→        <h2 className="text-xl font-bold">Continue to Checkout</h2>
+  1387→        <p className="text-muted-foreground">Log in for a faster experience, or continue as guest.</p>
+  1388→        <div className="flex gap-3 justify-center">
+  1389→          <Button variant="outline" onClick={() => navigateTo('login')}>Login</Button>
+  1390→          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setIsGuest(true)}>Continue as Guest</Button>
+  1391→        </div>
+  1392→      </div>
+  1393→    );
+  1394→  }
+  1395→
+  1396→  const handlePlaceOrder = async () => {
+  1397→    if (!address.fullName || !address.phone || !address.addressLine1 || !address.city || !address.pincode) {
+  1398→      toast.error('Please fill all address fields'); return;
+  1399→    }
+  1400→    if (!isAuthenticated && (!guestInfo.email || !guestInfo.phone)) {
+  1401→      toast.error('Please fill guest email and phone'); return;
+  1402→    }
+  1403→    setPlacing(true);
+  1404→    try {
+  1405→      const res = await fetch('/api/orders', {
+  1406→        method: 'POST',
+  1407→        headers: { 'Content-Type': 'application/json' },
+  1408→        body: JSON.stringify({
+  1409→          ...(isAuthenticated ? { userId: user!.id } : { guestEmail: guestInfo.email, guestPhone: guestInfo.phone }),
+  1410→          items: items.map(i => ({ productId: i.productId, quantity: i.quantity })),
+  1411→          shippingAddress: `${address.fullName}, ${address.addressLine1}, ${address.city}, ${address.state} - ${address.pincode}, Phone: ${address.phone}`,
+  1412→          paymentMethod,
+  1413→        }),
+  1414→      });
+  1415→      const data = await res.json();
+  1416→      if (data.success) {
+  1417→        clearCart();
+  1418→        toast.success('Order placed successfully!');
+  1419→        navigateTo('orders');
+  1420→        qc.invalidateQueries({ queryKey: ['orders'] });
+  1421→      } else { toast.error(data.error || 'Failed to place order'); }
+  1422→    } catch { toast.error('Something went wrong'); }
+  1423→    setPlacing(false);
+  1424→  };
+  1425→
+  1426→  return (
+  1427→    <div className="container mx-auto px-4 py-6">
+  1428→      <h1 className="text-2xl font-bold mb-6">Checkout</h1>
+  1429→      {isGuest && !isAuthenticated && (
+  1430→        <Card className="p-4 mb-4">
+  1431→          <h3 className="font-semibold mb-3">Guest Information</h3>
+  1432→          <div className="grid sm:grid-cols-2 gap-3">
+  1433→            <div><Label>Email *</Label><Input className="mt-1" type="email" value={guestInfo.email} onChange={e => setGuestInfo(g => ({...g, email: e.target.value}))} /></div>
+  1434→            <div><Label>Phone *</Label><Input className="mt-1" value={guestInfo.phone} onChange={e => setGuestInfo(g => ({...g, phone: e.target.value}))} /></div>
+  1435→          </div>
+  1436→        </Card>
+  1437→      )}
+  1438→      <div className="grid lg:grid-cols-3 gap-6">
+  1439→        <div className="lg:col-span-2 space-y-6">
+  1440→          <Card className="p-6">
+  1441→            <h2 className="font-bold text-lg mb-4 flex items-center gap-2"><MapPin size={20} className="text-orange-500" />Shipping Address</h2>
+  1442→            <div className="grid sm:grid-cols-2 gap-4">
+  1443→              <div><Label>Full Name</Label><Input value={address.fullName} onChange={e => setAddress(a => ({...a, fullName: e.target.value}))} className="mt-1" /></div>
+  1444→              <div><Label>Phone</Label><Input value={address.phone} onChange={e => setAddress(a => ({...a, phone: e.target.value}))} className="mt-1" /></div>
+  1445→              <div className="sm:col-span-2"><Label>Address</Label><Textarea value={address.addressLine1} onChange={e => setAddress(a => ({...a, addressLine1: e.target.value}))} className="mt-1" /></div>
+  1446→              <div><Label>City</Label><Input value={address.city} onChange={e => setAddress(a => ({...a, city: e.target.value}))} className="mt-1" /></div>
+  1447→              <div><Label>State</Label><Input value={address.state} onChange={e => setAddress(a => ({...a, state: e.target.value}))} className="mt-1" /></div>
+  1448→              <div><Label>Pincode</Label><Input value={address.pincode} onChange={e => setAddress(a => ({...a, pincode: e.target.value}))} className="mt-1" /></div>
+  1449→            </div>
+  1450→          </Card>
+  1451→
+  1452→          <div className="flex items-center gap-2 mb-4">
+  1453→            <Checkbox id="same-billing" checked={sameAddress} onCheckedChange={(v) => setSameAddress(v === true)} />
+  1454→            <Label htmlFor="same-billing" className="text-sm">Billing address same as shipping</Label>
+  1455→          </div>
+  1456→          {!sameAddress && (
+  1457→            <Card className="p-4 mb-4 border-dashed">
+  1458→              <h3 className="font-semibold mb-3">Billing Address</h3>
+  1459→              <div className="grid sm:grid-cols-2 gap-3">
+  1460→                <div><Label>Full Name</Label><Input className="mt-1" value={billingForm.fullName} onChange={e => setBillingForm(f => ({...f, fullName: e.target.value}))} /></div>
+  1461→                <div><Label>Phone</Label><Input className="mt-1" value={billingForm.phone} onChange={e => setBillingForm(f => ({...f, phone: e.target.value}))} /></div>
+  1462→                <div className="sm:col-span-2"><Label>Address</Label><Textarea className="mt-1" rows={2} value={billingForm.address} onChange={e => setBillingForm(f => ({...f, address: e.target.value}))} /></div>
+  1463→                <div><Label>City</Label><Input className="mt-1" value={billingForm.city} onChange={e => setBillingForm(f => ({...f, city: e.target.value}))} /></div>
+  1464→                <div><Label>State</Label><Input className="mt-1" value={billingForm.state} onChange={e => setBillingForm(f => ({...f, state: e.target.value}))} /></div>
+
+[showing lines 965-1464 of 2320; use offset=1465 with limit to continue reading]

@@ -4,8 +4,9 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { authToast, vendorStatusToast } from '@/lib/auth-toast';
 import {
-  Package, ShoppingCart, DollarSign, Star, TrendingUp, BarChart3, Plus, Pencil, Trash2,
+  Package, ShoppingCart, ShoppingBag, DollarSign, Star, TrendingUp, BarChart3, Plus, Pencil, Trash2,
   Search, Filter, Eye, ChevronLeft, ChevronRight, Upload, Settings, Bell, LogOut,
   Store, Menu, X, User, AlertTriangle, CheckCircle, Clock, Truck, BoxIcon, XCircle, ShieldCheck,
   Wallet, Copy, Printer, ArrowDownUp, FileText, RotateCcw, Ban, Download, FileSpreadsheet, Tags,
@@ -26,6 +27,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuthStore, useNavigationStore } from '@/stores';
@@ -86,7 +88,7 @@ function VendorSidebar() {
         </nav>
       </ScrollArea>
       <div className="p-3 border-t space-y-1">
-        <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''} text-muted-foreground`} onClick={() => { logout(); setAppView('customer'); toast.success('Logged out'); }}>
+        <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''} text-muted-foreground`} onClick={() => { logout(); setAppView('customer'); authToast.logoutSuccess(); }}>
           <LogOut size={18} />{!collapsed && <span>Logout</span>}
         </Button>
         <Button variant="ghost" size="sm" aria-label="Toggle sidebar" className="w-full justify-center lg:hidden" onClick={() => setCollapsed(!collapsed)}>
@@ -123,7 +125,7 @@ function VendorMobileHeader() {
               </Button>
             ))}
             <Separator />
-            <Button variant="ghost" className="w-full justify-start gap-3 text-destructive" onClick={() => { logout(); setAppView('customer'); }}><LogOut size={18} />Logout</Button>
+            <Button variant="ghost" className="w-full justify-start gap-3 text-destructive" onClick={() => { authToast.logoutSuccess(); logout(); setAppView('customer'); }}><LogOut size={18} />Logout</Button>
           </div>
         </div>
       )}
@@ -249,6 +251,7 @@ function VendorProducts() {
   const [importOpen, setImportOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+  const [confirmImport, setConfirmImport] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['vendor-products', vendorId, page, search, statusFilter],
@@ -380,7 +383,14 @@ function VendorProducts() {
         <Table>
           <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="hidden md:table-cell">Category</TableHead><TableHead>Price</TableHead><TableHead>Stock</TableHead><TableHead className="hidden sm:table-cell">Status</TableHead><TableHead className="hidden sm:table-cell">Rating</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
           <TableBody>
-            {!data?.data?.length && <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No products found</TableCell></TableRow>}
+            {!data?.data?.length && (
+              <TableRow><TableCell colSpan={7} className="p-0"><div className="flex flex-col items-center justify-center py-16 text-center">
+                <Package size={48} className="text-muted-foreground/50 mb-4" />
+                <h3 className="font-medium text-lg mb-1">No products yet</h3>
+                <p className="text-muted-foreground text-sm mb-4">Add your first product to start selling</p>
+                <Button onClick={() => setVendorView('vendor-add-product')} className="bg-orange-500 hover:bg-orange-600"><Plus size={16} className="mr-1" />Add Product</Button>
+              </div></TableCell></TableRow>
+            )}
             {data?.data?.map(product => (
               <TableRow key={product.id}>
                 <TableCell>
@@ -425,11 +435,23 @@ function VendorProducts() {
         )}
       </Card>}
 
-      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Delete Product</DialogTitle><DialogDescription>Are you sure? This action cannot be undone.</DialogDescription></DialogHeader>
-          <DialogFooter><Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button><Button variant="destructive" onClick={() => deleteId && deleteMutation.mutate(deleteId)} disabled={deleteMutation.isPending}>Delete</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Delete Confirmation AlertDialog */}
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Product</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {data?.data?.find((p: Product) => p.id === deleteId)?.name || 'this product'}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => deleteId && deleteMutation.mutate(deleteId)} disabled={deleteMutation.isPending}>
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Bulk Import Dialog */}
       <Dialog open={importOpen} onOpenChange={(open) => { setImportOpen(open); if (!open) setImportFile(null); }}>
@@ -461,12 +483,30 @@ function VendorProducts() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setImportOpen(false); setImportFile(null); }}>Cancel</Button>
-            <Button className="bg-orange-500 hover:bg-orange-600" onClick={handleBulkImport} disabled={!importFile || importing}>
+            <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setConfirmImport(true)} disabled={!importFile || importing}>
               {importing ? 'Importing...' : 'Import Products'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Import Confirmation AlertDialog */}
+      <AlertDialog open={confirmImport} onOpenChange={setConfirmImport}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Bulk Import</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will create new products from the CSV file. Existing products won't be affected. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-orange-500 hover:bg-orange-600" onClick={() => { setConfirmImport(false); handleBulkImport(); }}>
+              Yes, Import
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -514,6 +554,12 @@ function VendorAddProduct() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      // Form validation
+      if (form.name.trim().length < 3) { toast.error('Product name must be at least 3 characters'); return { success: false, error: '' }; }
+      if (!form.price || parseFloat(form.price) <= 0) { toast.error('Price must be greater than 0'); return { success: false, error: '' }; }
+      if (parseInt(form.stock) < 0) { toast.error('Stock must be 0 or greater'); return { success: false, error: '' }; }
+      if (!form.categoryId) { toast.error('Please select a category'); return { success: false, error: '' }; }
+
       const finalImages = images.length > 0
         ? images.map((img, idx) => ({ url: img.url, alt: img.alt || form.name, sortOrder: idx }))
         : [{ url: `https://placehold.co/600x600/f97316/ffffff?text=${encodeURIComponent(form.name.substring(0, 15))}`, alt: form.name, sortOrder: 0 }];
@@ -539,7 +585,7 @@ function VendorAddProduct() {
     },
     onSuccess: (data) => {
       if (data.success) { toast.success(isEditing ? 'Product updated!' : 'Product created!'); qc.invalidateQueries({ queryKey: ['vendor-products'] }); setVendorView('vendor-products'); }
-      else toast.error(data.error || 'Failed to save product');
+      else if (data.error) toast.error(data.error || 'Failed to save product');
     },
     onError: () => toast.error('Failed to save product'),
   });
@@ -788,9 +834,15 @@ function VendorOrders() {
 
       {isLoading ? <div className="space-y-3">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
       <div className="space-y-4">
-        {!data?.data?.length && <Card className="p-8 text-center text-muted-foreground">No orders found</Card>}
+        {!data?.data?.length && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <ShoppingBag size={48} className="text-muted-foreground/50 mb-4" />
+            <h3 className="font-medium text-lg mb-1">No orders yet</h3>
+            <p className="text-muted-foreground text-sm">Orders will appear here when customers purchase your products</p>
+          </div>
+        )}
         {data?.data?.map(order => (
-          <Card key={order.id} className="p-4">
+          <Card key={order.id} className="p-4 hover:shadow-md transition-shadow">
             <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
               <div>
                 <p className="font-medium">Order #{order.orderNumber}</p>
@@ -811,9 +863,9 @@ function VendorOrders() {
               ))}
             </div>
             <div className="flex gap-2 flex-wrap">
-              {order.status === 'NEW' && <Button size="sm" variant="outline" onClick={() => updateMutation.mutate({ orderId: order.id, status: 'PROCESSING' })}><Clock size={14} className="mr-1" />Accept & Process</Button>}
-              {order.status === 'PROCESSING' && <Button size="sm" variant="outline" onClick={() => updateMutation.mutate({ orderId: order.id, status: 'PACKED' })}><BoxIcon size={14} className="mr-1" />Mark Packed</Button>}
-              {order.status === 'PACKED' && <Button size="sm" variant="outline" onClick={() => updateMutation.mutate({ orderId: order.id, status: 'SHIPPED' })}><Truck size={14} className="mr-1" />Mark Shipped</Button>}
+              {order.status === 'NEW' && <Button size="sm" variant="outline" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ orderId: order.id, status: 'PROCESSING' })}><Clock size={14} className="mr-1" />Accept & Process</Button>}
+              {order.status === 'PROCESSING' && <Button size="sm" variant="outline" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ orderId: order.id, status: 'PACKED' })}><BoxIcon size={14} className="mr-1" />Mark Packed</Button>}
+              {order.status === 'PACKED' && <Button size="sm" variant="outline" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ orderId: order.id, status: 'SHIPPED' })}><Truck size={14} className="mr-1" />Mark Shipped</Button>}
               <Button size="sm" variant="outline" onClick={() => openPrint(order, 'invoice')}><FileText size={14} className="mr-1" />Invoice</Button>
               <Button size="sm" variant="outline" onClick={() => openPrint(order, 'packing')}><Printer size={14} className="mr-1" />Packing Slip</Button>
               <Button size="sm" variant="outline" onClick={() => openPrint(order, 'shipping')}><Truck size={14} className="mr-1" />Shipping Label</Button>
@@ -1002,7 +1054,13 @@ function VendorReports() {
                 <TableCell><StarRating rating={p.rating} size={12} /></TableCell>
               </TableRow>
             ))}
-            {(!data?.topProducts?.length) && <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No data available</TableCell></TableRow>}
+            {(!data?.topProducts?.length) && (
+              <TableRow><TableCell colSpan={4} className="p-0"><div className="flex flex-col items-center justify-center py-16 text-center">
+                <BarChart3 size={48} className="text-muted-foreground/50 mb-4" />
+                <h3 className="font-medium text-lg mb-1">Not enough data to generate reports</h3>
+                <p className="text-muted-foreground text-sm">Reports will populate as you make sales</p>
+              </div></TableCell></TableRow>
+            )}
           </TableBody>
         </Table>
       </Card>
@@ -1052,6 +1110,15 @@ function VendorProfile() {
 // ============ VENDOR SETTINGS ============
 
 function VendorSettings() {
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    toast.success('Settings saved');
+    setSaving(false);
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div><h1 className="text-2xl font-bold">Settings</h1><p className="text-muted-foreground text-sm">Manage your vendor account settings</p></div>
@@ -1061,7 +1128,7 @@ function VendorSettings() {
           <div><Label>Business Name</Label><Input className="mt-1" defaultValue={useAuthStore.getState().user?.name || ''} /></div>
           <div><Label>Business Email</Label><Input className="mt-1" type="email" defaultValue={useAuthStore.getState().user?.email || ''} /></div>
           <div><Label>Business Phone</Label><Input className="mt-1" /></div>
-          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => toast.success('Settings saved')}>Save Changes</Button>
+          <Button className="bg-orange-500 hover:bg-orange-600" disabled={saving} onClick={handleSave}>{saving ? 'Saving...' : 'Save Changes'}</Button>
         </div>
       </Card>
     </div>
@@ -1079,6 +1146,14 @@ function VendorPendingPage() {
     queryFn: () => fetch(`/api/vendors/${vendorId}`).then(r => r.json()).then((r: any) => r.data),
     enabled: !!vendorId,
   });
+
+  // Show vendor status toast on mount
+  React.useEffect(() => {
+    if (vendorStatus && vendorStatus !== 'APPROVED') {
+      const timer = setTimeout(() => vendorStatusToast(vendorStatus, rejectionReason || undefined), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [vendorStatus]);
 
   // Sync vendor status from server
   React.useEffect(() => {
@@ -1185,7 +1260,7 @@ function VendorPendingPage() {
             onClick={() => {
               logout();
               setAppView('customer');
-              toast.success('Logged out');
+              authToast.logoutSuccess();
             }}
           >
             Back to Store
@@ -1194,9 +1269,10 @@ function VendorPendingPage() {
             <Button
               className="bg-orange-500 hover:bg-orange-600"
               onClick={() => {
+                authToast.logoutSuccess();
                 logout();
                 setAppView('customer');
-                toast.info('Please contact admin to re-apply');
+                toast.info('Please contact support to re-apply');
               }}
             >
               Contact Support
@@ -1306,7 +1382,13 @@ function VendorWalletPage() {
               <Table>
                 <TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right hidden sm:table-cell">Balance After</TableHead><TableHead className="hidden md:table-cell">Date</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {(!vendorData?.transactions?.length) && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No transactions yet</TableCell></TableRow>}
+                  {(!vendorData?.transactions?.length) && (
+                    <TableRow><TableCell colSpan={5} className="p-0"><div className="flex flex-col items-center justify-center py-16 text-center">
+                      <Wallet size={48} className="text-muted-foreground/50 mb-4" />
+                      <h3 className="font-medium text-lg mb-1">No transactions yet</h3>
+                      <p className="text-muted-foreground text-sm">Transactions will appear here once you start earning</p>
+                    </div></TableCell></TableRow>
+                  )}
                   {vendorData?.transactions?.map(tx => (
                     <TableRow key={tx.id}>
                       <TableCell><Badge variant="secondary" className={txTypeColor[tx.type] || ''}>{tx.type.replace(/_/g, ' ')}</Badge></TableCell>
@@ -1375,7 +1457,11 @@ function VendorInventoryPage() {
       <h2 className="text-2xl font-bold">Inventory History</h2>
       {isLoading ? <div className="space-y-3">{Array.from({length:5}).map((_,i)=><Skeleton key={i} className="h-12 rounded-lg" />)}</div> :
       history.length === 0 ? (
-        <Card className="p-8 text-center"><BoxIcon size={48} className="mx-auto text-muted-foreground/30 mb-3" /><p className="text-muted-foreground">No inventory changes recorded yet</p></Card>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <BoxIcon size={48} className="text-muted-foreground/50 mb-4" />
+          <h3 className="font-medium text-lg mb-1">No inventory history</h3>
+          <p className="text-muted-foreground text-sm">Inventory changes will be recorded when stock is updated</p>
+        </div>
       ) : (
         <Card>
           <Table><TableHeader><TableRow>
@@ -1420,6 +1506,13 @@ export default function VendorApp() {
     );
   }
 
+  // Auth guard: ensure user has VENDOR role
+  if (user?.role !== 'VENDOR') {
+    toast.warning('Unauthorized access', { description: 'Please log in as a vendor to access this panel.' });
+    useNavigationStore.getState().setAppView('customer');
+    return null;
+  }
+
   if (vendorStatus === 'PENDING' || vendorStatus === 'REJECTED') {
     return <VendorPendingPage />;
   }
@@ -1431,7 +1524,7 @@ export default function VendorApp() {
           <XCircle size={48} className="mx-auto text-red-500" />
           <h2 className="text-xl font-bold">Account Suspended</h2>
           <p className="text-sm text-muted-foreground">Your vendor account has been suspended. Please contact the admin for more information.</p>
-          <Button variant="outline" onClick={() => { useAuthStore.getState().logout(); useNavigationStore.getState().setAppView('customer'); }}>
+          <Button variant="outline" onClick={() => { authToast.logoutSuccess(); useAuthStore.getState().logout(); useNavigationStore.getState().setAppView('customer'); }}>
             Back to Store
           </Button>
         </Card>
@@ -1456,13 +1549,13 @@ export default function VendorApp() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="min-h-screen flex flex-col bg-background">
       <a href="#main-content" className="skip-link">Skip to main content</a>
       <VendorMobileHeader />
       <div className="flex flex-1">
         <VendorSidebar />
         <main id="main-content" className="flex-1 overflow-auto" role="main">{renderView()}</main>
       </div>
-    </div>
+    </motion.div>
   );
 }

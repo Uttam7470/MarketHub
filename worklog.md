@@ -428,3 +428,188 @@ Stage Summary:
 - First image auto-tagged as "Main" product photo
 - Editing existing products loads and displays current images
 - PUT API now properly updates images (was previously ignoring them)
+
+---
+Task ID: 1-b
+Agent: vendor-ui-agent
+Task: VendorApp.tsx polish — toasts, auth guards, validation, loading states, confirmations, empty states, UX
+
+Work Log:
+- Fixed mobile header logout (line ~128): added `authToast.logoutSuccess()` before `logout()` call
+- Fixed rejected page "Contact Support" logout (line ~1207): added `authToast.logoutSuccess()` before `logout()` call
+- Fixed suspended page "Back to Store" logout (line ~1445): added `authToast.logoutSuccess()` before `logout()` call
+- Added vendor auth guard after isAuthenticated check: redirects non-VENDOR role users with toast.warning
+- Added form validation to VendorAddProduct save mutation: product name ≥ 3 chars, price > 0, stock ≥ 0, category required
+- Modified saveMutation onSuccess to skip generic error toast when validation returns empty error string
+- Added `disabled={updateMutation.isPending}` to all order action buttons (Accept, Mark Packed, Mark Shipped)
+- Enhanced VendorSettings with proper saving state: `saving` useState, fake 800ms delay, disabled button + "Saving..." text
+- Replaced delete product Dialog with AlertDialog showing product name: "Are you sure you want to delete {name}?"
+- Added AlertDialog confirmation for bulk CSV import: "This will create new products. Existing products won't be affected."
+- Enhanced all empty states with icons, friendly messages, and consistent styling:
+  - Products: Package icon + "No products yet" + Add Product CTA button
+  - Orders: ShoppingBag icon + "No orders yet" + informational text
+  - Wallet transactions: Wallet icon + "No transactions yet"
+  - Inventory: BoxIcon icon + "No inventory history"
+  - Reports top products: BarChart3 icon + "Not enough data to generate reports"
+- Wrapped main VendorApp return in `<motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.2}}>`
+- Added `hover:shadow-md transition-shadow` to vendor order cards
+- Added ShoppingBag to lucide-react imports, added AlertDialog imports from @/components/ui/alert-dialog
+- ESLint passes with zero errors, dev server compiles successfully
+
+Stage Summary:
+- All 7 requirement areas implemented: mobile logout toasts, vendor auth guard, form validation, loading states, confirmation dialogs, empty states, UX improvements
+- No existing functionality broken
+- All shadcn/ui components used (AlertDialog) already existed in src/components/ui/
+- File size remains reasonable (~1560 lines)
+
+---
+Task ID: 1-d
+Agent: Main
+Task: Error pages, Notification Center API polling, and API validation security
+
+Work Log:
+- Updated `src/app/not-found.tsx` with enhanced 404 page: orange icon circle, FileQuestion icon, 6xl 404 text, Go Home button with Link
+- Updated `src/app/error.tsx` with enhanced error boundary: red icon circle, AlertTriangle icon, Try Again + Go Home buttons
+- Created `src/app/global-error.tsx` for fatal/root layout errors: includes own `<html><body>` tags, 500 Server Error message, Reload button
+- Created `src/hooks/use-notifications.ts` custom hook: uses TanStack Query with 30s auto-polling, syncs unread count to useNotificationStore, scoped by user ID
+- Enhanced CustomerApp notification center: replaced inline useQuery with useNotifications hook (adds 30s auto-poll), integrated useNotificationStore for immediate UI sync on mark-all-read, updated notification API GET to support `limit` query parameter
+- Added GST number format validation to `/api/auth/vendor-register` (regex: 2 digits + 5 uppercase + 4 digits + 1 uppercase + 1 alphanumeric + Z + 1 alphanumeric)
+- Added PAN number format validation to `/api/auth/vendor-register` (regex: 5 uppercase + 4 digits + 1 uppercase)
+- Added email format validation to `/api/auth` POST (login) and PUT (register) handlers
+- Added password minimum length validation (6 chars) to `/api/auth` PUT (register) handler
+- Added comprehensive order creation validation to `/api/orders` POST:
+  - Items must be non-empty array
+  - Shipping address required with name, address, city, pincode, phone fields
+  - Pincode must be exactly 6 digits
+  - Phone must be at least 10 digits (strips non-digits)
+  - Payment method required
+
+Stage Summary:
+- 3 error pages created/updated (not-found, error, global-error) for graceful error handling
+- Notification polling hook with 30s auto-refresh and store synchronization
+- CustomerApp header notifications now auto-refresh every 30 seconds via hook
+- 4 API routes hardened with input validation (vendor-register, auth login/register, orders)
+- ESLint passes clean with zero errors
+
+
+---
+Task ID: 1-a
+Agent: Customer Notifications & UX Agent
+Task: Enhance CustomerApp.tsx with descriptive toasts, auth guards, form validation, confirmation dialogs, empty states, and UX polish
+
+Work Log:
+- Shopping Notifications: Updated coupon toasts with descriptive messages ("Coupon applied!" + "You save ₹X"), error toasts with descriptions for invalid code and minimum order not met
+- Replaced cart page "Remove" direct action with AlertDialog confirmation dialog ("Remove {name} from cart?")
+- Updated reorder toast to "Items added to cart" with description
+- Updated cancel order toast with "Refund will be processed." description
+- Updated return request toast with "We will review your request shortly." description
+- Updated order placed toast with "Your order has been confirmed." description
+- Auth Guards: Added requireAuth to compare toggle in ProductCard, replaced inline auth checks in CartPage checkout button with requireAuth('proceed to checkout')
+- Checkout Validation: Replaced generic "fill all address fields" error with specific per-field validation (name, address, city, pincode 6-digit, phone 10-digit) using regex
+- Form Validation - Login: Added EMAIL_REGEX email format check, password min 6 chars
+- Form Validation - Register: Added EMAIL_REGEX email check, password min 6, confirm password match
+- Added confirmPassword field to register form and updated all demo button reset calls
+- Form Validation - Vendor Register: Added email format, phone 10-digit, GST 15-char, PAN format (5A+4D+1A regex), business name required
+- Empty States: Standardized all empty states to use `flex flex-col items-center justify-center py-16 text-center` layout
+  - Cart (CartSheet): Changed icon to ShoppingBag, button to "Browse Products"
+  - Cart (CartPage): Changed icon to ShoppingBag, button to "Browse Products"
+  - Orders: Added "When you place your first order, it will appear here" subtitle
+  - Wishlist: Changed title to "No items in wishlist", subtitle to "Save items you love for later", button to "Discover Products"
+  - Compare: Updated to standardized layout format
+  - Search: Changed "No products found" to "No results found", added "Clear search" button that resets all filters
+- UX Improvements: Wrapped CustomerApp root in `<motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.2}}>`
+- Removed cursor-pointer from non-interactive footer elements (About Us, Returns & Refunds, Shipping Info, Privacy Policy, Terms & Conditions)
+- Verified all linting passes with zero errors
+
+Stage Summary:
+- All toast notifications now use descriptive titles + descriptions per spec
+- All restricted actions (cart, wishlist, compare, checkout, review) use requireAuth with consistent "Login required" + "Please log in to X" warning
+- Form validation covers email format, password length, confirm password, phone digits, GST/PAN formats
+- AlertDialog confirmations for cart item removal in both CartSheet and CartPage
+- Checkout address validation is field-specific with regex patterns
+- All empty states follow consistent design pattern with icon + title + subtitle + CTA
+- CustomerApp fades in smoothly with framer-motion
+- Non-interactive elements no longer show pointer cursor
+
+---
+Task ID: 1-a
+Agent: full-stack-developer
+Task: CustomerApp UX overhaul — toasts, auth guards, validation, confirm dialogs, empty states
+
+Work Log:
+- Enhanced all shopping toasts with descriptions (cart add/remove, wishlist, compare, coupon)
+- Added requireAuth() helper for restricted actions (add to cart, wishlist, compare, review, checkout)
+- Enhanced checkout validation with pincode (6 digits) and phone (10 digits) regex
+- Enhanced order toasts: placed, cancelled, return request, reorder
+- Added form validation to LoginPage: email regex, password min 6, confirm match
+- Added vendor registration validation: phone 10 digits, GST/PAN format
+- Added AlertDialog confirmation for cart item removal and order cancellation
+- Enhanced empty states: cart (ShoppingBag), wishlist (Heart), orders (Package), search (SearchX)
+- Wrapped CustomerApp in motion.div with fade-in transition
+- Removed cursor-pointer from non-interactive footer elements
+
+Stage Summary:
+- All 13 feature areas implemented for CustomerApp
+- Zero lint errors, zero browser console errors
+
+---
+Task ID: 1-b
+Agent: full-stack-developer
+Task: VendorApp UX overhaul — auth guards, validation, confirm dialogs, empty states
+
+Work Log:
+- Fixed all 3 mobile logout locations to include authToast.logoutSuccess()
+- Added auth guard: role !== 'VENDOR' redirects with toast.warning
+- Added product form validation: name ≥ 3 chars, price > 0, stock ≥ 0, category required
+- Added disabled states to order action buttons and settings save
+- Replaced delete product Dialog with AlertDialog confirmation
+- Added AlertDialog confirmation for CSV import
+- Enhanced empty states: Products, Orders, Wallet, Inventory, Reports (icons + messages + CTAs)
+- Wrapped VendorApp in motion.div fade-in
+- Added hover:shadow-md to order cards
+
+Stage Summary:
+- All vendor-side UX improvements implemented
+- Zero lint errors
+
+---
+Task ID: 1-c
+Agent: Main
+Task: AdminApp UX overhaul — auth guard, confirm dialogs, empty states, toasts
+
+Work Log:
+- Added auth guard at top of AdminApp: redirects non-admins with toast.warning
+- Added ConfirmContext.Provider + AlertDialog for all delete/suspend/reject confirmations
+- Moved useState/useCallback hooks before early return (fixed React hooks rule)
+- Moved useConfirm() calls to top of AdminVendors, AdminCategories, AdminBrands (fixed hooks-in-callback)
+- Enhanced toasts with descriptions: vendor approved, brand created, settings saved, reply sent
+- Enhanced empty states with icons: Vendors (Store), Categories (FolderOpen), Brands (Tag), Orders (Package), Flash Sales (Zap), FAQ (HelpCircle), Admin Users (UserCog)
+- Fixed duplicate JSX closing brace in AdminOrders
+- Wrapped AdminApp in motion.div fade-in
+
+Stage Summary:
+- Admin panel now has auth guard, working confirmation dialogs, enhanced empty states
+- ConfirmContext properly provided and consumed
+- Zero lint errors
+
+---
+Task ID: 1-d
+Agent: full-stack-developer
+Task: Error pages, notification center, API validation
+
+Work Log:
+- Updated not-found.tsx with orange FileQuestion icon, 404 heading, Go Home button
+- Updated error.tsx with red AlertTriangle icon, Try Again + Go Home buttons
+- Created global-error.tsx for fatal errors (includes own html/body)
+- Created src/hooks/use-notifications.ts with 30-second auto-polling
+- Enhanced CustomerApp notification center to use useNotifications() hook
+- Added email format validation to auth POST and PUT handlers
+- Added password length validation to auth PUT handler
+- Added GST/PAN format validation to vendor-register handler
+- Added comprehensive order creation validation (items, address, pincode, phone, payment method)
+
+Stage Summary:
+- 3 error pages (404, error, global-error) with professional UX
+- Notification polling hook with 30s auto-refresh
+- 5 API validation enhancements across auth and orders
+- Zero lint errors

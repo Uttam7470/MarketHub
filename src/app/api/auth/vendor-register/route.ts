@@ -37,6 +37,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Validate GST number format if provided
+    if (gstNumber && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstNumber)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid GST number format' },
+        { status: 400 }
+      );
+    }
+
+    // Validate PAN number format if provided
+    if (panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panNumber)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid PAN number format' },
+        { status: 400 }
+      );
+    }
+
     // Check if email already exists
     const existing = await db.user.findUnique({ where: { email } });
     if (existing) {

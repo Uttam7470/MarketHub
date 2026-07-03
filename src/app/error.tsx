@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 
 export default function Error({
   error,
@@ -12,27 +12,27 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('Application error:', error);
+    console.error(error);
   }, [error]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="max-w-md w-full text-center space-y-6">
-        <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mx-auto">
-          <AlertTriangle size={40} className="text-red-500" />
+    <div className="min-h-screen flex items-center justify-center px-4 bg-background">
+      <div className="text-center max-w-md">
+        <div className="w-24 h-24 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-6">
+          <AlertTriangle size={48} className="text-red-500" />
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">Something went wrong!</h1>
-          <p className="text-muted-foreground mt-2">
-            We encountered an unexpected error. Please try again.
-          </p>
-        </div>
-        <Button onClick={reset} className="bg-orange-500 hover:bg-orange-600">
-          Try Again
-        </Button>
-        <p className="text-xs text-muted-foreground">
-          Error: {error.message}
+        <h1 className="text-4xl font-bold mb-2">Something went wrong</h1>
+        <p className="text-muted-foreground mb-8">
+          An unexpected error occurred. Please try again.
         </p>
+        <div className="flex gap-3 justify-center">
+          <Button onClick={reset} variant="outline">
+            <RefreshCw size={16} className="mr-2" />Try Again
+          </Button>
+          <Button onClick={() => window.location.href = '/'} className="bg-orange-500 hover:bg-orange-600">
+            <Home size={16} className="mr-2" />Go Home
+          </Button>
+        </div>
       </div>
     </div>
   );

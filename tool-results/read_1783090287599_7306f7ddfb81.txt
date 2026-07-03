@@ -1,0 +1,502 @@
+   700→              <Slider min={0} max={100000} step={1000} value={priceRange} onValueChange={(v) => { setPriceRange(v as [number, number]); }} className="mt-2" />
+   701→              <div className="flex justify-between text-sm mt-2"><span>{formatCurrency(priceRange[0])}</span><span>{formatCurrency(priceRange[1])}</span></div>
+   702→            </AccordionContent>
+   703→          </AccordionItem>
+   704→        </Accordion>
+   705→      </div>
+   706→    </div>
+   707→  );
+   708→}
+   709→
+   710→// ============ PRODUCTS LIST PAGE ============
+   711→
+   712→function ProductsPage() {
+   713→  const { selectedCategory, selectedBrand, searchQuery, priceRange, sortBy, setPriceRange, setSortBy, setSelectedBrand } = useNavigationStore();
+   714→  const [page, setPage] = useState(1);
+   715→  const [mobileFilters, setMobileFilters] = useState(false);
+   716→  const [minPrice, maxPrice] = priceRange;
+   717→
+   718→  const queryParams = new URLSearchParams({ page: String(page), limit: '20', sort: sortBy, minPrice: String(minPrice), maxPrice: String(maxPrice) });
+   719→  if (selectedCategory) queryParams.set('category', selectedCategory);
+   720→  if (selectedBrand) queryParams.set('brand', selectedBrand);
+   721→  if (searchQuery) queryParams.set('search', searchQuery);
+   722→
+   723→  const { data, isLoading } = useQuery({
+   724→    queryKey: ['products', queryParams.toString()],
+   725→    queryFn: () => fetch(`/api/products?${queryParams}`).then(r => r.json()).then((r: ApiResponse<Product[]>) => r),
+   726→  });
+   727→
+   728→  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: ApiResponse<Category[]>) => r.data || []) });
+   729→  const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: ApiResponse<Brand[]>) => r.data || []) });
+   730→
+   731→  const allCategories = useMemo(() => {
+   732→    const flat: Category[] = [];
+   733→    categories?.forEach(c => { flat.push(c); c.children?.forEach(ch => flat.push(ch)); });
+   734→    return flat;
+   735→  }, [categories]);
+   736→
+   737→  return (
+   738→    <div className="container mx-auto px-4 py-6">
+   739→      <Breadcrumb className="mb-4">
+   740→        <BreadcrumbList><BreadcrumbItem><BreadcrumbLink onClick={() => useNavigationStore.getState().setCustomerView('home')} className="cursor-pointer">Home</BreadcrumbLink></BreadcrumbItem><BreadcrumbSeparator /><BreadcrumbItem><BreadcrumbLink className="text-foreground font-medium">{searchQuery ? `Search: "${searchQuery}"` : selectedCategory || 'All Products'}</BreadcrumbLink></BreadcrumbItem></BreadcrumbList>
+   741→      </Breadcrumb>
+   742→
+   743→      <div className="flex gap-6">
+   744→        {/* Desktop Filters */}
+   745→        <aside className="hidden lg:block w-64 shrink-0"><FilterSidebarContent allCategories={allCategories} allBrands={brands || []} /></aside>
+   746→
+   747→        {/* Main Content */}
+   748→        <div className="flex-1 min-w-0">
+   749→          <div className="flex items-center justify-between mb-4">
+   750→            <p className="text-sm text-muted-foreground">{data?.meta ? `${data.meta.total} products found` : ''}</p>
+   751→            <div className="flex items-center gap-2">
+   752→              <Button variant="outline" size="sm" className="lg:hidden" onClick={() => setMobileFilters(true)}><SlidersHorizontal size={16} className="mr-1.5" />Filters</Button>
+   753→              <Select value={sortBy} onValueChange={(v) => { setSortBy(v); setPage(1); }}>
+   754→                <SelectTrigger className="w-40 h-9"><SelectValue /></SelectTrigger>
+   755→                <SelectContent>
+   756→                  <SelectItem value="newest">Newest First</SelectItem>
+   757→                  <SelectItem value="price-asc">Price: Low to High</SelectItem>
+   758→                  <SelectItem value="price-desc">Price: High to Low</SelectItem>
+   759→                  <SelectItem value="rating">Highest Rated</SelectItem>
+   760→                  <SelectItem value="popular">Most Popular</SelectItem>
+   761→                </SelectContent>
+   762→              </Select>
+   763→            </div>
+   764→          </div>
+   765→          <ProductGrid products={data?.data || []} loading={isLoading} />
+   766→          {data?.meta && data.meta.totalPages > 1 && (
+   767→            <div className="flex items-center justify-center gap-2 mt-6">
+   768→              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></Button>
+   769→              {Array.from({ length: Math.min(data.meta.totalPages, 5) }, (_, i) => i + 1).map(p => (
+   770→                <Button key={p} variant={p === page ? 'default' : 'outline'} size="sm" className="bg-orange-500 hover:bg-orange-600" onClick={() => setPage(p)}>{p}</Button>
+   771→              ))}
+   772→              <Button variant="outline" size="sm" disabled={page >= data.meta.totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
+   773→            </div>
+   774→          )}
+   775→        </div>
+   776→      </div>
+   777→
+   778→      {/* Mobile Filters Sheet */}
+   779→      <Sheet open={mobileFilters} onOpenChange={setMobileFilters}>
+   780→        <SheetContent side="left" className="w-80"><SheetHeader><SheetTitle>Filters</SheetTitle></SheetHeader><div className="mt-4"><FilterSidebarContent allCategories={allCategories} allBrands={brands || []} /></div></SheetContent>
+   781→      </Sheet>
+   782→    </div>
+   783→  );
+   784→}
+   785→
+   786→// ============ PRODUCT DETAIL PAGE ============
+   787→
+   788→function ProductDetailPage() {
+   789→  const { selectedProductId } = useNavigationStore();
+   790→  const { data: product, isLoading } = useQuery({
+   791→    queryKey: ['product', selectedProductId],
+   792→    queryFn: () => fetch(`/api/products/${selectedProductId}`).then(r => r.json()).then((r: ApiResponse<Product>) => r.data),
+   793→    enabled: !!selectedProductId,
+   794→  });
+   795→  const { isAuthenticated, user } = useAuthStore();
+   796→  const { addItem } = useCartStore();
+   797→  const { toggleItem, hasItem } = useWishlistStore();
+   798→  const requireAuth = useRequireAuth();
+   799→  const [selectedImage, setSelectedImage] = useState(0);
+   800→  const [quantity, setQuantity] = useState(1);
+   801→  const [activeTab, setActiveTab] = useState('specs');
+   802→  const [pincode, setPincode] = useState('');
+   803→  const [checkingPincode, setCheckingPincode] = useState(false);
+   804→  const [deliveryResult, setDeliveryResult] = useState<{available: boolean; date?: string} | null>(null);
+   805→  const [showWishlistConfirm, setShowWishlistConfirm] = useState(false);
+   806→  const checkPincode = async () => {
+   807→    setCheckingPincode(true);
+   808→    try {
+   809→      const res = await fetch(`/api/products/${selectedProductId}/delivery-check?pincode=${pincode}`);
+   810→      const data = await res.json();
+   811→      setDeliveryResult(data.data || { available: false });
+   812→    } catch { setDeliveryResult({ available: false }); }
+   813→    setCheckingPincode(false);
+   814→  };
+   815→
+   816→  const { data: similarProducts = [] } = useQuery({
+   817→    queryKey: ['similar-products', selectedProductId, product?.categoryId],
+   818→    queryFn: () => fetch(`/api/products?categoryId=${product?.categoryId}&limit=4`).then(r => r.json()).then((r: any) => (r.data || []).filter((p: any) => p.id !== selectedProductId).slice(0, 4)),
+   819→    enabled: !!product?.categoryId,
+   820→  });
+   821→
+   822→  const { data: frequentlyBought = [] } = useQuery({
+   823→    queryKey: ['frequently-bought', selectedProductId, product?.vendorId],
+   824→    queryFn: () => fetch(`/api/products?vendorId=${product?.vendorId}&limit=4`).then(r => r.json()).then((r: any) => (r.data || []).filter((p: any) => p.id !== selectedProductId).slice(0, 4)),
+   825→    enabled: !!product?.vendorId,
+   826→  });
+   827→
+   828→  const { data: qaList = [] } = useQuery({
+   829→    queryKey: ['product-qa', selectedProductId],
+   830→    queryFn: () => fetch(`/api/products/${selectedProductId}/qa`).then(r => r.json()).then((r: any) => r.data || []),
+   831→    enabled: !!selectedProductId,
+   832→  });
+   833→
+   834→  const variantsByType = useMemo(() => {
+   835→    const map: Record<string, string[]> = {};
+   836→    product?.variants?.forEach(v => { if (!map[v.name]) map[v.name] = []; if (!map[v.name].includes(v.value)) map[v.name].push(v.value); });
+   837→    return map;
+   838→  }, [product?.variants]);
+   839→
+   840→  if (isLoading) return <div className="container mx-auto px-4 py-8"><Skeleton className="h-96 rounded-xl" /></div>;
+   841→  if (!product) return <div className="container mx-auto px-4 py-16 text-center"><p className="text-muted-foreground">Product not found</p></div>;
+   842→
+   843→  const isWishlisted = hasItem(product.id);
+   844→  const discount = discountPercent(product.price, product.compareAtPrice);
+   845→  const mainImage = product.images?.[selectedImage]?.url;
+   846→
+   847→  return (
+   848→    <div className="container mx-auto px-4 py-6">
+   849→      <Breadcrumb className="mb-6">
+   850→        <BreadcrumbList>
+   851→          <BreadcrumbItem><BreadcrumbLink onClick={() => useNavigationStore.getState().setCustomerView('home')} className="cursor-pointer">Home</BreadcrumbLink></BreadcrumbItem>
+   852→          <BreadcrumbSeparator />
+   853→          <BreadcrumbItem><BreadcrumbLink onClick={() => { useNavigationStore.getState().setSelectedCategory(product.category?.slug || null); useNavigationStore.getState().setCustomerView('products'); }} className="cursor-pointer">{product.category?.name}</BreadcrumbLink></BreadcrumbItem>
+   854→          <BreadcrumbSeparator />
+   855→          <BreadcrumbItem><BreadcrumbLink className="text-foreground font-medium truncate max-w-48">{product.name}</BreadcrumbLink></BreadcrumbItem>
+   856→        </BreadcrumbList>
+   857→      </Breadcrumb>
+   858→
+   859→      <div className="grid md:grid-cols-2 gap-8">
+   860→        {/* Images */}
+   861→        <div className="space-y-3">
+   862→          <div className="aspect-square rounded-xl overflow-hidden bg-muted/30 border">
+   863→            {mainImage ? <img src={mainImage} alt={product.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={64} className="text-muted-foreground/30" /></div>}
+   864→          </div>
+   865→          {product.images && product.images.length > 1 && (
+   866→            <div className="flex gap-2 overflow-x-auto pb-1">{product.images.map((img, i) => (
+   867→              <button key={img.id} className={`w-16 h-16 rounded-lg overflow-hidden border-2 shrink-0 ${i === selectedImage ? 'border-orange-500' : 'border-transparent'}`} onClick={() => setSelectedImage(i)}>
+   868→                <img src={img.url} alt={img.alt || ''} className="w-full h-full object-cover" />
+   869→              </button>
+   870→            ))}</div>
+   871→          )}
+   872→        </div>
+   873→
+   874→        {/* Product Info */}
+   875→        <div className="space-y-4">
+   876→          <div>
+   877→            <p className="text-sm text-muted-foreground mb-1">Brand: <span className="text-foreground font-medium">{product.brand?.name}</span></p>
+   878→            <h1 className="text-2xl md:text-3xl font-bold">{product.name}</h1>
+   879→            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+   880→              <StarRating rating={product.rating} /> <span>{product.rating}</span> ({product.reviewCount} reviews) | {product.totalSold} sold
+   881→            </p>
+   882→          </div>
+   883→
+   884→          <div className="flex items-baseline gap-3">
+   885→            <span className="text-3xl font-bold text-orange-500">{formatCurrency(product.price)}</span>
+   886→            {product.compareAtPrice && product.compareAtPrice > product.price && (
+   887→              <>
+   888→                <span className="text-xl text-muted-foreground line-through">{formatCurrency(product.compareAtPrice)}</span>
+   889→                <Badge className="bg-green-600">{discount}% OFF</Badge>
+   890→              </>
+   891→            )}
+   892→          </div>
+   893→
+   894→          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+   895→            <span className={`font-medium ${product.stock > 5 ? 'text-green-600' : product.stock > 0 ? 'text-amber-600' : 'text-red-600'}`}>
+   896→              {product.stock > 5 ? 'In Stock' : product.stock > 0 ? `Only ${product.stock} left` : 'Out of Stock'}
+   897→            </span>
+   898→            <span>|</span>
+   899→            <span>Sold by: <span className="text-orange-500 font-medium">{product.vendor?.businessName}</span></span>
+   900→          </div>
+   901→          <div className="flex items-center gap-2 mt-2">
+   902→            <MapPin size={16} className="text-orange-500 shrink-0" />
+   903→            <Input placeholder="Enter pincode" className="h-8 w-36 text-sm" value={pincode} onChange={e => setPincode(e.target.value)} maxLength={6} />
+   904→            <Button size="sm" variant="outline" className="h-8" onClick={checkPincode} disabled={pincode.length !== 6 || checkingPincode}>
+   905→              {checkingPincode ? 'Checking...' : 'Check'}
+   906→            </Button>
+   907→            {deliveryResult && (
+   908→              <span className={`text-xs font-medium ${deliveryResult.available ? 'text-green-600' : 'text-red-500'}`}>
+   909→                {deliveryResult.available ? `✓ Delivery available by ${deliveryResult.date}` : '✗ Delivery not available'}
+   910→              </span>
+   911→            )}
+   912→          </div>
+   913→
+   914→          <Separator />
+   915→
+   916→          {/* Variants */}
+   917→          {Object.entries(variantsByType).map(([type, values]) => (
+   918→            <div key={type}>
+   919→              <Label className="text-sm font-medium mb-2 block">{type}</Label>
+   920→              <div className="flex gap-2 flex-wrap">
+   921→                {values.map(v => (
+   922→                  <Button key={v} variant="outline" size="sm" className={type === 'Color' ? `w-10 h-10 p-0 rounded-full` : ''}>{v}</Button>
+   923→                ))}
+   924→              </div>
+   925→            </div>
+   926→          ))}
+   927→
+   928→          {/* Quantity */}
+   929→          <div>
+   930→            <Label className="text-sm font-medium mb-2 block">Quantity</Label>
+   931→            <div className="flex items-center gap-3">
+   932→              <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.max(1, q - 1))}><Minus size={16} /></Button>
+   933→              <span className="w-10 text-center font-medium">{quantity}</span>
+   934→              <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.min(product.stock, q + 1))}><Plus size={16} /></Button>
+   935→            </div>
+   936→          </div>
+   937→
+   938→          {/* Actions */}
+   939→          <div className="flex gap-3 pt-2">
+   940→            <Button size="lg" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white h-12" disabled={product.stock === 0}
+   941→              onClick={() => {
+   942→                if (!requireAuth('add items to cart')) return;
+   943→                for (let i = 0; i < quantity; i++) addItem({ productId: product.id, name: product.name, price: product.price, image: mainImage || '', vendorName: product.vendor?.businessName || '', vendorId: product.vendorId, stock: product.stock });
+   944→                toast.success('Added to cart', { description: `${product.name} has been added to your cart.` });
+   945→              }}>
+   946→              <ShoppingCart size={20} className="mr-2" />Add to Cart
+   947→            </Button>
+   948→            <Button size="lg" variant="outline" className="h-12" onClick={() => {
+   949→              if (isWishlisted) {
+   950→                setShowWishlistConfirm(true);
+   951→              } else {
+   952→                if (!requireAuth('add items to wishlist')) return;
+   953→                toggleItem(product.id);
+   954→                toast.success('Added to wishlist', { description: product.name });
+   955→              }
+   956→            }}>
+   957→              <Heart size={20} className={isWishlisted ? 'fill-red-500 text-red-500' : ''} />
+   958→            </Button>
+   959→          </div>
+   960→
+   961→          {/* Wishlist Remove Confirmation */}
+   962→          <AlertDialog open={showWishlistConfirm} onOpenChange={setShowWishlistConfirm}>
+   963→            <AlertDialogContent>
+   964→              <AlertDialogHeader>
+   965→                <AlertDialogTitle>Remove from wishlist?</AlertDialogTitle>
+   966→                <AlertDialogDescription>{product.name} will be removed from your wishlist.</AlertDialogDescription>
+   967→              </AlertDialogHeader>
+   968→              <AlertDialogFooter>
+   969→                <AlertDialogCancel>Cancel</AlertDialogCancel>
+   970→                <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => { toggleItem(product.id); toast.info('Removed from wishlist'); setShowWishlistConfirm(false); }}>Remove</AlertDialogAction>
+   971→              </AlertDialogFooter>
+   972→            </AlertDialogContent>
+   973→          </AlertDialog>
+   974→
+   975→          {/* Share Buttons */}
+   976→          <div className="flex items-center gap-2 mt-3">
+   977→            <span className="text-sm text-muted-foreground">Share:</span>
+   978→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(product.name + ' ' + window.location.href)}`)}><MessageCircle size={14} /></Button>
+   979→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`)}><Facebook size={14} /></Button>
+   980→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(product.name)}&url=${encodeURIComponent(window.location.href)}`)}><Twitter size={14} /></Button>
+   981→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success('Link copied!'); }}><LinkIcon size={14} /></Button>
+   982→          </div>
+   983→
+   984→          {/* Features */}
+   985→          <div className="grid grid-cols-1 gap-3 pt-2">
+   986→            <div className="flex items-center gap-2 text-sm"><Truck size={16} className="text-orange-500" /><span>Estimated delivery: {product.estimatedDeliveryDays || 5}-{(product.estimatedDeliveryDays || 5) + 3} business days</span></div>
+   987→            <div className="grid grid-cols-2 gap-3">
+   988→            {[
+   989→              { icon: <Truck size={16} />, text: 'Free delivery above ₹500' },
+   990→              { icon: <RefreshCw size={16} />, text: '7-day easy returns' },
+   991→              { icon: <Shield size={16} />, text: 'Secure transactions' },
+   992→              { icon: <Package size={16} />, text: product.warranty || 'Standard warranty' },
+   993→            ].map((f, i) => (
+   994→              <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground"><span className="text-orange-500">{f.icon}</span>{f.text}</div>
+   995→            ))}
+   996→            </div>
+   997→          </div>
+   998→        </div>
+   999→      </div>
+  1000→
+  1001→      {/* Tabs: Description, Specs, Reviews, Q&A */}
+  1002→      <div className="mt-10">
+  1003→        <Tabs value={activeTab} onValueChange={setActiveTab}>
+  1004→          <TabsList className="w-full justify-start border-b rounded-none h-auto p-0">
+  1005→            {['specs', 'description', 'reviews', 'qa'].map(t => (
+  1006→              <TabsTrigger key={t} value={t} className="rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:shadow-none px-6 py-3 capitalize">{t === 'qa' ? 'Q&A' : t}</TabsTrigger>
+  1007→            ))}
+  1008→          </TabsList>
+  1009→          <TabsContent value="specs" className="pt-4">
+  1010→            {product.specs && product.specs.length > 0 ? (
+  1011→              <div className="max-w-2xl"><Table><TableBody>{product.specs.map(s => (
+  1012→                <TableRow key={s.id}><TableCell className="font-medium w-40 bg-muted/30">{s.key}</TableCell><TableCell>{s.value}</TableCell></TableRow>
+  1013→              ))}</TableBody></Table></div>
+  1014→            ) : <p className="text-muted-foreground">No specifications available</p>}
+  1015→          </TabsContent>
+  1016→          <TabsContent value="description" className="pt-4">
+  1017→            <div className="max-w-3xl prose dark:prose-invert" dangerouslySetInnerHTML={{ __html: product.description || '<p>No description available</p>' }} />
+  1018→          </TabsContent>
+  1019→          <TabsContent value="reviews" className="pt-4">
+  1020→            <ReviewsSection productId={product.id} reviews={product.reviews || []} reviewCount={product._count?.reviews || 0} rating={product.rating} />
+  1021→          </TabsContent>
+  1022→          <TabsContent value="qa" className="pt-4">
+  1023→            <ProductQASection productId={product.id} qaList={qaList} />
+  1024→          </TabsContent>
+  1025→        </Tabs>
+  1026→      </div>
+  1027→
+  1028→      {/* Similar Products */}
+  1029→      {similarProducts.length > 0 && (
+  1030→        <div className="mt-10">
+  1031→          <h2 className="text-xl font-bold mb-4">Similar Products</h2>
+  1032→          <ProductGrid products={similarProducts} />
+  1033→        </div>
+  1034→      )}
+  1035→
+  1036→      {/* Frequently Bought Together */}
+  1037→      {frequentlyBought.length > 0 && (
+  1038→        <div className="mt-10">
+  1039→          <h2 className="text-xl font-bold mb-4">Frequently Bought Together</h2>
+  1040→          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+  1041→            {frequentlyBought.map(p => <ProductCard key={p.id} product={p} />)}
+  1042→          </div>
+  1043→        </div>
+  1044→      )}
+  1045→
+  1046→      {/* Customers Also Bought */}
+  1047→      <div className="mt-10">
+  1048→        <h2 className="text-xl font-bold mb-4">Customers Also Bought</h2>
+  1049→        <CustomersAlsoBought productId={product.id} />
+  1050→      </div>
+  1051→    </div>
+  1052→  );
+  1053→}
+  1054→
+  1055→function Table({ children, className }: { children: React.ReactNode; className?: string }) {
+  1056→  return <div className={`rounded-lg border overflow-hidden ${className || ''}`}><table className="w-full text-sm">{children}</table></div>;
+  1057→}
+  1058→function TableBody({ children }: { children: React.ReactNode }) { return <tbody>{children}</tbody>; }
+  1059→function TableRow({ children, className }: { children: React.ReactNode; className?: string }) { return <tr className={`border-b last:border-0 ${className || ''}`}>{children}</tr>; }
+  1060→function TableCell({ children, className }: { children: React.ReactNode; className?: string }) { return <td className={`px-4 py-3 ${className || ''}`}>{children}</td>; }
+  1061→
+  1062→function CustomersAlsoBought({ productId }: { productId: string }) {
+  1063→  const { data: products = [], isLoading } = useQuery({
+  1064→    queryKey: ['customers-also-bought', productId],
+  1065→    queryFn: () => fetch(`/api/products?limit=8&exclude=${productId}`).then(r => r.json()).then((r: any) => (r.data || []).sort(() => Math.random() - 0.5).slice(0, 4)),
+  1066→    enabled: !!productId,
+  1067→  });
+  1068→  if (isLoading) return <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{Array.from({length:4}).map((_,i)=><Skeleton key={i} className="aspect-square rounded-xl" />)}</div>;
+  1069→  if (!products.length) return null;
+  1070→  return <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{products.map(p => <ProductCard key={p.id} product={p} />)}</div>;
+  1071→}
+  1072→
+  1073→function ReviewsSection({ productId, reviews, reviewCount, rating }: { productId: string; reviews: any[]; reviewCount: number; rating: number }) {
+  1074→  const { isAuthenticated, user } = useAuthStore();
+  1075→  const queryClient = useQueryClient();
+  1076→  const requireAuth = useRequireAuth();
+  1077→  const [showForm, setShowForm] = useState(false);
+  1078→  const [form, setForm] = useState({ rating: 5, title: '', comment: '', images: '' });
+  1079→  const [sortBy, setSortBy] = useState('latest');
+  1080→  const sortedReviews = useMemo(() => {
+  1081→    const r = [...reviews];
+  1082→    switch(sortBy) {
+  1083→      case 'highest': return r.sort((a,b) => b.rating - a.rating);
+  1084→      case 'lowest': return r.sort((a,b) => a.rating - b.rating);
+  1085→      case 'helpful': return r.sort((a,b) => (b.helpfulCount||0) - (a.helpfulCount||0));
+  1086→      default: return r.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  1087→    }
+  1088→  }, [reviews, sortBy]);
+  1089→
+  1090→  const submitReview = useMutation({
+  1091→    mutationFn: async () => {
+  1092→      const res = await fetch('/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user!.id, productId, rating: form.rating, title: form.title, comment: form.comment, images: form.images.trim() || undefined }) });
+  1093→      return res.json();
+  1094→    },
+  1095→    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['product', productId] }); toast.success('Review submitted!'); setShowForm(false); setForm({ rating: 5, title: '', comment: '', images: '' }); },
+  1096→    onError: () => toast.error('Failed to submit review'),
+  1097→  });
+  1098→
+  1099→  return (
+  1100→    <div className="space-y-6">
+  1101→      <div className="flex items-center justify-between">
+  1102→        <div className="flex items-center gap-4">
+  1103→          <div className="text-center"><div className="text-4xl font-bold">{rating}</div><StarRating rating={rating} size={16} /><p className="text-sm text-muted-foreground mt-1">{reviewCount} reviews</p></div>
+  1104→        </div>
+  1105→        {isAuthenticated && <Button variant="outline" onClick={() => { if (!requireAuth('write a review')) return; setShowForm(!showForm); }}>{showForm ? 'Cancel' : 'Write a Review'}</Button>}
+  1106→      </div>
+  1107→
+  1108→      {showForm && (
+  1109→        <Card className="p-4 space-y-4">
+  1110→          <div><Label>Rating</Label><div className="flex gap-1 mt-1">{[1,2,3,4,5].map(s => <button key={s} aria-label={`Rate ${s} out of 5 stars`} onClick={() => setForm(f => ({...f, rating: s}))}><Star size={24} className={s <= form.rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'} /></button>)}</div></div>
+  1111→          <div><Label>Title</Label><Input placeholder="Summary of your experience" value={form.title} onChange={e => setForm(f => ({...f, title: e.target.value}))} className="mt-1" /></div>
+  1112→          <div><Label>Review</Label><Textarea placeholder="Tell us more..." value={form.comment} onChange={e => setForm(f => ({...f, comment: e.target.value}))} className="mt-1" rows={3} /></div>
+  1113→          <div><Label>Images (URLs, one per line)</Label><Textarea placeholder="Paste image URLs here..." value={form.images} onChange={e => setForm(f => ({...f, images: e.target.value}))} className="mt-1" rows={2} /></div>
+  1114→          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => submitReview.mutate()} disabled={submitReview.isPending || !form.comment.trim()}>{submitReview.isPending ? 'Submitting...' : 'Submit Review'}</Button>
+  1115→        </Card>
+  1116→      )}
+  1117→
+  1118→      <div className="space-y-4">
+  1119→        <div className="flex items-center justify-between">
+  1120→          <span className="text-sm text-muted-foreground">Sort by:</span>
+  1121→          <Select value={sortBy} onValueChange={setSortBy}>
+  1122→            <SelectTrigger aria-label="Sort reviews" className="w-40 h-8 text-sm"><SelectValue /></SelectTrigger>
+  1123→            <SelectContent>
+  1124→              <SelectItem value="latest">Latest</SelectItem>
+  1125→              <SelectItem value="highest">Highest Rated</SelectItem>
+  1126→              <SelectItem value="lowest">Lowest Rated</SelectItem>
+  1127→              <SelectItem value="helpful">Most Helpful</SelectItem>
+  1128→            </SelectContent>
+  1129→          </Select>
+  1130→        </div>
+  1131→        {sortedReviews.length === 0 && <p className="text-muted-foreground text-center py-8">No reviews yet. Be the first to review!</p>}
+  1132→        {sortedReviews.map((review: any) => (
+  1133→          <Card key={review.id} className="p-4">
+  1134→            <div className="flex items-start justify-between">
+  1135→              <div className="flex items-center gap-3">
+  1136→                <Avatar className="h-10 w-10"><AvatarFallback>{review.user?.name?.[0] || 'U'}</AvatarFallback></Avatar>
+  1137→                <div>
+  1138→                  <p className="font-medium text-sm">{review.user?.name || 'Anonymous'}</p>
+  1139→                  {review.verifiedPurchase && <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs ml-2">✓ Verified Purchase</Badge>}
+  1140→                  <div className="flex items-center gap-2"><StarRating rating={review.rating} size={12} /><span className="text-xs text-muted-foreground">{new Date(review.createdAt).toLocaleDateString()}</span></div>
+  1141→                </div>
+  1142→              </div>
+  1143→            </div>
+  1144→            {review.title && <p className="font-medium mt-2">{review.title}</p>}
+  1145→            {review.comment && <p className="text-sm text-muted-foreground mt-1">{review.comment}</p>}
+  1146→            {review.images && (
+  1147→              <div className="flex gap-2 mt-2 flex-wrap">
+  1148→                {review.images.split(',').filter(Boolean).map((img: string, i: number) => (
+  1149→                  <img key={i} src={img.trim()} alt="Review" className="w-16 h-16 rounded-lg object-cover border" />
+  1150→                ))}
+  1151→              </div>
+  1152→            )}
+  1153→          </Card>
+  1154→        ))}
+  1155→      </div>
+  1156→    </div>
+  1157→  );
+  1158→}
+  1159→
+  1160→function ProductQASection({ productId, qaList }: { productId: string; qaList: any[] }) {
+  1161→  const { isAuthenticated, user } = useAuthStore();
+  1162→  const queryClient = useQueryClient();
+  1163→  const [showDialog, setShowDialog] = useState(false);
+  1164→  const [question, setQuestion] = useState('');
+  1165→
+  1166→  const submitQuestion = useMutation({
+  1167→    mutationFn: async () => {
+  1168→      const res = await fetch(`/api/products/${productId}/qa`, {
+  1169→        method: 'POST',
+  1170→        headers: { 'Content-Type': 'application/json' },
+  1171→        body: JSON.stringify({ userId: user!.id, question }),
+  1172→      });
+  1173→      return res.json();
+  1174→    },
+  1175→    onSuccess: () => {
+  1176→      queryClient.invalidateQueries({ queryKey: ['product-qa', productId] });
+  1177→      toast.success('Question submitted!');
+  1178→      setShowDialog(false);
+  1179→      setQuestion('');
+  1180→    },
+  1181→    onError: () => toast.error('Failed to submit question'),
+  1182→  });
+  1183→
+  1184→  return (
+  1185→    <div className="space-y-6">
+  1186→      <div className="flex items-center justify-between">
+  1187→        <div className="flex items-center gap-2">
+  1188→          <HelpCircle size={20} className="text-orange-500" />
+  1189→          <h3 className="text-lg font-bold">Questions & Answers</h3>
+  1190→          <Badge variant="secondary">{qaList.length}</Badge>
+  1191→        </div>
+  1192→        <Button variant="outline" onClick={() => { if (!isAuthenticated) { toast.info('Please login to ask a question'); return; } setShowDialog(true); }}>
+  1193→          <Send size={14} className="mr-1.5" />Ask Question
+  1194→        </Button>
+  1195→      </div>
+  1196→
+  1197→      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+  1198→        <DialogContent>
+  1199→          <DialogHeader>
+
+[showing lines 700-1199 of 2320; use offset=1200 with limit to continue reading]

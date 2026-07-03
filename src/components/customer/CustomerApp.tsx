@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { authToast, authErrorToast, vendorStatusToast } from '@/lib/auth-toast';
 import {
   Search, ShoppingCart, Heart, User, Menu, X, ChevronDown, Star, StarHalf,
   Minus, Plus, Trash2, ChevronRight, ChevronLeft, MapPin, Phone, Mail,
@@ -12,7 +13,7 @@ import {
   Store, CreditCard, Banknote, Smartphone, Building2, Home,
   Settings, LogOut, Bell, Sun, Moon, Monitor, Filter, SlidersHorizontal,
   Bookmark, Send, Printer, RotateCcw, XCircle,
-  MessageCircle, Facebook, Twitter, Link as LinkIcon, HelpCircle, Headphones
+  MessageCircle, Facebook, Twitter, Link as LinkIcon, HelpCircle, Headphones, SearchX, ShoppingBag
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -36,13 +37,29 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useTheme } from 'next-themes';
-import { useAuthStore, useNavigationStore, useCartStore, useWishlistStore, useCompareStore } from '@/stores';
+import { useAuthStore, useNavigationStore, useCartStore, useWishlistStore, useCompareStore, useNotificationStore } from '@/stores';
+import { useNotifications } from '@/hooks/use-notifications';
 import type { Product, Category, Brand, Order, Banner, CustomerAddress, ApiResponse } from '@/types';
 
 // ============ HELPERS ============
 
 const formatCurrency = (price: number) => '₹' + price.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function useRequireAuth() {
+  const { isAuthenticated } = useAuthStore();
+  const { navigateTo } = useNavigationStore();
+  return (action: string) => {
+    if (!isAuthenticated) {
+      toast.warning('Login required', { description: `Please log in to ${action}.` });
+      navigateTo('login');
+      return false;
+    }
+    return true;
+  };
+}
 const discountPercent = (price: number, compare?: number | null) => compare ? Math.round(((compare - price) / compare) * 100) : 0;
 const badgeColors: Record<string, string> = { BEST_SELLER: 'bg-emerald-500 text-white', NEW_ARRIVAL: 'bg-blue-500 text-white', LIMITED_TIME: 'bg-red-500 text-white', FESTIVAL_OFFER: 'bg-amber-500 text-white' };
 const badgeLabels: Record<string, string> = { BEST_SELLER: 'Best Seller', NEW_ARRIVAL: 'New', LIMITED_TIME: 'Limited', FESTIVAL_OFFER: 'Festival' };
@@ -66,10 +83,40 @@ function ProductCard({ product }: { product: Product }) {
   const { addItem } = useCartStore();
   const { toggleItem, hasItem } = useWishlistStore();
   const { toggleItem: toggleCompare, hasItem: hasCompare } = useCompareStore();
+  const requireAuth = useRequireAuth();
   const isWishlisted = hasItem(product.id);
   const isCompared = hasCompare(product.id);
   const discount = discountPercent(product.price, product.compareAtPrice);
   const mainImage = product.images?.[0]?.url;
+
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!requireAuth('add items to cart')) return;
+    addItem({ productId: product.id, name: product.name, price: product.price, image: mainImage || '', vendorName: product.vendor?.businessName || '', vendorId: product.vendorId, stock: product.stock });
+    toast.success('Added to cart', { description: `${product.name} has been added to your cart.` });
+  };
+
+  const handleWishlistToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!requireAuth('add items to wishlist')) return;
+    toggleItem(product.id);
+    if (isWishlisted) {
+      toast.info('Removed from wishlist');
+    } else {
+      toast.success('Added to wishlist', { description: product.name });
+    }
+  };
+
+  const handleCompareToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!requireAuth('compare products')) return;
+    toggleCompare(product.id);
+    if (isCompared) {
+      toast.info('Removed from comparison');
+    } else {
+      toast.success('Added to comparison');
+    }
+  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} whileHover={{ y: -4 }}>
@@ -89,10 +136,10 @@ function ProductCard({ product }: { product: Product }) {
           {product.stock < 5 && product.stock > 0 && <Badge variant="secondary" className="absolute top-2 right-10 text-xs">Low Stock</Badge>}
           {product.stock === 0 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Badge variant="destructive">Out of Stock</Badge></div>}
           <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" aria-label={isWishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`} onClick={(e) => { e.stopPropagation(); toggleItem(product.id); toast.success(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist'); }}>
+            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" aria-label={isWishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`} onClick={handleWishlistToggle}>
               <Heart size={14} className={isWishlisted ? 'fill-red-500 text-red-500' : ''} />
             </Button>
-            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" onClick={(e) => { e.stopPropagation(); toggleCompare(product.id); toast.success(isCompared ? 'Removed from compare' : 'Added to compare'); }}>
+            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" onClick={handleCompareToggle}>
               <GitCompare size={14} className={isCompared ? 'text-orange-500' : ''} />
             </Button>
           </div>
@@ -112,7 +159,7 @@ function ProductCard({ product }: { product: Product }) {
           </div>
         </CardContent>
         <CardFooter className="p-3 pt-0">
-          <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 text-white" aria-label={`Add ${product.name} to cart`} disabled={product.stock === 0} onClick={(e) => { e.stopPropagation(); addItem({ productId: product.id, name: product.name, price: product.price, image: mainImage || '', vendorName: product.vendor?.businessName || '', vendorId: product.vendorId, stock: product.stock }); toast.success('Added to cart!'); }}>
+          <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 text-white" aria-label={`Add ${product.name} to cart`} disabled={product.stock === 0} onClick={handleAddToCart}>
             <ShoppingCart size={14} className="mr-1.5" /> Add to Cart
           </Button>
         </CardFooter>
@@ -128,7 +175,14 @@ function ProductGrid({ products, loading }: { products: Product[]; loading?: boo
     </div>;
   }
   if (!products.length) {
-    return <div className="text-center py-16"><Package size={64} className="mx-auto text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium text-muted-foreground">No products found</h3><p className="text-sm text-muted-foreground mt-1">Try adjusting your filters or search</p></div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <SearchX size={64} className="text-muted-foreground/30 mb-4" />
+        <h3 className="text-lg font-medium text-muted-foreground">No results found</h3>
+        <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters or search</p>
+        <Button variant="outline" className="mt-4" onClick={() => { const { setSearchQuery, setSelectedCategory, setSelectedBrand, setCustomerView, setPriceRange } = useNavigationStore.getState(); setSearchQuery(''); setSelectedCategory(null); setSelectedBrand(null); setPriceRange([0, 100000]); setCustomerView('products'); }}>Clear search</Button>
+      </div>
+    );
   }
   return <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">{products.map(p => <ProductCard key={p.id} product={p} />)}</div>;
 }
@@ -147,14 +201,11 @@ function CustomerHeader() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const qc = useQueryClient();
 
-  const { data: notifications = [] } = useQuery({
-    queryKey: ['notifications'],
-    queryFn: () => fetch('/api/notifications').then(r => r.json()).then((r: any) => r.data || []),
-    enabled: !!mounted && isAuthenticated,
-  });
-  const unreadCount = notifications.filter((n: any) => !n.isRead).length;
+  const { notifications, unreadCount } = useNotifications();
+  const { markAllRead: storeMarkAllRead } = useNotificationStore();
   const markAllRead = async () => {
     await fetch('/api/notifications/mark-all-read', { method: 'PUT' });
+    storeMarkAllRead();
     qc.invalidateQueries({ queryKey: ['notifications'] });
   };
 
@@ -256,7 +307,12 @@ function CustomerHeader() {
                   </div>
                   <DropdownMenuSeparator />
                   <div className="max-h-64 overflow-y-auto">
-                    {notifications.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No notifications</p> :
+                    {notifications.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <Bell size={32} className="text-muted-foreground/30 mb-2" />
+                        <p className="text-sm text-muted-foreground">No notifications</p>
+                      </div>
+                    ) :
                       notifications.slice(0, 10).map((n: any) => (
                         <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1 p-3 cursor-pointer" onClick={() => { if (n.link) { /* could navigate */ } }}>
                           <p className={`text-sm ${!n.isRead ? 'font-medium' : 'text-muted-foreground'}`}>{n.title}</p>
@@ -281,7 +337,7 @@ function CustomerHeader() {
                   <DropdownMenuItem onClick={() => navigateTo('wishlist')}><Heart size={16} className="mr-2" />Wishlist</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigateTo('addresses')}><MapPin size={16} className="mr-2" />Addresses</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => { logout(); setCustomerView('home'); toast.success('Logged out'); }} className="text-destructive"><LogOut size={16} className="mr-2" />Logout</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { logout(); setCustomerView('home'); authToast.logoutSuccess(); }} className="text-destructive"><LogOut size={16} className="mr-2" />Logout</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
@@ -312,7 +368,7 @@ function CustomerHeader() {
                   <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('profile'); setMobileMenuOpen(false); }}><User size={16} className="mr-2" />Profile</Button>
                   <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('orders'); setMobileMenuOpen(false); }}><Package size={16} className="mr-2" />Orders</Button>
                   <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('wishlist'); setMobileMenuOpen(false); }}><Heart size={16} className="mr-2" />Wishlist</Button>
-                  <Button variant="ghost" className="w-full justify-start text-destructive" onClick={() => { logout(); setMobileMenuOpen(false); toast.success('Logged out'); }}><LogOut size={16} className="mr-2" />Logout</Button>
+                  <Button variant="ghost" className="w-full justify-start text-destructive" onClick={() => { logout(); setMobileMenuOpen(false); authToast.logoutSuccess(); }}><LogOut size={16} className="mr-2" />Logout</Button>
                 </>
               ) : (
                 <Button className="w-full bg-orange-500 hover:bg-orange-600" onClick={() => { navigateTo('login'); setMobileMenuOpen(false); }}>Login / Register</Button>
@@ -370,6 +426,14 @@ function CategoriesNav({ mobile }: { mobile?: boolean }) {
 function CartSheet() {
   const { items, removeItem, updateQuantity, getSubtotal, getShipping } = useCartStore();
   const { isCartOpen, setCartOpen, navigateTo } = useNavigationStore();
+  const requireAuth = useRequireAuth();
+  const [removeTarget, setRemoveTarget] = useState<{id: string; name: string} | null>(null);
+
+  const handleRemove = (id: string, name: string) => {
+    removeItem(id);
+    toast.info('Removed from cart', { description: `${name} removed.` });
+    setRemoveTarget(null);
+  };
 
   return (
     <Sheet open={isCartOpen} onOpenChange={setCartOpen}>
@@ -377,8 +441,9 @@ function CartSheet() {
         <SheetHeader><SheetTitle className="flex items-center gap-2"><ShoppingCart size={20} />Cart ({items.length})</SheetTitle></SheetHeader>
         {items.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3">
-            <ShoppingCart size={48} className="text-muted-foreground/30" /><p>Your cart is empty</p>
-            <Button variant="outline" onClick={() => setCartOpen(false)}>Continue Shopping</Button>
+            <ShoppingBag size={48} className="text-muted-foreground/30" /><p className="font-medium">Your cart is empty</p>
+            <p className="text-sm text-muted-foreground">Looks like you haven&apos;t added anything yet</p>
+            <Button variant="outline" onClick={() => setCartOpen(false)}>Browse Products</Button>
           </div>
         ) : (
           <>
@@ -393,10 +458,10 @@ function CartSheet() {
                     <p className="text-xs text-muted-foreground">{item.vendorName}</p>
                     <p className="text-sm font-bold mt-1">{formatCurrency(item.price)}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateQuantity(item.productId, item.quantity - 1)}><Minus size={12} /></Button>
+                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => { updateQuantity(item.productId, item.quantity - 1); toast.success('Quantity updated'); }}><Minus size={12} /></Button>
                       <span className="text-sm w-6 text-center">{item.quantity}</span>
-                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateQuantity(item.productId, item.quantity + 1)}><Plus size={12} /></Button>
-                      <Button size="icon" variant="ghost" className="h-6 w-6 ml-auto text-destructive" onClick={() => { removeItem(item.productId); toast.success('Removed from cart'); }}><Trash2 size={12} /></Button>
+                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => { updateQuantity(item.productId, item.quantity + 1); toast.success('Quantity updated'); }}><Plus size={12} /></Button>
+                      <Button size="icon" variant="ghost" className="h-6 w-6 ml-auto text-destructive" onClick={() => setRemoveTarget({id: item.productId, name: item.name})}><Trash2 size={12} /></Button>
                     </div>
                   </div>
                 </div>
@@ -407,12 +472,24 @@ function CartSheet() {
               <div className="flex justify-between text-sm"><span>Shipping</span><span>{getShipping() === 0 ? <span className="text-green-600">Free</span> : formatCurrency(getShipping())}</span></div>
               <Separator />
               <div className="flex justify-between font-bold"><span>Total</span><span>{formatCurrency(getSubtotal() + getShipping())}</span></div>
-              <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white" onClick={() => { setCartOpen(false); navigateTo('checkout'); }}>
+              <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white" onClick={() => { if (!requireAuth('proceed to checkout')) return; setCartOpen(false); navigateTo('checkout'); }}>
                 Checkout ({formatCurrency(getSubtotal() + getShipping())})
               </Button>
             </div>
           </>
         )}
+        <AlertDialog open={!!removeTarget} onOpenChange={() => setRemoveTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove {removeTarget?.name} from cart?</AlertDialogTitle>
+              <AlertDialogDescription>This item will be removed from your cart.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => removeTarget && handleRemove(removeTarget.id, removeTarget.name)}>Remove</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );
@@ -720,12 +797,14 @@ function ProductDetailPage() {
   const { isAuthenticated, user } = useAuthStore();
   const { addItem } = useCartStore();
   const { toggleItem, hasItem } = useWishlistStore();
+  const requireAuth = useRequireAuth();
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('specs');
   const [pincode, setPincode] = useState('');
   const [checkingPincode, setCheckingPincode] = useState(false);
   const [deliveryResult, setDeliveryResult] = useState<{available: boolean; date?: string} | null>(null);
+  const [showWishlistConfirm, setShowWishlistConfirm] = useState(false);
   const checkPincode = async () => {
     setCheckingPincode(true);
     try {
@@ -861,13 +940,39 @@ function ProductDetailPage() {
           {/* Actions */}
           <div className="flex gap-3 pt-2">
             <Button size="lg" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white h-12" disabled={product.stock === 0}
-              onClick={() => { for (let i = 0; i < quantity; i++) addItem({ productId: product.id, name: product.name, price: product.price, image: mainImage || '', vendorName: product.vendor?.businessName || '', vendorId: product.vendorId, stock: product.stock }); toast.success('Added to cart!'); }}>
+              onClick={() => {
+                if (!requireAuth('add items to cart')) return;
+                for (let i = 0; i < quantity; i++) addItem({ productId: product.id, name: product.name, price: product.price, image: mainImage || '', vendorName: product.vendor?.businessName || '', vendorId: product.vendorId, stock: product.stock });
+                toast.success('Added to cart', { description: `${product.name} has been added to your cart.` });
+              }}>
               <ShoppingCart size={20} className="mr-2" />Add to Cart
             </Button>
-            <Button size="lg" variant="outline" className="h-12" onClick={() => { toggleItem(product.id); toast.success(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist'); }}>
+            <Button size="lg" variant="outline" className="h-12" onClick={() => {
+              if (isWishlisted) {
+                setShowWishlistConfirm(true);
+              } else {
+                if (!requireAuth('add items to wishlist')) return;
+                toggleItem(product.id);
+                toast.success('Added to wishlist', { description: product.name });
+              }
+            }}>
               <Heart size={20} className={isWishlisted ? 'fill-red-500 text-red-500' : ''} />
             </Button>
           </div>
+
+          {/* Wishlist Remove Confirmation */}
+          <AlertDialog open={showWishlistConfirm} onOpenChange={setShowWishlistConfirm}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Remove from wishlist?</AlertDialogTitle>
+                <AlertDialogDescription>{product.name} will be removed from your wishlist.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => { toggleItem(product.id); toast.info('Removed from wishlist'); setShowWishlistConfirm(false); }}>Remove</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           {/* Share Buttons */}
           <div className="flex items-center gap-2 mt-3">
@@ -970,6 +1075,7 @@ function CustomersAlsoBought({ productId }: { productId: string }) {
 function ReviewsSection({ productId, reviews, reviewCount, rating }: { productId: string; reviews: any[]; reviewCount: number; rating: number }) {
   const { isAuthenticated, user } = useAuthStore();
   const queryClient = useQueryClient();
+  const requireAuth = useRequireAuth();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ rating: 5, title: '', comment: '', images: '' });
   const [sortBy, setSortBy] = useState('latest');
@@ -998,7 +1104,7 @@ function ReviewsSection({ productId, reviews, reviewCount, rating }: { productId
         <div className="flex items-center gap-4">
           <div className="text-center"><div className="text-4xl font-bold">{rating}</div><StarRating rating={rating} size={16} /><p className="text-sm text-muted-foreground mt-1">{reviewCount} reviews</p></div>
         </div>
-        {isAuthenticated && <Button variant="outline" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : 'Write a Review'}</Button>}
+        {isAuthenticated && <Button variant="outline" onClick={() => { if (!requireAuth('write a review')) return; setShowForm(!showForm); }}>{showForm ? 'Cancel' : 'Write a Review'}</Button>}
       </div>
 
       {showForm && (
@@ -1007,7 +1113,7 @@ function ReviewsSection({ productId, reviews, reviewCount, rating }: { productId
           <div><Label>Title</Label><Input placeholder="Summary of your experience" value={form.title} onChange={e => setForm(f => ({...f, title: e.target.value}))} className="mt-1" /></div>
           <div><Label>Review</Label><Textarea placeholder="Tell us more..." value={form.comment} onChange={e => setForm(f => ({...f, comment: e.target.value}))} className="mt-1" rows={3} /></div>
           <div><Label>Images (URLs, one per line)</Label><Textarea placeholder="Paste image URLs here..." value={form.images} onChange={e => setForm(f => ({...f, images: e.target.value}))} className="mt-1" rows={2} /></div>
-          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => submitReview.mutate()} disabled={submitReview.isPending}>Submit Review</Button>
+          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => submitReview.mutate()} disabled={submitReview.isPending || !form.comment.trim()}>{submitReview.isPending ? 'Submitting...' : 'Submit Review'}</Button>
         </Card>
       )}
 
@@ -1149,32 +1255,40 @@ function ProductQASection({ productId, qaList }: { productId: string; qaList: an
 
 function CartPage() {
   const { items, removeItem, updateQuantity, getSubtotal, getShipping, getTax, getTotal, couponCode, couponDiscount, applyCoupon, removeCoupon, clearCart, addItem } = useCartStore();
-  const { navigateTo, isAuthenticated } = useNavigationStore();
+  const { navigateTo } = useNavigationStore();
+  const requireAuth = useRequireAuth();
   const { data: coupons } = useQuery({ queryKey: ['coupons'], queryFn: () => fetch('/api/coupons').then(r => r.json()).then((r: ApiResponse<any[]>) => r.data || []) });
   const [couponInput, setCouponInput] = useState('');
   const [savedForLater, setSavedForLater] = useState<any[]>([]);
+  const [cartPageRemoveTarget, setCartPageRemoveTarget] = useState<{id: string; name: string} | null>(null);
   const qc = useQueryClient();
 
   const handleApplyCoupon = () => {
     const coupon = coupons?.find(c => c.code.toUpperCase() === couponInput.toUpperCase());
-    if (!coupon) { toast.error('Invalid coupon code'); return; }
+    if (!coupon) { toast.error('Invalid coupon code', { description: 'Please check the code and try again.' }); return; }
     const subtotal = getSubtotal();
-    if (coupon.minOrder && subtotal < coupon.minOrder) { toast.error(`Minimum order ₹${coupon.minOrder} required`); return; }
+    if (coupon.minOrder && subtotal < coupon.minOrder) { toast.error('Minimum order amount not met', { description: `You need to order at least ${formatCurrency(coupon.minOrder)} to use this coupon.` }); return; }
     let discount = 0;
     if (coupon.discountType === 'PERCENTAGE') discount = (subtotal * coupon.discountValue) / 100;
     else discount = coupon.discountValue;
     if (coupon.maxDiscount) discount = Math.min(discount, coupon.maxDiscount);
     applyCoupon(coupon.code, discount);
-    toast.success(`Coupon applied! You save ${formatCurrency(discount)}`);
+    toast.success('Coupon applied!', { description: 'You save ' + formatCurrency(discount) });
+  };
+
+  const handleCartPageRemove = (id: string, name: string) => {
+    removeItem(id);
+    toast.info('Removed from cart', { description: `${name} removed.` });
+    setCartPageRemoveTarget(null);
   };
 
   if (items.length === 0) {
     return (
-      <div className="container mx-auto px-4 py-16 text-center">
-        <ShoppingCart size={64} className="mx-auto text-muted-foreground/30 mb-4" />
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <ShoppingBag size={64} className="text-muted-foreground/30 mb-4" />
         <h2 className="text-xl font-bold">Your cart is empty</h2>
-        <p className="text-muted-foreground mt-2">Add items to your cart to see them here</p>
-        <Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Continue Shopping</Button>
+        <p className="text-muted-foreground mt-2">Looks like you haven&apos;t added anything yet</p>
+        <Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Browse Products</Button>
       </div>
     );
   }
@@ -1197,7 +1311,7 @@ function CartPage() {
                   <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.productId, item.quantity - 1)}><Minus size={14} /></Button>
                   <span className="w-8 text-center">{item.quantity}</span>
                   <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.productId, Math.min(item.stock, item.quantity + 1))}><Plus size={14} /></Button>
-                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { removeItem(item.productId); toast.success('Removed'); }}><Trash2 size={16} className="mr-1" />Remove</Button>
+                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setCartPageRemoveTarget({id: item.productId, name: item.name})}><Trash2 size={16} className="mr-1" />Remove</Button>
                   <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => { setSavedForLater(prev => [...prev, item]); removeItem(item.productId); toast.success('Saved for later'); }}>
                     <Bookmark size={14} className="mr-1" />Save for Later
                   </Button>
@@ -1247,18 +1361,28 @@ function CartPage() {
                 ))}
               </div>
             </div>
-            <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 text-lg" onClick={() => { if (!isAuthenticated) { navigateTo('login'); toast.info('Please login first'); return; } navigateTo('checkout'); }}>
+            <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 text-lg" onClick={() => { if (!requireAuth('proceed to checkout')) return; navigateTo('checkout'); }}>
               Proceed to Checkout
             </Button>
             <Button variant="ghost" className="w-full" onClick={() => navigateTo('home')}>Continue Shopping</Button>
           </Card>
         </div>
       </div>
+      <AlertDialog open={!!cartPageRemoveTarget} onOpenChange={() => setCartPageRemoveTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {cartPageRemoveTarget?.name} from cart?</AlertDialogTitle>
+            <AlertDialogDescription>This item will be removed from your cart.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => cartPageRemoveTarget && handleCartPageRemove(cartPageRemoveTarget.id, cartPageRemoveTarget.name)}>Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
-// ============ CHECKOUT PAGE ============
 
 function CheckoutPage() {
   const { user, isAuthenticated } = useAuthStore();
@@ -1290,9 +1414,13 @@ function CheckoutPage() {
   }
 
   const handlePlaceOrder = async () => {
-    if (!address.fullName || !address.phone || !address.addressLine1 || !address.city || !address.pincode) {
-      toast.error('Please fill all address fields'); return;
-    }
+    if (!address.fullName) { toast.error('Please enter your full name'); return; }
+    if (!address.addressLine1) { toast.error('Please enter your address'); return; }
+    if (!address.city) { toast.error('Please enter your city'); return; }
+    if (!address.pincode) { toast.error('Please enter your pincode'); return; }
+    if (!/^\d{6}$/.test(address.pincode)) { toast.error('Invalid pincode', { description: 'Pincode must be exactly 6 digits.' }); return; }
+    if (!address.phone) { toast.error('Please enter your phone number'); return; }
+    if (!/^\d{10}$/.test(address.phone.replace(/\s/g, ''))) { toast.error('Invalid phone number', { description: 'Phone number must be exactly 10 digits.' }); return; }
     if (!isAuthenticated && (!guestInfo.email || !guestInfo.phone)) {
       toast.error('Please fill guest email and phone'); return;
     }
@@ -1311,7 +1439,7 @@ function CheckoutPage() {
       const data = await res.json();
       if (data.success) {
         clearCart();
-        toast.success('Order placed successfully!');
+        toast.success('Order placed successfully!', { description: 'Your order has been confirmed.' });
         navigateTo('orders');
         qc.invalidateQueries({ queryKey: ['orders'] });
       } else { toast.error(data.error || 'Failed to place order'); }
@@ -1430,7 +1558,7 @@ function OrdersPage() {
     <div className="container mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold mb-6">My Orders</h1>
       {isLoading ? <div className="space-y-4">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div> :
-      !data?.length ? <div className="text-center py-16"><Package size={64} className="mx-auto text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium">No orders yet</h3><Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Start Shopping</Button></div> :
+      !data?.length ? <div className="flex flex-col items-center justify-center py-16 text-center"><Package size={64} className="text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium">No orders yet</h3><p className="text-sm text-muted-foreground mt-1">When you place your first order, it will appear here</p><Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Start Shopping</Button></div> :
       <div className="space-y-4">{data.map(order => (
         <Card key={order.id} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setSelectedOrderId(order.id); navigateTo('order-detail'); }}>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -1460,11 +1588,11 @@ function OrderDetailPage() {
   const [cancelReason, setCancelReason] = useState('');
   const cancelMutation = useMutation({
     mutationFn: () => fetch(`/api/orders/${selectedOrderId}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: cancelReason }) }).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Order cancelled'); setShowCancelDialog(false); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Order cancelled', { description: 'Refund will be processed.' }); setShowCancelDialog(false); },
   });
   const returnMutation = useMutation({
     mutationFn: () => fetch(`/api/orders/${selectedOrderId}/return`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: returnReason }) }).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Return request submitted'); setShowReturnDialog(false); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Return request submitted', { description: 'We will review your request shortly.' }); setShowReturnDialog(false); },
   });
   const { data: order, isLoading } = useQuery({
     queryKey: ['order', selectedOrderId],
@@ -1491,7 +1619,7 @@ function OrderDetailPage() {
         addItem({ productId: item.productId, name: item.productName, price: item.price, image: item.productImage || '', vendorName: item.vendorName || '', vendorId: item.vendorId, stock: 999 });
       }
     });
-    toast.success('Items added to cart');
+    toast.success('Items added to cart', { description: 'You can review them before checkout.' });
     navigateTo('cart');
   };
 
@@ -1628,7 +1756,7 @@ function LoginPage() {
   const { navigateTo, setAppView } = useNavigationStore();
   const [mode, setMode] = useState<'login' | 'register' | 'vendor-register'>('login');
   const [form, setForm] = useState({
-    email: '', password: '', name: '', phone: '',
+    email: '', password: '', name: '', phone: '', confirmPassword: '',
     businessName: '', businessEmail: '', businessPhone: '',
     businessAddress: '', gstNumber: '', panNumber: '',
     bankName: '', bankAccount: '', bankIfsc: '', description: '',
@@ -1639,30 +1767,41 @@ function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.email || !form.password) { toast.error('Please fill all fields'); return; }
+    if (!EMAIL_REGEX.test(form.email)) { toast.error('Invalid email format'); return; }
+    if (form.password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
     setLoading(true);
     try {
       const res = await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.email, password: form.password }) });
       const data = await res.json();
       if (data.success) {
         login(data.data.user, data.data.token, data.data.vendorId, data.data.vendorStatus);
-        toast.success(`Welcome back, ${data.data.user.name}!`);
+        // Show vendor status warning if pending/rejected
+        if (data.data.user.role === 'VENDOR' && data.data.vendorStatus && data.data.vendorStatus !== 'APPROVED') {
+          authToast.loginSuccess(data.data.user.name, data.data.user.role);
+          vendorStatusToast(data.data.vendorStatus);
+        } else {
+          authToast.loginSuccess(data.data.user.name, data.data.user.role);
+        }
         if (data.data.user.role === 'ADMIN') { useNavigationStore.getState().setAppView('admin'); }
         else if (data.data.user.role === 'VENDOR') { useNavigationStore.getState().setAppView('vendor'); }
         else { navigateTo('home'); }
-      } else { toast.error(data.error || 'Login failed'); }
-    } catch { toast.error('Something went wrong'); }
+      } else { authErrorToast(data.error || 'Login failed', res.status); }
+    } catch { toast.error('Something went wrong. Please check your connection.'); }
     setLoading(false);
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.email || !form.password) { toast.error('Please fill all required fields'); return; }
+    if (!EMAIL_REGEX.test(form.email)) { toast.error('Invalid email format'); return; }
+    if (form.password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
+    if (form.password !== form.confirmPassword) { toast.error('Passwords do not match'); return; }
     setLoading(true);
     try {
       const res = await fetch('/api/auth', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, email: form.email, password: form.password, phone: form.phone }) });
       const data = await res.json();
-      if (data.success) { login(data.data.user, data.data.token); toast.success('Account created!'); navigateTo('home'); }
-      else { toast.error(data.error || 'Registration failed'); }
+      if (data.success) { login(data.data.user, data.data.token); authToast.registerSuccess(data.data.user.name); navigateTo('home'); }
+      else { authErrorToast(data.error || 'Registration failed', res.status); }
     } catch { toast.error('Something went wrong'); }
     setLoading(false);
   };
@@ -1673,10 +1812,14 @@ function LoginPage() {
       toast.error('Please fill all required fields');
       return;
     }
+    if (!EMAIL_REGEX.test(form.email)) { toast.error('Invalid email format'); return; }
     if (form.password.length < 6) {
       toast.error('Password must be at least 6 characters');
       return;
     }
+    if (form.phone && !/^\d{10}$/.test(form.phone.replace(/\s/g, ''))) { toast.error('Invalid phone number', { description: 'Phone number must be exactly 10 digits.' }); return; }
+    if (form.gstNumber && form.gstNumber.length !== 15) { toast.error('Invalid GST number', { description: 'GST number must be exactly 15 characters.' }); return; }
+    if (form.panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(form.panNumber)) { toast.error('Invalid PAN number', { description: 'PAN format should be: 5 letters, 4 digits, 1 letter (e.g., ABCDE1234F).' }); return; }
     setLoading(true);
     try {
       const res = await fetch('/api/auth/vendor-register', {
@@ -1702,10 +1845,10 @@ function LoginPage() {
       const data = await res.json();
       if (data.success) {
         login(data.data.user, data.data.token, data.data.vendorId, data.data.vendorStatus);
-        toast.success(data.message || 'Application submitted successfully!');
+        authToast.vendorApplicationSubmitted(form.businessName);
         setAppView('vendor');
       } else {
-        toast.error(data.error || 'Registration failed');
+        authErrorToast(data.error || 'Registration failed', res.status);
       }
     } catch { toast.error('Something went wrong'); }
     setLoading(false);
@@ -1760,6 +1903,7 @@ function LoginPage() {
               <div><Label>Full Name *</Label><Input placeholder="John Doe" value={form.name} onChange={e => updateForm('name', e.target.value)} className="mt-1" /></div>
               <div><Label>Email *</Label><Input type="email" placeholder="you@example.com" value={form.email} onChange={e => updateForm('email', e.target.value)} className="mt-1" /></div>
               <div><Label>Password *</Label><Input type="password" placeholder="Min 6 characters" value={form.password} onChange={e => updateForm('password', e.target.value)} className="mt-1" /></div>
+              <div><Label>Confirm Password *</Label><Input type="password" placeholder="Re-enter password" value={form.confirmPassword} onChange={e => updateForm('confirmPassword', e.target.value)} className="mt-1" /></div>
               <div><Label>Phone (optional)</Label><Input placeholder="+91 XXXXX XXXXX" value={form.phone} onChange={e => updateForm('phone', e.target.value)} className="mt-1" /></div>
               <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={isLoading}>{isLoading ? 'Please wait...' : 'Create Account'}</Button>
             </form>
@@ -1817,9 +1961,9 @@ function LoginPage() {
               <Separator className="w-full" />
               <p className="text-xs text-muted-foreground text-center">Quick Demo Access</p>
               <div className="flex gap-2 flex-wrap justify-center">
-                <Button variant="outline" size="sm" onClick={() => { setForm({ email: 'admin@markethub.com', password: 'admin123', name: '', phone: '', businessName: '', businessEmail: '', businessPhone: '', businessAddress: '', gstNumber: '', panNumber: '', bankName: '', bankAccount: '', bankIfsc: '', description: '' }); }}>Admin Demo</Button>
-                <Button variant="outline" size="sm" onClick={() => { setForm({ email: 'techstore@vendor.com', password: 'vendor123', name: '', phone: '', businessName: '', businessEmail: '', businessPhone: '', businessAddress: '', gstNumber: '', panNumber: '', bankName: '', bankAccount: '', bankIfsc: '', description: '' }); }}>Vendor Demo</Button>
-                <Button variant="outline" size="sm" onClick={() => { setForm({ email: 'rahul@example.com', password: 'customer123', name: '', phone: '', businessName: '', businessEmail: '', businessPhone: '', businessAddress: '', gstNumber: '', panNumber: '', bankName: '', bankAccount: '', bankIfsc: '', description: '' }); }}>Customer Demo</Button>
+                <Button variant="outline" size="sm" onClick={() => { setForm({ email: 'admin@markethub.com', password: 'admin123', name: '', phone: '', confirmPassword: '', businessName: '', businessEmail: '', businessPhone: '', businessAddress: '', gstNumber: '', panNumber: '', bankName: '', bankAccount: '', bankIfsc: '', description: '' }); }}>Admin Demo</Button>
+                <Button variant="outline" size="sm" onClick={() => { setForm({ email: 'techstore@vendor.com', password: 'vendor123', name: '', phone: '', confirmPassword: '', businessName: '', businessEmail: '', businessPhone: '', businessAddress: '', gstNumber: '', panNumber: '', bankName: '', bankAccount: '', bankIfsc: '', description: '' }); }}>Vendor Demo</Button>
+                <Button variant="outline" size="sm" onClick={() => { setForm({ email: 'rahul@example.com', password: 'customer123', name: '', phone: '', confirmPassword: '', businessName: '', businessEmail: '', businessPhone: '', businessAddress: '', gstNumber: '', panNumber: '', bankName: '', bankAccount: '', bankIfsc: '', description: '' }); }}>Customer Demo</Button>
               </div>
               <p className="text-[10px] text-muted-foreground text-center">Admin: admin@markethub.com / admin123<br/>Vendor: techstore@vendor.com / vendor123<br/>Customer: rahul@example.com / customer123</p>
             </>
@@ -1853,8 +1997,8 @@ function ProfilePage() {
       if (!data.success) throw new Error(data.error);
       return data;
     },
-    onSuccess: () => { toast.success('Password updated!'); setPwForm({ current: '', newPw: '', confirm: '' }); },
-    onError: (e: any) => { if (e.message !== 'Passwords do not match' && e.message !== 'Password must be at least 6 characters') toast.error('Failed to change password'); },
+    onSuccess: () => { authToast.passwordChanged(); setPwForm({ current: '', newPw: '', confirm: '' }); },
+    onError: (e: any) => { if (e.message !== 'Passwords do not match' && e.message !== 'Password must be at least 6 characters') toast.error('Failed to change password. Please try again.'); },
   });
   const handleChangePw = () => changePwMutation.mutate();
 
@@ -1873,7 +2017,7 @@ function ProfilePage() {
           <div><Label>Name</Label>{editing ? <Input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1" /> : <p className="mt-1">{user?.name}</p>}</div>
           <div className="flex items-center gap-2">
             <Label>Email</Label>
-            {user?.isVerified ? <Badge className="bg-green-100 text-green-700 text-xs">✓ Verified</Badge> : <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => toast.info('Verification email sent!')}>Verify</Badge>}
+            {user?.isVerified ? <Badge className="bg-green-100 text-green-700 text-xs">✓ Verified</Badge> : <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => authToast.passwordResetEmailSent(user?.email || '')}>Verify</Badge>}
           </div>
           <p className="mt-1">{user?.email}</p>
           <div className="flex items-center gap-2 mt-2">
@@ -1881,7 +2025,7 @@ function ProfilePage() {
             {user?.phone ? <Badge className="bg-green-100 text-green-700 text-xs">✓ Verified</Badge> : <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => toast.info('OTP verification coming soon!')}>Verify</Badge>}
           </div>
           <p className="mt-1">{user?.phone || 'Not set'}</p>
-          <Button variant={editing ? 'default' : 'outline'} className={editing ? 'bg-orange-500 hover:bg-orange-600' : ''} onClick={() => { if (editing) toast.success('Profile updated'); setEditing(!editing); }}>
+          <Button variant={editing ? 'default' : 'outline'} className={editing ? 'bg-orange-500 hover:bg-orange-600' : ''} onClick={() => { if (editing) authToast.profileUpdated(); setEditing(!editing); }}>
             {editing ? 'Save Changes' : 'Edit Profile'}
           </Button>
         </div>
@@ -1950,7 +2094,7 @@ function WishlistPage() {
   return (
     <div className="container mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold mb-6">My Wishlist ({items.length})</h1>
-      {!products?.length ? <div className="text-center py-16"><Heart size={64} className="mx-auto text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium">Your wishlist is empty</h3><Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Browse Products</Button></div> :
+      {!products?.length ? <div className="flex flex-col items-center justify-center py-16 text-center"><Heart size={64} className="text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium">No items in wishlist</h3><p className="text-sm text-muted-foreground mt-1">Save items you love for later</p><Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Discover Products</Button></div> :
       <ProductGrid products={products} />}
     </div>
   );
@@ -1996,8 +2140,8 @@ function ComparePage() {
   });
 
   if (!items.length) return (
-    <div className="container mx-auto px-4 py-16 text-center">
-      <GitCompare size={64} className="mx-auto text-muted-foreground/30 mb-4" />
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <GitCompare size={64} className="text-muted-foreground/30 mb-4" />
       <h2 className="text-xl font-bold">Compare Products</h2>
       <p className="text-muted-foreground mt-2">Add up to 4 products to compare</p>
       <Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Browse Products</Button>
@@ -2052,7 +2196,7 @@ function CustomerFooter() {
             <div className="space-y-2 text-sm text-muted-foreground">
               <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('home')}>Home</p>
               <p className="hover:text-foreground cursor-pointer" onClick={() => { useNavigationStore.getState().setSelectedCategory(null); useNavigationStore.getState().setCustomerView('products'); }}>All Products</p>
-              <p className="hover:text-foreground cursor-pointer">About Us</p>
+              <p className="hover:text-foreground">About Us</p>
               <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('contact')}>Contact</p>
             </div>
           </div>
@@ -2074,7 +2218,7 @@ function CustomerFooter() {
         <Separator className="my-6" />
         <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
           <p>&copy; 2025 MarketHub. All rights reserved.</p>
-          <div className="flex gap-4"><p className="hover:text-foreground cursor-pointer">Privacy Policy</p><p className="hover:text-foreground cursor-pointer">Terms & Conditions</p></div>
+          <div className="flex gap-4"><p className="hover:text-foreground">Privacy Policy</p><p className="hover:text-foreground">Terms & Conditions</p></div>
         </div>
       </div>
 
@@ -2200,11 +2344,11 @@ export default function CustomerApp() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.2}} className="min-h-screen flex flex-col bg-background">
       <a href="#main-content" className="skip-link">Skip to main content</a>
       <CustomerHeader />
       <main id="main-content" className="flex-1" role="main">{renderView()}</main>
       <CustomerFooter />
-    </div>
+    </motion.div>
   );
 }
