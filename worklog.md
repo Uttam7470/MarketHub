@@ -673,3 +673,22 @@ Stage Summary:
 - Admin notification center is now feature-complete matching Vendor pattern
 - All 13 tasks are now 100% complete
 - Zero lint errors
+
+---
+Task ID: toast-fix
+Agent: Main
+Task: Fix toast notifications not showing (login/logout/errors)
+
+Work Log:
+- Discovered layout.tsx used shadcn `<Toaster from @/components/ui/toaster>` while all code used `toast from sonner` — two completely different toast systems
+- First tried replacing with `<Toaster from sonner>` in layout — toasts still didn't appear
+- Diagnosed root cause: `dynamic({ ssr: false })` in page.tsx causes Turbopack to create separate chunks, resulting in two separate sonner `ToastState` singleton instances — `toast` dispatches to one, `Toaster` listens to another
+- Created `src/lib/sonner.ts` as shared re-export module
+- Changed all `from 'sonner'` imports to `from '@/lib/sonner'` (6 files: auth-toast, CustomerApp, VendorApp, AdminApp, sonner-toaster)
+- Moved `<SonnerToaster />` from layout.tsx into page.tsx (same chunk as the app components)
+- Verified both success toast ("Successfully logged in - Welcome back, Super Admin") and error toast ("Invalid email or password") render correctly
+
+Stage Summary:
+- Toast notifications now work for ALL actions across all 3 app panels
+- Root cause was module duplication from dynamic imports with ssr:false
+- Fix: shared re-export + Toaster in same chunk as consuming components

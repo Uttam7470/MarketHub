@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'sonner';
+import { toast } from '@/lib/sonner';
 import { authToast, vendorStatusToast } from '@/lib/auth-toast';
 import {
   Package, ShoppingCart, ShoppingBag, DollarSign, Star, TrendingUp, BarChart3, Plus, Pencil, Trash2,

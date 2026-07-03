@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useAuthStore, useNavigationStore } from '@/stores';
+import { SonnerToaster } from '@/components/sonner-toaster';
 
 const CustomerApp = dynamic(() => import('@/components/customer/CustomerApp'), {
   loading: () => <div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-orange-500 border-t-transparent rounded-full" /></div>,
@@ -37,13 +38,13 @@ export default function Home() {
     }
   }, [isAuthenticated, user, appView, setAppView, setAdminView, setVendorView]);
 
-  // Portal switcher links shown on login page
-  switch (appView) {
-    case 'vendor':
-      return <VendorApp />;
-    case 'admin':
-      return <AdminApp />;
-    default:
-      return <CustomerApp />;
-  }
+  return (
+    <>
+      {/* Portal switcher links shown on login page */}
+      {appView === 'vendor' && <VendorApp />}
+      {appView === 'admin' && <AdminApp />}
+      {appView !== 'vendor' && appView !== 'admin' && <CustomerApp />}
+      <SonnerToaster />
+    </>
+  );
 }

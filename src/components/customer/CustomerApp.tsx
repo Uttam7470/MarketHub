@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'sonner';
+import { toast } from '@/lib/sonner';
 import { authToast, authErrorToast, vendorStatusToast } from '@/lib/auth-toast';
 import {
   Search, ShoppingCart, Heart, User, Menu, X, ChevronDown, Star, StarHalf,

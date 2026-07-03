@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useContext } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'sonner';
+import { toast } from '@/lib/sonner';
 import { authToast } from '@/lib/auth-toast';
 import {
   BarChart3, Users, Package, ShoppingCart, Store, DollarSign, TrendingUp,

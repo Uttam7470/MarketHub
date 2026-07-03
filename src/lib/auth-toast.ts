@@ -5,7 +5,7 @@
  * instead of raw toast.success/error calls, ensuring
  * consistent, descriptive, and user-friendly messages.
  */
-import { toast } from 'sonner';
+import { toast } from '@/lib/sonner';
 
 // ============ SUCCESS NOTIFICATIONS ============
 
