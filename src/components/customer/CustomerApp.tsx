@@ -1474,6 +1474,7 @@ function CheckoutPage() {
   const banks = ['State Bank of India', 'HDFC Bank', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra Bank', 'Punjab National Bank', 'Bank of Baroda', 'Canara Bank', 'Union Bank of India', 'IndusInd Bank'];
 
   useEffect(() => { if (items.length === 0) navigateTo('cart'); }, [items.length, navigateTo]);
+  useEffect(() => { setPaymentErrors({}); }, [paymentMethod]);
   if (items.length === 0) return null;
   if (!isAuthenticated && !isGuest) {
     return (
@@ -1488,9 +1489,6 @@ function CheckoutPage() {
       </div>
     );
   }
-
-  // Clear payment errors when switching methods
-  useEffect(() => { setPaymentErrors({}); }, [paymentMethod]);
 
   const handlePlaceOrder = async () => {
     if (paymentMethod !== 'COD' && !validatePayment()) { toast.error('Please fill payment details'); return; }
