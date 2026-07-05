@@ -1113,6 +1113,7 @@ function AdminSettings() {
     <div className="p-6 space-y-6">
       <div><h1 className="text-2xl font-bold">Platform Settings</h1><p className="text-muted-foreground text-sm">Configure marketplace settings</p></div>
       <Card className="p-6">
+        <h2 className="font-semibold text-lg mb-4">General Settings</h2>
         <div className="grid sm:grid-cols-2 gap-4">
           <div><Label>Site Name</Label><Input value={form.siteName || ''} onChange={e => setForm(f => ({...f, siteName: e.target.value}))} className="mt-1" /></div>
           <div><Label>Site Description</Label><Input value={form.siteDescription || ''} onChange={e => setForm(f => ({...f, siteDescription: e.target.value}))} className="mt-1" /></div>
@@ -1125,6 +1126,42 @@ function AdminSettings() {
           <div className="sm:col-span-2"><Label>Address</Label><Textarea value={form.address || ''} onChange={e => setForm(f => ({...f, address: e.target.value}))} className="mt-1" /></div>
         </div>
         <Button className="mt-4 bg-amber-600 hover:bg-amber-700" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>Save Settings</Button>
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">📱 Social Media & Chat Integration</h2>
+        <p className="text-sm text-muted-foreground mb-4">Configure your WhatsApp and Facebook so customers can reach you directly. These links appear on the Contact Us page.</p>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <Label className="flex items-center gap-2">WhatsApp Number</Label>
+            <Input placeholder="919876543210" value={form.whatsappNumber || ''} onChange={e => setForm(f => ({...f, whatsappNumber: e.target.value}))} className="mt-1" />
+            <p className="text-xs text-muted-foreground mt-1">Country code + number, no spaces or + sign (e.g. 919876543210)</p>
+          </div>
+          <div>
+            <Label className="flex items-center gap-2">Facebook Page URL</Label>
+            <Input placeholder="https://facebook.com/yourpage" value={form.facebookPage || ''} onChange={e => setForm(f => ({...f, facebookPage: e.target.value}))} className="mt-1" />
+            <p className="text-xs text-muted-foreground mt-1">Full URL of your Facebook business page</p>
+          </div>
+          <div>
+            <Label className="flex items-center gap-2">Instagram Handle</Label>
+            <Input placeholder="@markethub" value={form.instagramHandle || ''} onChange={e => setForm(f => ({...f, instagramHandle: e.target.value}))} className="mt-1" />
+            <p className="text-xs text-muted-foreground mt-1">Your Instagram username (with or without @)</p>
+          </div>
+          <div>
+            <Label className="flex items-center gap-2">Twitter / X Handle</Label>
+            <Input placeholder="@markethub" value={form.twitterHandle || ''} onChange={e => setForm(f => ({...f, twitterHandle: e.target.value}))} className="mt-1" />
+            <p className="text-xs text-muted-foreground mt-1">Your Twitter/X username</p>
+          </div>
+        </div>
+        <div className="flex gap-3 mt-4">
+          <Button className="bg-amber-600 hover:bg-amber-700" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>Save Social Settings</Button>
+          {(form.whatsappNumber || form.facebookPage) && (
+            <Button variant="outline" onClick={() => {
+              const wNum = form.whatsappNumber ? `https://wa.me/${form.whatsappNumber.replace(/[^0-9]/g, '')}` : '#';
+              window.open(form.facebookPage || wNum, '_blank');
+            }}>Test Links</Button>
+          )}
+        </div>
       </Card>
     </div>
   );

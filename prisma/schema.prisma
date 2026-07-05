@@ -649,6 +649,10 @@ model PlatformSettings {
   freeShippingMin Float    @default(500)
   contactEmail    String?
   contactPhone    String?
+  whatsappNumber  String?
+  facebookPage    String?
+  instagramHandle String?
+  twitterHandle   String?
   address         String?
   socialLinks     String?
   createdAt       DateTime @default(now())

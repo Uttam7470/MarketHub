@@ -581,7 +581,8 @@ export type CustomerView =
   | 'home' | 'products' | 'product-detail' | 'cart' | 'checkout' 
   | 'orders' | 'order-detail' | 'profile' | 'addresses' | 'wishlist' 
   | 'compare' | 'login' | 'register' | 'search' | 'notifications' 
-  | 'support' | 'faq' | 'track-order' | 'returns' | 'contact' | 'help' | 'about';
+  | 'support' | 'faq' | 'track-order' | 'returns' | 'contact' | 'help' | 'about'
+  | 'shipping-policy' | 'return-policy' | 'privacy-policy' | 'terms-of-service';
 
 export type VendorView = 
   | 'vendor-login' | 'vendor-dashboard' | 'vendor-products' | 'vendor-add-product'

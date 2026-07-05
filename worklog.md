@@ -692,3 +692,44 @@ Stage Summary:
 - Toast notifications now work for ALL actions across all 3 app panels
 - Root cause was module duplication from dynamic imports with ssr:false
 - Fix: shared re-export + Toaster in same chunk as consuming components
+
+---
+Task ID: 1
+Agent: Main
+Task: Add WhatsApp/Facebook contact integration + 4 detail pages (Shipping, Returns, Privacy, Terms)
+
+Work Log:
+- Added `whatsappNumber`, `facebookPage`, `instagramHandle`, `twitterHandle` fields to PlatformSettings in Prisma schema
+- Ran `bun run db:push` to apply schema changes
+- Added new CustomerView types: `shipping-policy`, `return-policy`, `privacy-policy`, `terms-of-service`
+- Created 4 separate page components in `/src/components/customer/pages/`:
+  - ShippingPolicyPage.tsx — Full shipping policy with coverage zones, charges table, delivery timeline, shipping partners
+  - ReturnPolicyPage.tsx — Return window, category-wise table, non-returnable items, how to return, refund process, exchange policy, cancellation policy
+  - PrivacyPolicyPage.tsx — Info collection, usage, sharing, data security, cookies, user rights
+  - TermsOfServicePage.tsx — 10 sections covering usage, accounts, pricing, orders, prohibited activities, IP, liability, disputes
+- Enhanced ContactUsPage with:
+  - WhatsApp chat card (green gradient, wa.me link with pre-filled message)
+  - Facebook message card (blue gradient, links to configured Facebook page)
+  - Dynamic settings from `/api/settings` for WhatsApp number and Facebook URL
+  - Social media buttons (Facebook, WhatsApp, Twitter) with proper external links
+  - Breadcrumb navigation
+- Updated CustomerApp.tsx:
+  - Added dynamic imports for 4 new page components (to avoid OOM)
+  - Added routing cases in switch statement
+  - Updated footer: Shipping Info and Returns & Refunds are now clickable links
+  - Updated footer: Privacy Policy and Terms & Conditions are now clickable links
+- Updated Admin Settings page with:
+  - New "Social Media & Chat Integration" section
+  - WhatsApp Number input field (with formatting instructions)
+  - Facebook Page URL input field
+  - Instagram Handle input field
+  - Twitter/X Handle input field
+  - "Test Links" button to verify configured links
+- Browser verified all 6 pages (Contact, Shipping, Returns, Privacy, Terms) — all rendering correctly with zero console errors
+
+Stage Summary:
+- All 6 detail pages are fully functional and accessible from footer links
+- WhatsApp and Facebook chat integration is live on Contact page
+- Admin can configure WhatsApp number and Facebook URL from Admin Settings
+- Contact info on Contact page dynamically uses settings from database
+- Dynamic imports used for new pages to prevent Turbopack OOM
