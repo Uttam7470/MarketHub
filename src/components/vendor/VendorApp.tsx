@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from '@/lib/sonner';
@@ -1539,356 +1540,45 @@ function VendorInventoryPage() {
 
 // ============ MAIN VENDOR APP ============
 
-// ============ VENDOR COUPONS ============
-
-function VendorCoupons() {
-  const { vendorId } = useAuthStore();
-  const qc = useQueryClient();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-
-  const [form, setForm] = useState({
-    code: '',
-    discountType: 'PERCENTAGE' as 'PERCENTAGE' | 'FIXED',
-    discountValue: '',
-    minOrder: '',
-    maxDiscount: '',
-    usageLimit: '',
-    startDate: '',
-    endDate: '',
-    autoSuggest: false,
-  });
-
-  const resetForm = () => {
-    setForm({ code: '', discountType: 'PERCENTAGE', discountValue: '', minOrder: '', maxDiscount: '', usageLimit: '', startDate: '', endDate: '', autoSuggest: false });
-    setEditingCoupon(null);
-  };
-
-  const openCreate = () => { resetForm(); setDialogOpen(true); };
-  const openEdit = (c: Coupon) => {
-    setEditingCoupon(c);
-    setForm({
-      code: c.code,
-      discountType: c.discountType,
-      discountValue: String(c.discountValue),
-      minOrder: c.minOrder ? String(c.minOrder) : '',
-      maxDiscount: c.maxDiscount ? String(c.maxDiscount) : '',
-      usageLimit: c.usageLimit ? String(c.usageLimit) : '',
-      startDate: c.startDate?.slice(0, 10) || '',
-      endDate: c.endDate?.slice(0, 10) || '',
-      autoSuggest: c.autoSuggest,
-    });
-    setDialogOpen(true);
-  };
-
-  const { data: coupons, isLoading } = useQuery({
-    queryKey: ['vendor-coupons', vendorId],
-    queryFn: () => fetch(`/api/vendor/coupons?vendorId=${vendorId}`).then(r => r.json()).then((r: ApiResponse<Coupon[]>) => r.data),
-    enabled: !!vendorId,
-  });
-
-  const createMutation = useMutation({
-    mutationFn: () => fetch('/api/vendor/coupons', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        vendorId,
-        code: form.code.toUpperCase(),
-        discountType: form.discountType,
-        discountValue: parseFloat(form.discountValue),
-        minOrder: form.minOrder ? parseFloat(form.minOrder) : null,
-        maxDiscount: form.maxDiscount ? parseFloat(form.maxDiscount) : null,
-        usageLimit: form.usageLimit ? parseInt(form.usageLimit) : null,
-        startDate: form.startDate,
-        endDate: form.endDate,
-        autoSuggest: form.autoSuggest,
-      }),
-    }).then(r => r.json()),
-    onSuccess: (data) => {
-      if (data.success) { toast.success('Coupon created successfully'); setDialogOpen(false); resetForm(); qc.invalidateQueries({ queryKey: ['vendor-coupons'] }); }
-      else toast.error(data.error || 'Failed to create coupon');
-    },
-    onError: () => toast.error('Failed to create coupon'),
-  });
-
-  const editMutation = useMutation({
-    mutationFn: () => fetch('/api/vendor/coupons', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: editingCoupon!.id,
-        vendorId,
-        code: form.code.toUpperCase(),
-        discountType: form.discountType,
-        discountValue: parseFloat(form.discountValue),
-        minOrder: form.minOrder ? parseFloat(form.minOrder) : null,
-        maxDiscount: form.maxDiscount ? parseFloat(form.maxDiscount) : null,
-        usageLimit: form.usageLimit ? parseInt(form.usageLimit) : null,
-        startDate: form.startDate,
-        endDate: form.endDate,
-        autoSuggest: form.autoSuggest,
-      }),
-    }).then(r => r.json()),
-    onSuccess: (data) => {
-      if (data.success) { toast.success('Coupon updated successfully'); setDialogOpen(false); resetForm(); qc.invalidateQueries({ queryKey: ['vendor-coupons'] }); }
-      else toast.error(data.error || 'Failed to update coupon');
-    },
-    onError: () => toast.error('Failed to update coupon'),
-  });
-
-  const toggleMutation = useMutation({
-    mutationFn: (coupon: Coupon) => fetch('/api/vendor/coupons', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: coupon.id, vendorId, isActive: !coupon.isActive }),
-    }).then(r => r.json()),
-    onSuccess: (data) => {
-      if (data.success) { toast.success('Coupon status updated'); qc.invalidateQueries({ queryKey: ['vendor-coupons'] }); }
-      else toast.error(data.error || 'Failed to update');
-    },
-    onError: () => toast.error('Failed to update coupon'),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/vendor/coupons?id=${id}&vendorId=${vendorId}`, { method: 'DELETE' }).then(r => r.json()),
-    onSuccess: (data) => {
-      if (data.success) { toast.success('Coupon deleted'); setDeleteId(null); qc.invalidateQueries({ queryKey: ['vendor-coupons'] }); }
-      else toast.error(data.error || 'Failed to delete coupon');
-    },
-    onError: () => toast.error('Failed to delete coupon'),
-  });
-
-  const totalCoupons = coupons?.length || 0;
-  const activeCoupons = coupons?.filter(c => c.isActive).length || 0;
-  const totalUsed = coupons?.reduce((sum, c) => sum + (c.usedCount || 0), 0) || 0;
-
-  const getStatusBadge = (c: Coupon) => {
-    const now = new Date();
-    const start = new Date(c.startDate);
-    const end = new Date(c.endDate);
-    if (!c.isActive) return <Badge variant="secondary" className="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">Inactive</Badge>;
-    if (now < start) return <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Scheduled</Badge>;
-    if (now > end) return <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Expired</Badge>;
-    return <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</Badge>;
-  };
-
-  const isSaving = createMutation.isPending || editMutation.isPending;
-
-  if (isLoading) return <div className="p-6 space-y-4">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>;
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div><h1 className="text-2xl font-bold">Coupons</h1><p className="text-muted-foreground text-sm">Create and manage discount coupons for your products</p></div>
-        <Button className="bg-orange-500 hover:bg-orange-600" onClick={openCreate}><Plus size={16} className="mr-1.5" />Create Coupon</Button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-          <Card className="p-6 border-orange-200 dark:border-orange-900/50 bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/10 dark:to-background">
-            <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center"><Tags size={20} className="text-orange-600" /></div><p className="text-sm text-muted-foreground">Total Coupons</p></div>
-            <p className="text-3xl font-bold text-orange-600">{totalCoupons}</p>
-          </Card>
-        </motion.div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
-          <Card className="p-6 border-green-200 dark:border-green-900/50 bg-gradient-to-br from-green-50 to-white dark:from-green-900/10 dark:to-background">
-            <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center"><CheckCircle size={20} className="text-green-600" /></div><p className="text-sm text-muted-foreground">Active Coupons</p></div>
-            <p className="text-3xl font-bold text-green-600">{activeCoupons}</p>
-          </Card>
-        </motion.div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
-          <Card className="p-6 border-blue-200 dark:border-blue-900/50 bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/10 dark:to-background">
-            <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"><BarChart3 size={20} className="text-blue-600" /></div><p className="text-sm text-muted-foreground">Total Used</p></div>
-            <p className="text-3xl font-bold text-blue-600">{totalUsed}</p>
-          </Card>
-        </motion.div>
-      </div>
-
-      {/* Coupons Table */}
-      <Card>
-        <CardContent className="p-0">
-          {!coupons?.length ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4"><Tags size={32} className="text-muted-foreground" /></div>
-              <h3 className="text-lg font-medium mb-1">No coupons yet</h3>
-              <p className="text-sm text-muted-foreground mb-4">Create your first coupon to attract customers</p>
-              <Button className="bg-orange-500 hover:bg-orange-600" size="sm" onClick={openCreate}><Plus size={14} className="mr-1" />Create Coupon</Button>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Discount</TableHead>
-                  <TableHead>Min Order</TableHead>
-                  <TableHead>Usage</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {coupons.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell className="font-mono font-semibold">{c.code}</TableCell>
-                    <TableCell>{c.discountType === 'PERCENTAGE' ? `${c.discountValue}%` : formatCurrency(c.discountValue)}{c.maxDiscount ? ` (max ${formatCurrency(c.maxDiscount)})` : ''}</TableCell>
-                    <TableCell>{c.minOrder ? formatCurrency(c.minOrder) : '—'}</TableCell>
-                    <TableCell>{c.usedCount ?? 0}{c.usageLimit ? ` / ${c.usageLimit}` : ''}</TableCell>
-                    <TableCell>{getStatusBadge(c)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(c)} aria-label="Edit coupon"><Pencil size={14} /></Button>
-                        <Button variant="ghost" size="icon" className={`h-8 w-8 ${c.isActive ? 'text-amber-600 hover:text-amber-700' : 'text-green-600 hover:text-green-700'}`} onClick={() => toggleMutation.mutate(c)} disabled={toggleMutation.isPending} aria-label={c.isActive ? 'Deactivate coupon' : 'Activate coupon'}>
-                          {toggleMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : c.isActive ? <Ban size={14} /> : <CheckCircle size={14} />}
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteId(c.id)} aria-label="Delete coupon"><Trash2 size={14} /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) { setDialogOpen(false); resetForm(); } }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingCoupon ? 'Edit Coupon' : 'Create Coupon'}</DialogTitle>
-            <DialogDescription>{editingCoupon ? 'Update coupon details' : 'Set up a new discount coupon'}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="coupon-code">Coupon Code</Label>
-              <Input id="coupon-code" placeholder="e.g. SAVE20" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} disabled={!!editingCoupon} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Discount Type</Label>
-                <Select value={form.discountType} onValueChange={(v) => setForm({ ...form, discountType: v as 'PERCENTAGE' | 'FIXED' })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PERCENTAGE">Percentage (%)</SelectItem>
-                    <SelectItem value="FIXED">Fixed Amount (₹)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="discount-value">Discount Value</Label>
-                <Input id="discount-value" type="number" min="0" step="0.01" placeholder={form.discountType === 'PERCENTAGE' ? 'e.g. 15' : 'e.g. 100'} value={form.discountValue} onChange={(e) => setForm({ ...form, discountValue: e.target.value })} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="min-order">Min Order (₹)</Label>
-                <Input id="min-order" type="number" min="0" step="0.01" placeholder="Optional" value={form.minOrder} onChange={(e) => setForm({ ...form, minOrder: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="max-discount">Max Discount (₹)</Label>
-                <Input id="max-discount" type="number" min="0" step="0.01" placeholder="Optional" value={form.maxDiscount} onChange={(e) => setForm({ ...form, maxDiscount: e.target.value })} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="usage-limit">Usage Limit</Label>
-              <Input id="usage-limit" type="number" min="1" placeholder="e.g. 100 (leave empty for unlimited)" value={form.usageLimit} onChange={(e) => setForm({ ...form, usageLimit: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="start-date">Start Date</Label>
-                <Input id="start-date" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="end-date">End Date</Label>
-                <Input id="end-date" type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button
-                type="button"
-                variant={form.autoSuggest ? 'default' : 'outline'}
-                size="sm"
-                className={form.autoSuggest ? 'bg-green-600 hover:bg-green-700' : ''}
-                onClick={() => setForm({ ...form, autoSuggest: !form.autoSuggest })}
-              >
-                <CheckCircle size={14} className="mr-1.5" />{form.autoSuggest ? 'Enabled' : 'Disabled'}
-              </Button>
-              <Label className="text-sm text-muted-foreground">Auto-suggest this coupon to customers at checkout</Label>
-            </div>
-          </div>
-          <DialogFooter className="gap-2 pt-2">
-            <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>Cancel</Button>
-            <Button className="bg-orange-500 hover:bg-orange-600" disabled={isSaving || !form.code || !form.discountValue || !form.startDate || !form.endDate} onClick={() => editingCoupon ? editMutation.mutate() : createMutation.mutate()}>
-              {isSaving ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : null}{editingCoupon ? 'Update Coupon' : 'Create Coupon'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Coupon</AlertDialogTitle>
-            <AlertDialogDescription>Are you sure you want to delete this coupon? This action cannot be undone.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deleteId) deleteMutation.mutate(deleteId); }}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}
+const VendorCoupons = dynamic(() => import('./pages/CouponsPage'), { loading: () => <div className="p-6 flex items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-orange-500 border-t-transparent rounded-full" /></div> });
 
 export default function VendorApp() {
   const { vendorView, setVendorView } = useNavigationStore();
   const { user, vendorStatus, isAuthenticated } = useAuthStore();
 
-  // Gate: If vendor is not APPROVED, show pending/rejected page
-  if (!isAuthenticated || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="p-8 max-w-md w-full text-center space-y-4">
-          <Store size={48} className="mx-auto text-muted-foreground" />
-          <h2 className="text-xl font-bold">Vendor Access Required</h2>
-          <p className="text-sm text-muted-foreground">Please log in to access the vendor panel.</p>
-          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => useNavigationStore.getState().setAppView('customer')}>
-            Go to Login
-          </Button>
-        </Card>
+  if (!isAuthenticated || user?.role !== 'VENDOR') return <VendorPendingPage />;
+  if (vendorStatus === 'REJECTED') return <VendorPendingPage />;
+  if (vendorStatus === 'SUSPENDED') return <VendorPendingPage />;
+  if (vendorStatus === 'PENDING') return <VendorPendingPage />;
+
+  const renderView = () => {
+    switch (vendorView) {
+      case 'vendor-dashboard': return <VendorDashboard />;
+      case 'vendor-products': return <VendorProducts />;
+      case 'vendor-add-product': return <VendorAddProduct />;
+      case 'vendor-orders': return <VendorOrders />;
+      case 'vendor-reports': return <VendorReports />;
+      case 'vendor-inventory': return <VendorInventoryPage />;
+      case 'vendor-coupons': return <VendorCoupons />;
+      case 'vendor-wallet': return <VendorWalletPage />;
+      case 'vendor-profile': return <VendorProfile />;
+      case 'vendor-settings': return <VendorSettings />;
+      case 'vendor-notifications': return <VendorNotifications />;
+      default: return <VendorDashboard />;
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="min-h-screen flex flex-col bg-background">
+      <a href="#main-content" className="skip-link">Skip to main content</a>
+      <VendorMobileHeader />
+      <div className="flex flex-1">
+        <VendorSidebar />
+        <main id="main-content" className="flex-1 overflow-auto" role="main"><AnimatePresence mode="wait"><motion.div key={vendorView} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}} transition={{duration:0.15}}>{renderView()}</motion.div></AnimatePresence></main>
       </div>
-    );
-  }
-
-  // Auth guard: ensure user has VENDOR role
-  if (user?.role !== 'VENDOR') {
-    toast.warning('Unauthorized access', { description: 'Please log in as a vendor to access this panel.' });
-    useNavigationStore.getState().setAppView('customer');
-    return null;
-  }
-
-  if (vendorStatus === 'PENDING' || vendorStatus === 'REJECTED') {
-    return <VendorPendingPage />;
-  }
-
-  if (vendorStatus === 'SUSPENDED') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="p-8 max-w-md w-full text-center space-y-4">
-          <XCircle size={48} className="mx-auto text-red-500" />
-          <h2 className="text-xl font-bold">Account Suspended</h2>
-          <p className="text-sm text-muted-foreground">Your vendor account has been suspended. Please contact the admin for more information.</p>
-          <Button variant="outline" onClick={() => { authToast.logoutSuccess(); useAuthStore.getState().logout(); useNavigationStore.getState().setAppView('customer'); }}>
-            Back to Store
-          </Button>
-        </Card>
-      </div>
-    );
-  }
+    </motion.div>
+  );
+}
 
 // ============ VENDOR NOTIFICATIONS ============
 
@@ -2000,34 +1690,5 @@ function VendorNotifications() {
         </div>
       )}
     </div>
-  );
-}
-
-  const renderView = () => {
-    switch (vendorView) {
-      case 'vendor-dashboard': return <VendorDashboard />;
-      case 'vendor-products': return <VendorProducts />;
-      case 'vendor-add-product': return <VendorAddProduct />;
-      case 'vendor-orders': return <VendorOrders />;
-      case 'vendor-reports': return <VendorReports />;
-      case 'vendor-inventory': return <VendorInventoryPage />;
-      case 'vendor-coupons': return <VendorCoupons />;
-      case 'vendor-wallet': return <VendorWalletPage />;
-      case 'vendor-profile': return <VendorProfile />;
-      case 'vendor-settings': return <VendorSettings />;
-      case 'vendor-notifications': return <VendorNotifications />;
-      default: return <VendorDashboard />;
-    }
-  };
-
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="min-h-screen flex flex-col bg-background">
-      <a href="#main-content" className="skip-link">Skip to main content</a>
-      <VendorMobileHeader />
-      <div className="flex flex-1">
-        <VendorSidebar />
-        <main id="main-content" className="flex-1 overflow-auto" role="main"><AnimatePresence mode="wait"><motion.div key={vendorView} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}} transition={{duration:0.15}}>{renderView()}</motion.div></AnimatePresence></main>
-      </div>
-    </motion.div>
   );
 }
