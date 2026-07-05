@@ -2144,7 +2144,8 @@ function ProfilePage() {
 function WishlistPage() {
   const { items, removeItem } = useWishlistStore();
   const { addItem: addCartItem } = useCartStore();
-  const { isAuthenticated, navigateTo } = useNavigationStore();
+  const { isAuthenticated } = useAuthStore();
+  const { navigateTo } = useNavigationStore();
 
   const { data: products, isLoading: wishlistLoading } = useQuery({
     queryKey: ['wishlist-products', items],
