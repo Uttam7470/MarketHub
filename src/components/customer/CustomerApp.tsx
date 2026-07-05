@@ -52,6 +52,8 @@ const OrderDetailPage = dynamic(() => import('./pages/OrderPages').then(m => ({ 
 const LoginPage = dynamic(() => import('./pages/LoginPage'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin" /></div> });
 const HelpCenterPage = dynamic(() => import('./pages/HelpCenterPage'), { loading: () => <div className="container mx-auto px-4 py-8"><Skeleton className="h-64 rounded-xl" /></div> });
 const AboutPage = dynamic(() => import('./pages/AboutPage'), { loading: () => <div className="container mx-auto px-4 py-8"><Skeleton className="h-64 rounded-xl" /></div> });
+const ReturnsRefundsPage = dynamic(() => import('./pages/ReturnsRefundsPage'), { loading: () => <div className="container mx-auto px-4 py-8"><Skeleton className="h-64 rounded-xl" /></div> });
+const ShippingInfoPage = dynamic(() => import('./pages/ShippingInfoPage'), { loading: () => <div className="container mx-auto px-4 py-8"><Skeleton className="h-64 rounded-xl" /></div> });
 
 // Need RefreshCw icon
 function RefreshCw(props: React.SVGProps<SVGSVGElement> & { size?: number }) {
@@ -917,7 +919,7 @@ function CustomerFooter() {
           <div>
             <h4 className="font-semibold mb-3">Customer Service</h4>
             <div className="space-y-2 text-sm text-muted-foreground">
-              <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('help')}>Help Center</p><p>Returns & Refunds</p><p>Shipping Info</p><p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('help')}>FAQ</p>
+              <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('help')}>Help Center</p><p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('returns')}>Returns & Refunds</p><p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('shipping-info')}>Shipping Info</p><p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('help')}>FAQ</p>
             </div>
           </div>
           <div>
@@ -1042,6 +1044,8 @@ export default function CustomerApp() {
       case 'contact': return <ContactUsPage />;
       case 'help': return <HelpCenterPage />;
       case 'about': return <AboutPage />;
+      case 'returns': return <ReturnsRefundsPage />;
+      case 'shipping-info': return <ShippingInfoPage />;
       default: return <HomePage />;
     }
   };
