@@ -1466,7 +1466,14 @@ function CheckoutPage() {
         body: JSON.stringify({
           ...(isAuthenticated ? { userId: user!.id } : { guestEmail: guestInfo.email, guestPhone: guestInfo.phone }),
           items: items.map(i => ({ productId: i.productId, quantity: i.quantity })),
-          shippingAddress: `${address.fullName}, ${address.addressLine1}, ${address.city}, ${address.state} - ${address.pincode}, Phone: ${address.phone}`,
+          shippingAddress: {
+            name: address.fullName,
+            address: `${address.addressLine1}${address.addressLine2 ? ', ' + address.addressLine2 : ''}`,
+            city: address.city,
+            state: address.state,
+            pincode: address.pincode,
+            phone: address.phone,
+          },
           paymentMethod,
         }),
       });
@@ -1630,6 +1637,14 @@ function OrdersPage() {
   );
 }
 
+function formatShippingAddress(addr: string | Record<string, string>): string {
+  if (typeof addr === 'object' && addr !== null) {
+    const a = addr as Record<string, string>;
+    return `${a.name}, ${a.address}, ${a.city}, ${a.state} - ${a.pincode}, Phone: ${a.phone}`;
+  }
+  return String(addr);
+}
+
 function OrderDetailPage() {
   const { user, isAuthenticated } = useAuthStore();
   const { selectedOrderId, navigateTo } = useNavigationStore();
@@ -1734,7 +1749,7 @@ function OrderDetailPage() {
             <p><span className="text-muted-foreground">Status:</span> <Badge variant={order.paymentStatus === 'PAID' ? 'default' : 'secondary'}>{order.paymentStatus}</Badge></p>
           </div>
           <Separator />
-          <div className="text-sm"><p className="text-muted-foreground mb-1">Shipping Address</p><p>{order.shippingAddress}</p></div>
+          <div className="text-sm"><p className="text-muted-foreground mb-1">Shipping Address</p><p>{formatShippingAddress(order.shippingAddress as string | Record<string, string>)}</p></div>
         </Card>
       </div>
 
@@ -1770,7 +1785,7 @@ function OrderDetailPage() {
             <Separator />
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div><p className="font-medium text-gray-500">Bill To</p><p className="font-medium">{user?.name}</p><p>{user?.email}</p></div>
-              <div className="text-right"><p className="font-medium text-gray-500">Ship To</p><p>{order.shippingAddress}</p></div>
+              <div className="text-right"><p className="font-medium text-gray-500">Ship To</p><p>{formatShippingAddress(order.shippingAddress as string | Record<string, string>)}</p></div>
             </div>
             <Separator />
             <table className="w-full text-sm">

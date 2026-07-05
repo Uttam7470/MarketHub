@@ -36,6 +36,14 @@ import type { Product, Order, ApiResponse, VendorDashboardStats, VendorWallet, W
 
 const formatCurrency = (price: number | undefined | null) => '₹' + (price ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
+function formatShippingAddress(addr: string | Record<string, string>): string {
+  if (typeof addr === 'object' && addr !== null) {
+    const a = addr as Record<string, string>;
+    return `${a.name}, ${a.address}, ${a.city}, ${a.state} - ${a.pincode}, Phone: ${a.phone}`;
+  }
+  return String(addr);
+}
+
 function timeAgo(dateStr: string): string {
   const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
   if (seconds < 60) return 'Just now';
@@ -909,7 +917,7 @@ function VendorOrders() {
               <div className="space-y-4">
                 <div className="flex justify-between items-start border-b pb-4">
                   <div><h3 className="text-lg font-bold text-orange-600">INVOICE</h3><p className="text-muted-foreground">Order #{printDialog.order?.orderNumber}</p><p className="text-muted-foreground">{new Date(printDialog.order?.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
-                  <div className="text-right"><p className="font-medium">{printDialog.order?.user?.name}</p><p className="text-muted-foreground text-xs">{printDialog.order?.shippingAddress}</p></div>
+                  <div className="text-right"><p className="font-medium">{printDialog.order?.user?.name}</p><p className="text-muted-foreground text-xs">{formatShippingAddress(printDialog.order?.shippingAddress as string | Record<string, string>)}</p></div>
                 </div>
                 <Table>
                   <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty</TableHead><TableHead>Price</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
@@ -926,7 +934,7 @@ function VendorOrders() {
               <div className="space-y-4">
                 <div className="flex justify-between items-start border-b pb-4">
                   <div><h3 className="text-lg font-bold text-orange-600">PACKING SLIP</h3><p className="text-muted-foreground">Order #{printDialog.order?.orderNumber}</p></div>
-                  <div className="text-right"><p className="font-medium">{printDialog.order?.user?.name}</p><p className="text-muted-foreground text-xs">{printDialog.order?.shippingAddress}</p></div>
+                  <div className="text-right"><p className="font-medium">{printDialog.order?.user?.name}</p><p className="text-muted-foreground text-xs">{formatShippingAddress(printDialog.order?.shippingAddress as string | Record<string, string>)}</p></div>
                 </div>
                 <div className="space-y-2">
                   {vendorItems(printDialog.order).map(item => (
@@ -944,7 +952,7 @@ function VendorOrders() {
                   <h2 className="text-2xl font-bold mb-4">SHIPPING LABEL</h2>
                   <div className="text-left space-y-2 text-sm">
                     <div className="flex justify-between"><span className="font-bold">From:</span><span>{user?.name} (Vendor)</span></div>
-                    <div className="flex justify-between"><span className="font-bold">To:</span><span>{printDialog.order?.shippingAddress}</span></div>
+                    <div className="flex justify-between"><span className="font-bold">To:</span><span>{formatShippingAddress(printDialog.order?.shippingAddress as string | Record<string, string>)}</span></div>
                     <Separator />
                     <div className="flex justify-between"><span className="font-bold">Order:</span><span>#{printDialog.order?.orderNumber}</span></div>
                     <div className="flex justify-between"><span className="font-bold">Items:</span><span>{vendorItems(printDialog.order).length} item(s)</span></div>
