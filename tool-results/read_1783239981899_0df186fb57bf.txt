@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useMemo, useCallback } from 'react';
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→import { motion, AnimatePresence } from 'framer-motion';
+     6→import { toast } from '@/lib/sonner';
+     7→import { authToast, authErrorToast, vendorStatusToast } from '@/lib/auth-toast';
+     8→import {
+     9→  Search, ShoppingCart, Heart, User, Menu, X, ChevronDown, Star, StarHalf,
+    10→  Minus, Plus, Trash2, ChevronRight, ChevronLeft, MapPin, Phone, Mail,
+    11→  Package, Truck, CheckCircle, Clock, Shield, Gift, TrendingUp,
+    12→  BarChart3, Users, ArrowRight, Eye, Share2, GitCompare, Tag,
+    13→  Store, CreditCard, Banknote, Smartphone, Building2, Home,
+    14→  Settings, LogOut, Bell, Sun, Moon, Monitor, Filter, SlidersHorizontal,
+    15→  Bookmark, Send, Printer, RotateCcw, XCircle,
+    16→  MessageCircle, Facebook, Twitter, Link as LinkIcon, HelpCircle, Headphones, SearchX, ShoppingBag,
+    17→  Loader2, ShieldCheck
+    18→} from 'lucide-react';
+    19→
+    20→import { Button } from '@/components/ui/button';
+    21→import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+    22→import { Input } from '@/components/ui/input';
+    23→import { Label } from '@/components/ui/label';
+    24→import { Badge } from '@/components/ui/badge';
+    25→import { Separator } from '@/components/ui/separator';
+    26→import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+    27→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+    28→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    29→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    30→import { Checkbox } from '@/components/ui/checkbox';
+    31→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    32→import { Slider } from '@/components/ui/slider';
+    33→import { Textarea } from '@/components/ui/textarea';
+    34→import { Skeleton } from '@/components/ui/skeleton';
+    35→import { ScrollArea } from '@/components/ui/scroll-area';
+    36→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    37→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+    38→import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+    39→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    40→import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
+    41→import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+    42→import { useTheme } from 'next-themes';
+    43→import { useAuthStore, useNavigationStore, useCartStore, useWishlistStore, useCompareStore, useNotificationStore } from '@/stores';
+    44→import { useNotifications } from '@/hooks/use-notifications';
+    45→import type { Product, Category, Brand, Order, Banner, CustomerAddress, ApiResponse } from '@/types';
+    46→
+    47→// ============ HELPERS ============
+    48→
+    49→const formatCurrency = (price: number | undefined | null) => '₹' + (price ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    50→const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    51→
+    52→function useRequireAuth() {
+    53→  const { isAuthenticated } = useAuthStore();
+    54→  const { navigateTo } = useNavigationStore();
+    55→  return (action: string) => {
+    56→    if (!isAuthenticated) {
+    57→      toast.warning('Login required', { description: `Please log in to ${action}.` });
+    58→      navigateTo('login');
+    59→      return false;
+    60→    }
+    61→    return true;
+    62→  };
+    63→}
+    64→const discountPercent = (price: number, compare?: number | null) => compare ? Math.round(((compare - price) / compare) * 100) : 0;
+    65→const badgeColors: Record<string, string> = { BEST_SELLER: 'bg-emerald-500 text-white', NEW_ARRIVAL: 'bg-blue-500 text-white', LIMITED_TIME: 'bg-red-500 text-white', FESTIVAL_OFFER: 'bg-amber-500 text-white' };
+    66→const badgeLabels: Record<string, string> = { BEST_SELLER: 'Best Seller', NEW_ARRIVAL: 'New', LIMITED_TIME: 'Limited', FESTIVAL_OFFER: 'Festival' };
+    67→
+    68→function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
+    69→  const stars = [];
+    70→  for (let i = 1; i <= 5; i++) {
+    71→    if (i <= Math.floor(rating)) {
+    72→      stars.push(<Star key={i} className="fill-amber-400 text-amber-400" size={size} />);
+    73→    } else if (i - 0.5 <= rating) {
+    74→      stars.push(<StarHalf key={i} className="fill-amber-400 text-amber-400" size={size} />);
+    75→    } else {
+    76→      stars.push(<Star key={i} className="text-muted-foreground/30" size={size} />);
+    77→    }
+    78→  }
+    79→  return <span className="inline-flex items-center gap-0.5">{stars}</span>;
+    80→}
+    81→
+    82→function ProductCard({ product }: { product: Product }) {
+    83→  const { navigateTo, setSelectedProductId } = useNavigationStore();
+    84→  const { addItem } = useCartStore();
+    85→  const { toggleItem, hasItem } = useWishlistStore();
+    86→  const { toggleItem: toggleCompare, hasItem: hasCompare } = useCompareStore();
+    87→  const requireAuth = useRequireAuth();
+    88→  const isWishlisted = hasItem(product.id);
+    89→  const isCompared = hasCompare(product.id);
+    90→  const discount = discountPercent(product.price, product.compareAtPrice);
+    91→  const mainImage = product.images?.[0]?.url;
+    92→
+    93→  const handleAddToCart = (e: React.MouseEvent) => {
+    94→    e.stopPropagation();
+    95→    if (!requireAuth('add items to cart')) return;
+    96→    addItem({ productId: product.id, name: product.name, price: product.price, image: mainImage || '', vendorName: product.vendor?.businessName || '', vendorId: product.vendorId, stock: product.stock });
+    97→    toast.success('Added to cart', { description: `${product.name} has been added to your cart.` });
+    98→  };
+    99→
+   100→  const handleWishlistToggle = (e: React.MouseEvent) => {
+   101→    e.stopPropagation();
+   102→    if (!requireAuth('add items to wishlist')) return;
+   103→    toggleItem(product.id);
+   104→    if (isWishlisted) {
+   105→      toast.info('Removed from wishlist');
+   106→    } else {
+   107→      toast.success('Added to wishlist', { description: product.name });
+   108→    }
+   109→  };
+   110→
+   111→  const handleCompareToggle = (e: React.MouseEvent) => {
+   112→    e.stopPropagation();
+   113→    if (!requireAuth('compare products')) return;
+   114→    toggleCompare(product.id);
+   115→    if (isCompared) {
+   116→      toast.info('Removed from comparison');
+   117→    } else {
+   118→      toast.success('Added to comparison');
+   119→    }
+   120→  };
+   121→
+   122→  return (
+   123→    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} whileHover={{ y: -4 }}>
+   124→      <Card role="article" aria-label={`${product.name}, ${formatCurrency(product.price)}`} className="group overflow-hidden border-border/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer h-full flex flex-col">
+   125→        <div className="relative aspect-square overflow-hidden bg-muted/30">
+   126→          {mainImage ? (
+   127→            <img src={mainImage} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+   128→          ) : (
+   129→            <div className="w-full h-full flex items-center justify-center text-muted-foreground"><Package size={48} /></div>
+   130→          )}
+   131→          <div className="absolute top-2 left-2 flex flex-col gap-1">
+   132→            {discount > 0 && <Badge className="bg-red-500 text-white text-xs">{discount}% OFF</Badge>}
+   133→            {product.badge && (
+   134→              <Badge className={badgeColors[product.badge] || 'bg-gray-500 text-white'}>{badgeLabels[product.badge]}</Badge>
+   135→            )}
+   136→          </div>
+   137→          {product.stock < 5 && product.stock > 0 && <Badge variant="secondary" className="absolute top-2 right-10 text-xs">Low Stock</Badge>}
+   138→          {product.stock === 0 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Badge variant="destructive">Out of Stock</Badge></div>}
+   139→          <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+   140→            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" aria-label={isWishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`} onClick={handleWishlistToggle}>
+   141→              <Heart size={14} className={isWishlisted ? 'fill-red-500 text-red-500' : ''} />
+   142→            </Button>
+   143→            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md" onClick={handleCompareToggle}>
+   144→              <GitCompare size={14} className={isCompared ? 'text-orange-500' : ''} />
+   145→            </Button>
+   146→          </div>
+   147→        </div>
+   148→        <CardContent className="p-3 flex-1 flex flex-col gap-1.5" onClick={() => { setSelectedProductId(product.id); navigateTo('product-detail'); }}>
+   149→          <p className="text-xs text-muted-foreground truncate">{product.vendor?.businessName}</p>
+   150→          <h3 className="text-sm font-medium line-clamp-2 leading-tight min-h-[2.5rem]">{product.name}</h3>
+   151→          <div className="flex items-center gap-1">
+   152→            <StarRating rating={product.rating} size={12} />
+   153→            <span className="text-xs text-muted-foreground">({product.reviewCount})</span>
+   154→          </div>
+   155→          <div className="flex items-baseline gap-2 mt-auto">
+   156→            <span className="text-lg font-bold text-foreground">{formatCurrency(product.price)}</span>
+   157→            {product.compareAtPrice && product.compareAtPrice > product.price && (
+   158→              <span className="text-sm text-muted-foreground line-through">{formatCurrency(product.compareAtPrice)}</span>
+   159→            )}
+   160→          </div>
+   161→        </CardContent>
+   162→        <CardFooter className="p-3 pt-0">
+   163→          <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 text-white" aria-label={`Add ${product.name} to cart`} disabled={product.stock === 0} onClick={handleAddToCart}>
+   164→            <ShoppingCart size={14} className="mr-1.5" /> Add to Cart
+   165→          </Button>
+   166→        </CardFooter>
+   167→      </Card>
+   168→    </motion.div>
+   169→  );
+   170→}
+   171→
+   172→function ProductGrid({ products, loading }: { products: Product[]; loading?: boolean }) {
+   173→  if (loading) {
+   174→    return <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+   175→      {Array.from({ length: 8 }).map((_, i) => (
+   176→        <Card key={i} className="overflow-hidden">
+   177→          <Skeleton className="aspect-square" />
+   178→          <div className="p-3 space-y-2">
+   179→            <Skeleton className="h-3 w-16" />
+   180→            <Skeleton className="h-4 w-full" />
+   181→            <Skeleton className="h-4 w-3/4" />
+   182→            <div className="flex items-center gap-1"><Skeleton className="h-3 w-20" /></div>
+   183→            <Skeleton className="h-5 w-24" />
+   184→          </div>
+   185→          <div className="px-3 pb-3"><Skeleton className="h-8 w-full rounded-md" /></div>
+   186→        </Card>
+   187→      ))}
+   188→    </div>;
+   189→  }
+   190→  if (!products.length) {
+   191→    return (
+   192→      <div className="flex flex-col items-center justify-center py-16 text-center">
+   193→        <SearchX size={64} className="text-muted-foreground/30 mb-4" />
+   194→        <h3 className="text-lg font-medium text-muted-foreground">No results found</h3>
+   195→        <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters or search</p>
+   196→        <Button variant="outline" className="mt-4" onClick={() => { const { setSearchQuery, setSelectedCategory, setSelectedBrand, setCustomerView, setPriceRange } = useNavigationStore.getState(); setSearchQuery(''); setSelectedCategory(null); setSelectedBrand(null); setPriceRange([0, 100000]); setCustomerView('products'); }}>Clear search</Button>
+   197→      </div>
+   198→    );
+   199→  }
+   200→  return <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">{products.map(p => <ProductCard key={p.id} product={p} />)}</div>;
+   201→}
+   202→
+   203→// ============ HEADER ============
+   204→
+   205→function CustomerHeader() {
+   206→  const { user, isAuthenticated, logout } = useAuthStore();
+   207→  const { customerView, searchQuery, setSearchQuery, setCustomerView, setMobileMenuOpen, isMobileMenuOpen, isCartOpen, setCartOpen, setAppView, navigateTo, setSelectedProductId } = useNavigationStore();
+   208→  const { getItemCount } = useCartStore();
+   209→  const { setTheme, theme } = useTheme();
+   210→  const itemCount = getItemCount();
+   211→  const [searchInput, setSearchInput] = useState(searchQuery);
+   212→  const [mounted, setMounted] = useState(false);
+   213→  const [suggestions, setSuggestions] = useState<any[]>([]);
+   214→  const [showSuggestions, setShowSuggestions] = useState(false);
+   215→  const qc = useQueryClient();
+   216→
+   217→  const { notifications, unreadCount } = useNotifications();
+   218→  const { markAllRead: storeMarkAllRead } = useNotificationStore();
+   219→  const markAllRead = async () => {
+   220→    await fetch('/api/notifications/mark-all-read', { method: 'PUT' });
+   221→    storeMarkAllRead();
+   222→    qc.invalidateQueries({ queryKey: ['notifications'] });
+   223→  };
+   224→
+   225→  const { data: searchHistory = [] } = useQuery({
+   226→    queryKey: ['search-history'],
+   227→    queryFn: () => fetch('/api/search/history').then(r => r.json()).then((r: any) => r.data || []),
+   228→    enabled: !!mounted && isAuthenticated,
+   229→  });
+   230→
+   231→  useEffect(() => { setSearchInput(searchQuery); }, [searchQuery]);
+   232→  useEffect(() => { setMounted(true); }, []);
+   233→
+   234→  useEffect(() => {
+   235→    if (!searchInput.trim()) { setSuggestions([]); return; }
+   236→    const timer = setTimeout(async () => {
+   237→      try {
+   238→        const res = await fetch(`/api/search/suggestions?q=${encodeURIComponent(searchInput)}`);
+   239→        const data = await res.json();
+   240→        setSuggestions(data.data || []);
+   241→      } catch { setSuggestions([]); }
+   242→    }, 300);
+   243→    return () => clearTimeout(timer);
+   244→  }, [searchInput]);
+   245→
+   246→  const handleSearch = (e: React.FormEvent) => {
+   247→    e.preventDefault();
+   248→    setSearchQuery(searchInput);
+   249→    setCustomerView(searchInput ? 'search' : 'home');
+   250→  };
+   251→
+   252→  return (
+   253→    <header role="banner" className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+   254→      {/* Top bar */}
+   255→      <div className="bg-orange-500 text-white text-xs py-1.5 text-center hidden md:block">
+   256→        Free shipping on orders above ₹500 | Use code WELCOME10 for 10% off on first order!
+   257→      </div>
+   258→      {/* Main nav */}
+   259→      <div className="container mx-auto px-4">
+   260→        <div className="flex items-center h-16 gap-4">
+   261→          <Button variant="ghost" size="icon" className="md:hidden" aria-label="Toggle navigation menu" aria-expanded={isMobileMenuOpen} onClick={() => setMobileMenuOpen(!isMobileMenuOpen)}>
+   262→            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+   263→          </Button>
+   264→          <div className="flex items-center gap-2 cursor-pointer shrink-0" onClick={() => { setAppView('customer'); setCustomerView('home'); }}>
+   265→            <Store size={28} className="text-orange-500" />
+   266→            <span className="text-xl font-bold hidden sm:block">MarketHub</span>
+   267→          </div>
+   268→
+   269→          <form onSubmit={handleSearch} className="flex-1 max-w-2xl mx-4 relative" onFocus={() => setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}>
+   270→            <div className="relative">
+   271→              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+   272→              <Input aria-label="Search products" placeholder="Search products, brands, categories..." value={searchInput} onChange={e => setSearchInput(e.target.value)} className="pl-10 pr-4 h-10 bg-muted/50" />
+   273→            </div>
+   274→            {showSuggestions && suggestions.length > 0 && (
+   275→              <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+   276→                {suggestions.map((p: any) => (
+   277→                  <div key={p.id} className="flex items-center gap-3 p-2 hover:bg-muted cursor-pointer" onClick={() => { setSearchQuery(p.name); setSearchInput(p.name); setShowSuggestions(false); setSelectedProductId(p.id); navigateTo('product-detail'); }}>
+   278→                    <img src={p.images?.[0]?.url || ''} className="w-8 h-8 object-cover rounded" alt="" />
+   279→                    <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{p.name}</p><p className="text-xs text-muted-foreground">₹{p.price.toLocaleString('en-IN')}</p></div>
+   280→                  </div>
+   281→                ))}
+   282→              </div>
+   283→            )}
+   284→            {showSuggestions && suggestions.length === 0 && !searchInput.trim() && searchHistory.length > 0 && (
+   285→              <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+   286→                <div className="px-3 py-2 text-xs font-medium text-muted-foreground">Recent Searches</div>
+   287→                {searchHistory.slice(0, 5).map((s: any) => (
+   288→                  <div key={s.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer text-sm" onClick={() => { setSearchQuery(s.query); setSearchInput(s.query); setShowSuggestions(false); setCustomerView('search'); }}>
+   289→                    <Clock size={14} className="text-muted-foreground" />{s.query}
+   290→                  </div>
+   291→                ))}
+   292→              </div>
+   293→            )}
+   294→          </form>
+   295→
+   296→          <div className="flex items-center gap-1">
+   297→            <TooltipProvider><Tooltip><TooltipTrigger asChild>
+   298→              <Button variant="ghost" size="icon" aria-label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} suppressHydrationWarning>
+   299→                {!mounted ? <div className="w-5 h-5" /> : theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+   300→              </Button>
+   301→            </TooltipTrigger><TooltipContent>Toggle theme</TooltipContent></Tooltip></TooltipProvider>
+   302→
+   303→            <Button variant="ghost" size="icon" className="relative" aria-label={`Shopping cart with ${itemCount} items`} onClick={() => setCartOpen(true)}>
+   304→              <ShoppingCart size={20} />
+   305→              {mounted && itemCount > 0 && <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] bg-orange-500 text-white border-2 border-background">{itemCount}</Badge>}
+   306→            </Button>
+   307→
+   308→            {isAuthenticated && (
+   309→              <DropdownMenu>
+   310→                <DropdownMenuTrigger asChild>
+   311→                  <Button variant="ghost" size="icon" className="relative">
+   312→                    <Bell size={20} />
+   313→                    {mounted && unreadCount > 0 && <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] bg-red-500 text-white border-2 border-background">{unreadCount}</Badge>}
+   314→                  </Button>
+   315→                </DropdownMenuTrigger>
+   316→                <DropdownMenuContent align="end" className="w-80">
+   317→                  <div className="px-3 py-2 flex items-center justify-between">
+   318→                    <span className="font-semibold text-sm">Notifications</span>
+   319→                    {unreadCount > 0 && <Button variant="ghost" size="sm" className="text-xs h-6" onClick={() => markAllRead()}><CheckCircle size={12} className="mr-1" />Mark all read</Button>}
+   320→                  </div>
+   321→                  <DropdownMenuSeparator />
+   322→                  <div className="max-h-64 overflow-y-auto">
+   323→                    {notifications.length === 0 ? (
+   324→                      <div className="flex flex-col items-center justify-center py-8 text-center">
+   325→                        <Bell size={32} className="text-muted-foreground/30 mb-2" />
+   326→                        <p className="text-sm text-muted-foreground">No notifications</p>
+   327→                      </div>
+   328→                    ) :
+   329→                      notifications.slice(0, 10).map((n: any) => (
+   330→                        <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1 p-3 cursor-pointer" onClick={() => { if (n.link) { /* could navigate */ } }}>
+   331→                          <p className={`text-sm ${!n.isRead ? 'font-medium' : 'text-muted-foreground'}`}>{n.title}</p>
+   332→                          <p className="text-xs text-muted-foreground line-clamp-1">{n.message}</p>
+   333→                          <p className="text-xs text-muted-foreground/60">{new Date(n.createdAt).toLocaleDateString()}</p>
+   334→                        </DropdownMenuItem>
+   335→                      ))
+   336→                    }
+   337→                  </div>
+   338→                </DropdownMenuContent>
+   339→              </DropdownMenu>
+   340→            )}
+   341→
+   342→            {isAuthenticated ? (
+   343→              <DropdownMenu>
+   344→                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><User size={20} /></Button></DropdownMenuTrigger>
+   345→                <DropdownMenuContent align="end" className="w-56">
+   346→                  <div className="px-3 py-2"><p className="text-sm font-medium">{user?.name}</p><p className="text-xs text-muted-foreground">{user?.email}</p></div>
+   347→                  <DropdownMenuSeparator />
+   348→                  <DropdownMenuItem onClick={() => navigateTo('profile')}><User size={16} className="mr-2" />My Profile</DropdownMenuItem>
+   349→                  <DropdownMenuItem onClick={() => navigateTo('orders')}><Package size={16} className="mr-2" />My Orders</DropdownMenuItem>
+   350→                  <DropdownMenuItem onClick={() => navigateTo('wishlist')}><Heart size={16} className="mr-2" />Wishlist</DropdownMenuItem>
+   351→                  <DropdownMenuItem onClick={() => navigateTo('addresses')}><MapPin size={16} className="mr-2" />Addresses</DropdownMenuItem>
+   352→                  <DropdownMenuSeparator />
+   353→                  <DropdownMenuItem onClick={() => { logout(); setCustomerView('home'); authToast.logoutSuccess(); }} className="text-destructive"><LogOut size={16} className="mr-2" />Logout</DropdownMenuItem>
+   354→                </DropdownMenuContent>
+   355→              </DropdownMenu>
+   356→            ) : (
+   357→              <Button variant="ghost" size="sm" onClick={() => navigateTo('login')} className="hidden sm:flex gap-1.5"><User size={16} />Login</Button>
+   358→            )}
+   359→          </div>
+   360→        </div>
+   361→      </div>
+   362→      {/* Category nav */}
+   363→      <div className="hidden md:block border-t bg-muted/30">
+   364→        <div className="container mx-auto px-4">
+   365→          <nav aria-label="Main navigation" className="flex items-center gap-6 h-10 text-sm overflow-x-auto">
+   366→            <CategoriesNav />
+   367→          </nav>
+   368→        </div>
+   369→      </div>
+   370→      {/* Mobile menu */}
+   371→      <Sheet open={isMobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+   372→        <SheetContent side="left" className="w-80 p-0">
+   373→          <SheetHeader className="p-4 border-b"><SheetTitle className="flex items-center gap-2"><Store size={20} className="text-orange-500" />MarketHub</SheetTitle></SheetHeader>
+   374→          <ScrollArea className="h-[calc(100vh-80px)]">
+   375→            <div className="p-4 space-y-2">
+   376→              <CategoriesNav mobile />
+   377→              <Separator className="my-3" />
+   378→              {isAuthenticated ? (
+   379→                <>
+   380→                  <p className="text-sm font-medium px-2">{user?.name}</p>
+   381→                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('profile'); setMobileMenuOpen(false); }}><User size={16} className="mr-2" />Profile</Button>
+   382→                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('orders'); setMobileMenuOpen(false); }}><Package size={16} className="mr-2" />Orders</Button>
+   383→                  <Button variant="ghost" className="w-full justify-start" onClick={() => { navigateTo('wishlist'); setMobileMenuOpen(false); }}><Heart size={16} className="mr-2" />Wishlist</Button>
+   384→                  <Button variant="ghost" className="w-full justify-start text-destructive" onClick={() => { logout(); setMobileMenuOpen(false); authToast.logoutSuccess(); }}><LogOut size={16} className="mr-2" />Logout</Button>
+   385→                </>
+   386→              ) : (
+   387→                <Button className="w-full bg-orange-500 hover:bg-orange-600" onClick={() => { navigateTo('login'); setMobileMenuOpen(false); }}>Login / Register</Button>
+   388→              )}
+   389→            </div>
+   390→          </ScrollArea>
+   391→        </SheetContent>
+   392→      </Sheet>
+   393→      {/* Cart Sheet */}
+   394→      <CartSheet />
+   395→    </header>
+   396→  );
+   397→}
+   398→
+   399→function CategoriesNav({ mobile }: { mobile?: boolean }) {
+   400→  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: ApiResponse<Category[]>) => r.data || []) });
+   401→  const { setSelectedCategory, setCustomerView, setMobileMenuOpen } = useNavigationStore();
+   402→
+   403→  const handleCategoryClick = (slug: string) => {
+   404→    setSelectedCategory(slug);
+   405→    setCustomerView('products');
+   406→    if (mobile) setMobileMenuOpen(false);
+   407→  };
+   408→
+   409→  if (mobile) {
+   410→    return categories?.map(cat => (
+   411→      <div key={cat.id} className="space-y-1">
+   412→        <Button variant="ghost" className="w-full justify-start font-medium" onClick={() => handleCategoryClick(cat.slug)}>{cat.name}</Button>
+   413→        {cat.children?.map(child => (
+   414→          <Button key={child.id} variant="ghost" className="w-full justify-start pl-8 text-sm text-muted-foreground" onClick={() => handleCategoryClick(child.slug)}>{child.name}</Button>
+   415→        ))}
+   416→      </div>
+   417→    ));
+   418→  }
+   419→
+   420→  return <>
+   421→    <Button variant="ghost" size="sm" className="h-10 text-sm font-medium" onClick={() => { setCustomerView('products'); setSelectedCategory(null); }}>All Products</Button>
+   422→    {categories?.map(cat => (
+   423→      <DropdownMenu key={cat.id}>
+   424→        <DropdownMenuTrigger asChild>
+   425→          <Button variant="ghost" size="sm" className="h-10 text-sm font-medium hover:text-orange-500">{cat.name}{cat.children?.length ? <ChevronDown size={14} className="ml-1" /> : null}</Button>
+   426→        </DropdownMenuTrigger>
+   427→        {cat.children?.length ? (
+   428→          <DropdownMenuContent>
+   429→            {cat.children.map(child => (
+   430→              <DropdownMenuItem key={child.id} onClick={() => handleCategoryClick(child.slug)}>{child.name} <Badge variant="secondary" className="ml-auto text-xs">{child._count?.products || 0}</Badge></DropdownMenuItem>
+   431→            ))}
+   432→          </DropdownMenuContent>
+   433→        ) : null}
+   434→      </DropdownMenu>
+   435→    ))}
+   436→  </>;
+   437→}
+   438→
+   439→function CartSheet() {
+   440→  const { items, removeItem, updateQuantity, getSubtotal, getShipping } = useCartStore();
+   441→  const { isCartOpen, setCartOpen, navigateTo } = useNavigationStore();
+   442→  const requireAuth = useRequireAuth();
+   443→  const [removeTarget, setRemoveTarget] = useState<{id: string; name: string} | null>(null);
+   444→
+   445→  const handleRemove = (id: string, name: string) => {
+   446→    removeItem(id);
+   447→    toast.info('Removed from cart', { description: `${name} removed.` });
+   448→    setRemoveTarget(null);
+   449→  };
+   450→
+   451→  return (
+   452→    <Sheet open={isCartOpen} onOpenChange={setCartOpen}>
+   453→      <SheetContent className="w-full sm:max-w-md flex flex-col">
+   454→        <SheetHeader><SheetTitle className="flex items-center gap-2"><ShoppingCart size={20} />Cart ({items.length})</SheetTitle></SheetHeader>
+   455→        {items.length === 0 ? (
+   456→          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3">
+   457→            <ShoppingBag size={48} className="text-muted-foreground/30" /><p className="font-medium">Your cart is empty</p>
+   458→            <p className="text-sm text-muted-foreground">Looks like you haven&apos;t added anything yet</p>
+   459→            <Button variant="outline" onClick={() => setCartOpen(false)}>Browse Products</Button>
+   460→          </div>
+   461→        ) : (
+   462→          <>
+   463→            <ScrollArea className="flex-1 -mx-6 px-6">
+   464→              <div className="space-y-4 py-4">{items.map(item => (
+   465→                <div key={item.productId} className="flex gap-3 p-3 bg-muted/30 rounded-lg">
+   466→                  <div className="w-16 h-16 rounded-md overflow-hidden bg-muted shrink-0">
+   467→                    {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={20} /></div>}
+   468→                  </div>
+   469→                  <div className="flex-1 min-w-0">
+   470→                    <p className="text-sm font-medium truncate">{item.name}</p>
+   471→                    <p className="text-xs text-muted-foreground">{item.vendorName}</p>
+   472→                    <p className="text-sm font-bold mt-1">{formatCurrency(item.price)}</p>
+   473→                    <div className="flex items-center gap-2 mt-1">
+   474→                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => { updateQuantity(item.productId, item.quantity - 1); toast.success('Quantity updated'); }}><Minus size={12} /></Button>
+   475→                      <span className="text-sm w-6 text-center">{item.quantity}</span>
+   476→                      <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => { updateQuantity(item.productId, item.quantity + 1); toast.success('Quantity updated'); }}><Plus size={12} /></Button>
+   477→                      <Button size="icon" variant="ghost" className="h-6 w-6 ml-auto text-destructive" onClick={() => setRemoveTarget({id: item.productId, name: item.name})}><Trash2 size={12} /></Button>
+   478→                    </div>
+   479→                  </div>
+   480→                </div>
+   481→              ))}</div>
+   482→            </ScrollArea>
+   483→            <div className="border-t pt-4 space-y-3">
+   484→              <div className="flex justify-between text-sm"><span>Subtotal</span><span>{formatCurrency(getSubtotal())}</span></div>
+   485→              <div className="flex justify-between text-sm"><span>Shipping</span><span>{getShipping() === 0 ? <span className="text-green-600">Free</span> : formatCurrency(getShipping())}</span></div>
+   486→              <Separator />
+   487→              <div className="flex justify-between font-bold"><span>Total</span><span>{formatCurrency(getSubtotal() + getShipping())}</span></div>
+   488→              <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white" onClick={() => { if (!requireAuth('proceed to checkout')) return; setCartOpen(false); navigateTo('checkout'); }}>
+   489→                Checkout ({formatCurrency(getSubtotal() + getShipping())})
+   490→              </Button>
+   491→            </div>
+   492→          </>
+   493→        )}
+   494→        <AlertDialog open={!!removeTarget} onOpenChange={() => setRemoveTarget(null)}>
+   495→          <AlertDialogContent>
+   496→            <AlertDialogHeader>
+   497→              <AlertDialogTitle>Remove {removeTarget?.name} from cart?</AlertDialogTitle>
+   498→              <AlertDialogDescription>This item will be removed from your cart.</AlertDialogDescription>
+   499→            </AlertDialogHeader>
+   500→            <AlertDialogFooter>
+   501→              <AlertDialogCancel>Cancel</AlertDialogCancel>
+   502→              <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => removeTarget && handleRemove(removeTarget.id, removeTarget.name)}>Remove</AlertDialogAction>
+   503→            </AlertDialogFooter>
+   504→          </AlertDialogContent>
+   505→        </AlertDialog>
+   506→      </SheetContent>
+   507→    </Sheet>
+   508→  );
+   509→}
+   510→
+   511→// ============ HOME PAGE ============
+   512→
+   513→function HomePage() {
+   514→  const { data: banners } = useQuery({ queryKey: ['banners'], queryFn: () => fetch('/api/banners?position=HOME').then(r => r.json()).then((r: ApiResponse<Banner[]>) => r.data || []) });
+   515→  const { data: categories, isLoading: categoriesLoading } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: ApiResponse<Category[]>) => r.data || []) });
+   516→  const { data: featuredData, isLoading: featuredLoading } = useQuery({ queryKey: ['products', 'featured'], queryFn: () => fetch('/api/products?featured=true&limit=8').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
+   517→  const { data: newArrivals, isLoading: newArrivalsLoading } = useQuery({ queryKey: ['products', 'new'], queryFn: () => fetch('/api/products?limit=8&sort=newest').then(r => r.json()).then((r: ApiResponse<Product[]>) => r.data || []) });
+   518→  const { data: brands, isLoading: brandsLoading } = useQuery({ queryKey: ['brands'], queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: ApiResponse<Brand[]>) => r.data || []) });
+   519→  const { data: popularSearches } = useQuery({ queryKey: ['popular-searches'], queryFn: () => fetch('/api/search/popular').then(r => r.json()).then((r: any) => r.data || []) });
+   520→  const { setSelectedCategory, setCustomerView, setSearchQuery } = useNavigationStore();
+   521→  const [bannerIdx, setBannerIdx] = useState(0);
+   522→
+   523→  // Recently Viewed
+   524→  const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(() => {
+   525→    if (typeof window === 'undefined') return [];
+   526→    try {
+   527→      const stored = localStorage.getItem('marketplace-recently-viewed');
+   528→      return stored ? JSON.parse(stored).slice(0, 6) : [];
+   529→    } catch { return []; }
+   530→  });
+   531→
+   532→  const { data: recentlyViewedProducts } = useQuery({
+   533→    queryKey: ['recently-viewed', recentlyViewedIds],
+   534→    queryFn: async () => {
+   535→      if (!recentlyViewedIds.length) return [];
+   536→      const res = await fetch('/api/products?limit=50');
+   537→      const data = await res.json();
+   538→      return (data.data || []).filter((p: Product) => recentlyViewedIds.includes(p.id));
+   539→    },
+   540→    enabled: recentlyViewedIds.length > 0,
+   541→  });
+   542→
+   543→  useEffect(() => {
+   544→    if ((banners?.length || 0) > 1) {
+   545→      const timer = setInterval(() => setBannerIdx(i => (i + 1) % (banners?.length || 1)), 5000);
+   546→      return () => clearInterval(timer);
+   547→    }
+   548→  }, [banners?.length]);
+   549→
+   550→  return (
+   551→    <div className="space-y-10 pb-10">
+   552→      {/* Hero Banner */}
+   553→      {banners && banners.length > 0 && (
+   554→        <div className="relative overflow-hidden rounded-xl mx-4 mt-4 md:mx-0">
+   555→          <AnimatePresence mode="wait">
+   556→            <motion.img key={bannerIdx} src={banners[bannerIdx]?.image} alt={banners[bannerIdx]?.title} className="w-full h-48 md:h-80 object-cover" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+   557→          </AnimatePresence>
+   558→          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
+   559→            {banners.map((_, i) => <button key={i} className={`w-2.5 h-2.5 rounded-full transition-all ${i === bannerIdx ? 'bg-orange-500 w-6' : 'bg-white/70'}`} onClick={() => setBannerIdx(i)} />)}
+   560→          </div>
+   561→        </div>
+   562→      )}
+   563→
+   564→      {/* Categories */}
+   565→      {categoriesLoading ? (
+   566→        <section className="container mx-auto px-4">
+   567→          <div className="flex items-center justify-between mb-4">
+   568→            <Skeleton className="h-7 w-40" />
+   569→            <Skeleton className="h-8 w-20" />
+   570→          </div>
+   571→          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+   572→            {Array.from({ length: 6 }).map((_, i) => (
+   573→              <Card key={i} className="text-center p-4">
+   574→                <Skeleton className="w-12 h-12 mx-auto rounded-full mb-2" />
+   575→                <Skeleton className="h-3 w-16 mx-auto" />
+   576→                <Skeleton className="h-2 w-12 mx-auto mt-1" />
+   577→              </Card>
+   578→            ))}
+   579→          </div>
+   580→        </section>
+   581→      ) : categories && categories.length > 0 ? (
+   582→        <section className="container mx-auto px-4">
+   583→          <div className="flex items-center justify-between mb-4">
+   584→            <h2 className="text-xl font-bold">Shop by Category</h2>
+   585→            <Button variant="ghost" size="sm" className="text-orange-500" onClick={() => { setSelectedCategory(null); setCustomerView('products'); }}>View All <ArrowRight size={14} /></Button>
+   586→          </div>
+   587→          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-3">
+   588→            {categories.slice(0, 7).map(cat => {
+   589→              const allCats = [cat, ...(cat.children || [])];
+   590→              return allCats.slice(0, 1).map(c => (
+   591→                <motion.div key={c.id} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+   592→                  <Card className="cursor-pointer hover:border-orange-300 hover:shadow-md transition-shadow duration-200 text-center p-4" onClick={() => { setSelectedCategory(c.slug); setCustomerView('products'); }}>
+   593→                    <div className="w-12 h-12 mx-auto rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-2 text-orange-500 font-bold text-lg">{c.name[0]}</div>
+   594→                    <p className="text-xs font-medium truncate">{c.name}</p>
+   595→                    <p className="text-[10px] text-muted-foreground">{c._count?.products || 0} items</p>
+   596→                  </Card>
+   597→                </motion.div>
+   598→              ));
+   599→            })}
+   600→          </div>
+   601→        </section>
+   602→      ) : null}
+   603→
+   604→      {/* Featured Products */}
+   605→      <section className="container mx-auto px-4">
+   606→        <div className="flex items-center justify-between mb-4">
+   607→          <h2 className="text-xl font-bold">Featured Products</h2>
+   608→          {!featuredLoading && featuredData && featuredData.length > 0 && <Button variant="ghost" size="sm" className="text-orange-500" onClick={() => { setSelectedCategory(null); setCustomerView('products'); }}>View All <ArrowRight size={14} /></Button>}
+   609→        </div>
+   610→        <ProductGrid products={featuredData || []} loading={featuredLoading} />
+   611→      </section>
+   612→
+   613→      {/* Brands */}
+   614→      {brandsLoading ? (
+   615→        <section className="container mx-auto px-4">
+   616→          <Skeleton className="h-7 w-28 mb-4" />
+   617→          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+   618→            {Array.from({ length: 6 }).map((_, i) => (
+   619→              <Skeleton key={i} className="h-20 rounded-lg" />
+   620→            ))}
+   621→          </div>
+   622→        </section>
+   623→      ) : brands && brands.length > 0 ? (
+   624→        <section className="container mx-auto px-4">
+   625→          <h2 className="text-xl font-bold mb-4">Top Brands</h2>
+   626→          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
+   627→            {brands.map(brand => (
+   628→              <Card key={brand.id} className="flex items-center justify-center p-4 hover:border-orange-300 transition-colors cursor-pointer h-20">
+   629→                <span className="font-bold text-sm text-center">{brand.name}</span>
+   630→              </Card>
+   631→            ))}
+   632→          </div>
+   633→        </section>
+   634→      ) : null}
+   635→
+   636→      {/* New Arrivals */}
+   637→      <section className="container mx-auto px-4">
+   638→        <div className="flex items-center justify-between mb-4">
+   639→          <h2 className="text-xl font-bold">New Arrivals</h2>
+   640→        </div>
+   641→        <ProductGrid products={newArrivals || []} loading={newArrivalsLoading} />
+   642→      </section>
+   643→
+   644→      {/* Features */}
+   645→      <section className="container mx-auto px-4">
+   646→        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   647→          {[
+   648→            { icon: <Truck size={24} />, title: 'Free Shipping', desc: 'On orders above ₹500' },
+   649→            { icon: <Shield size={24} />, title: 'Secure Payment', desc: '100% secure payments' },
+   650→            { icon: <RefreshCw size={24} />, title: 'Easy Returns', desc: '7-day return policy' },
+   651→            { icon: <Gift size={24} />, title: 'Best Deals', desc: 'Unbeatable prices' },
+   652→          ].map((f, i) => (
+   653→            <Card key={i} className="p-4 text-center"><div className="mx-auto text-orange-500 mb-2">{f.icon}</div><h3 className="font-medium text-sm">{f.title}</h3><p className="text-xs text-muted-foreground">{f.desc}</p></Card>
+   654→          ))}
+   655→        </div>
+   656→      </section>
+   657→
+   658→      {/* Popular Searches */}
+   659→      {popularSearches && (popularSearches as any[]).length > 0 && (
+   660→        <section className="container mx-auto px-4">
+   661→          <h2 className="text-xl font-bold mb-4">Popular Searches</h2>
+   662→          <div className="flex flex-wrap gap-2">
+   663→            {(popularSearches as any[]).map((s: any, i: number) => (
+   664→              <Button key={i} variant="outline" size="sm" className="rounded-full" onClick={() => { setSearchQuery(s.query || s); setCustomerView('products'); }}>
+   665→                <Search size={14} className="mr-1.5" />{s.query || s}
+   666→              </Button>
+   667→            ))}
+   668→          </div>
+   669→        </section>
+   670→      )}
+   671→
+   672→      {/* Recently Viewed */}
+   673→      {recentlyViewedProducts && recentlyViewedProducts.length > 0 && (
+   674→        <section className="container mx-auto px-4">
+   675→          <div className="flex items-center justify-between mb-4">
+   676→            <h2 className="text-xl font-bold">Recently Viewed</h2>
+   677→            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { try { localStorage.removeItem('marketplace-recently-viewed'); } catch {} setRecentlyViewedIds([]); }}>
+   678→              <Trash2 size={14} className="mr-1.5" />Clear
+   679→            </Button>
+   680→          </div>
+   681→          <ProductGrid products={recentlyViewedProducts} />
+   682→        </section>
+   683→      )}
+   684→    </div>
+   685→  );
+   686→}
+   687→
+   688→// Need RefreshCw icon
+   689→function RefreshCw(props: React.SVGProps<SVGSVGElement> & { size?: number }) {
+   690→  const { size = 24, ...rest } = props;
+   691→  return (
+   692→    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...rest}>
+   693→      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" />
+   694→    </svg>
+   695→  );
+   696→}
+   697→
+   698→// ============ FILTER SIDEBAR (extracted) ============
+   699→
+   700→function FilterSidebarContent({ allCategories, allBrands }: { allCategories: Category[]; allBrands: Brand[] }) {
+   701→  const { selectedCategory, selectedBrand, priceRange, setPriceRange, setSelectedBrand } = useNavigationStore();
+   702→  const navStore = useNavigationStore();
+   703→
+   704→  return (
+   705→    <div className="space-y-6">
+   706→      <div>
+   707→        <h3 className="font-semibold mb-3 flex items-center gap-2"><Filter size={16} /> Filters</h3>
+   708→        <Accordion type="multiple" defaultValue={['category', 'brand', 'price', 'rating']}>
+   709→          <AccordionItem value="category"><AccordionTrigger>Category</AccordionTrigger>
+   710→            <AccordionContent>
+   711→              <div className="space-y-2 max-h-48 overflow-y-auto">
+   712→                <Button variant={selectedCategory === null ? 'secondary' : 'ghost'} size="sm" className="w-full justify-start" onClick={() => { navStore.setSelectedCategory(null); }}>All Categories</Button>
+   713→                {allCategories.map(cat => (
+   714→                  <Button key={cat.id} variant={selectedCategory === cat.slug ? 'secondary' : 'ghost'} size="sm" className="w-full justify-start" onClick={() => { navStore.setSelectedCategory(cat.slug); }}>
+   715→                    {cat.name} <Badge variant="secondary" className="ml-auto text-xs">{cat._count?.products || 0}</Badge>
+   716→                  </Button>
+   717→                ))}
+   718→              </div>
+   719→            </AccordionContent>
+   720→          </AccordionItem>
+   721→          <AccordionItem value="brand"><AccordionTrigger>Brand</AccordionTrigger>
+   722→            <AccordionContent>
+   723→              <div className="space-y-2 max-h-48 overflow-y-auto">
+   724→                {allBrands.map(brand => (
+   725→                  <label key={brand.id} className="flex items-center gap-2 cursor-pointer">
+   726→                    <Checkbox checked={selectedBrand === brand.slug} onCheckedChange={() => setSelectedBrand(selectedBrand === brand.slug ? null : brand.slug)} />
+   727→                    <span className="text-sm">{brand.name}</span>
+   728→                    <span className="text-xs text-muted-foreground ml-auto">({brand._count?.products || 0})</span>
+   729→                  </label>
+   730→                ))}
+   731→              </div>
+   732→            </AccordionContent>
+   733→          </AccordionItem>
+   734→          <AccordionItem value="price"><AccordionTrigger>Price Range</AccordionTrigger>
+   735→            <AccordionContent>
+   736→              <Slider min={0} max={100000} step={1000} value={priceRange} onValueChange={(v) => { setPriceRange(v as [number, number]); }} className="mt-2" />
+   737→              <div className="flex justify-between text-sm mt-2"><span>{formatCurrency(priceRange[0])}</span><span>{formatCurrency(priceRange[1])}</span></div>
+   738→            </AccordionContent>
+   739→          </AccordionItem>
+   740→        </Accordion>
+   741→      </div>
+   742→    </div>
+   743→  );
+   744→}
+   745→
+   746→// ============ PRODUCTS LIST PAGE ============
+   747→
+   748→function ProductsPage() {
+   749→  const { selectedCategory, selectedBrand, searchQuery, priceRange, sortBy, setPriceRange, setSortBy, setSelectedBrand } = useNavigationStore();
+   750→  const [page, setPage] = useState(1);
+   751→  const [mobileFilters, setMobileFilters] = useState(false);
+   752→  const [minPrice, maxPrice] = priceRange;
+   753→
+   754→  const queryParams = new URLSearchParams({ page: String(page), limit: '20', sort: sortBy, minPrice: String(minPrice), maxPrice: String(maxPrice) });
+   755→  if (selectedCategory) queryParams.set('category', selectedCategory);
+   756→  if (selectedBrand) queryParams.set('brand', selectedBrand);
+   757→  if (searchQuery) queryParams.set('search', searchQuery);
+   758→
+   759→  const { data, isLoading } = useQuery({
+   760→    queryKey: ['products', queryParams.toString()],
+   761→    queryFn: () => fetch(`/api/products?${queryParams}`).then(r => r.json()).then((r: ApiResponse<Product[]>) => r),
+   762→  });
+   763→
+   764→  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: ApiResponse<Category[]>) => r.data || []) });
+   765→  const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: ApiResponse<Brand[]>) => r.data || []) });
+   766→
+   767→  const allCategories = useMemo(() => {
+   768→    const flat: Category[] = [];
+   769→    categories?.forEach(c => { flat.push(c); c.children?.forEach(ch => flat.push(ch)); });
+   770→    return flat;
+   771→  }, [categories]);
+   772→
+   773→  return (
+   774→    <div className="container mx-auto px-4 py-6">
+   775→      <Breadcrumb className="mb-4">
+   776→        <BreadcrumbList><BreadcrumbItem><BreadcrumbLink onClick={() => useNavigationStore.getState().setCustomerView('home')} className="cursor-pointer">Home</BreadcrumbLink></BreadcrumbItem><BreadcrumbSeparator /><BreadcrumbItem><BreadcrumbLink className="text-foreground font-medium">{searchQuery ? `Search: "${searchQuery}"` : selectedCategory || 'All Products'}</BreadcrumbLink></BreadcrumbItem></BreadcrumbList>
+   777→      </Breadcrumb>
+   778→
+   779→      <div className="flex gap-6">
+   780→        {/* Desktop Filters */}
+   781→        <aside className="hidden lg:block w-64 shrink-0"><FilterSidebarContent allCategories={allCategories} allBrands={brands || []} /></aside>
+   782→
+   783→        {/* Main Content */}
+   784→        <div className="flex-1 min-w-0">
+   785→          <div className="flex items-center justify-between mb-4">
+   786→            <p className="text-sm text-muted-foreground">{data?.meta ? `${data.meta.total} products found` : ''}</p>
+   787→            <div className="flex items-center gap-2">
+   788→              <Button variant="outline" size="sm" className="lg:hidden" onClick={() => setMobileFilters(true)}><SlidersHorizontal size={16} className="mr-1.5" />Filters</Button>
+   789→              <Select value={sortBy} onValueChange={(v) => { setSortBy(v); setPage(1); }}>
+   790→                <SelectTrigger className="w-40 h-9"><SelectValue /></SelectTrigger>
+   791→                <SelectContent>
+   792→                  <SelectItem value="newest">Newest First</SelectItem>
+   793→                  <SelectItem value="price-asc">Price: Low to High</SelectItem>
+   794→                  <SelectItem value="price-desc">Price: High to Low</SelectItem>
+   795→                  <SelectItem value="rating">Highest Rated</SelectItem>
+   796→                  <SelectItem value="popular">Most Popular</SelectItem>
+   797→                </SelectContent>
+   798→              </Select>
+   799→            </div>
+   800→          </div>
+   801→          <ProductGrid products={data?.data || []} loading={isLoading} />
+   802→          {data?.meta && data.meta.totalPages > 1 && (
+   803→            <div className="flex items-center justify-center gap-2 mt-6">
+   804→              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></Button>
+   805→              {Array.from({ length: Math.min(data.meta.totalPages, 5) }, (_, i) => i + 1).map(p => (
+   806→                <Button key={p} variant={p === page ? 'default' : 'outline'} size="sm" className="bg-orange-500 hover:bg-orange-600" onClick={() => setPage(p)}>{p}</Button>
+   807→              ))}
+   808→              <Button variant="outline" size="sm" disabled={page >= data.meta.totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
+   809→            </div>
+   810→          )}
+   811→        </div>
+   812→      </div>
+   813→
+   814→      {/* Mobile Filters Sheet */}
+   815→      <Sheet open={mobileFilters} onOpenChange={setMobileFilters}>
+   816→        <SheetContent side="left" className="w-80"><SheetHeader><SheetTitle>Filters</SheetTitle></SheetHeader><div className="mt-4"><FilterSidebarContent allCategories={allCategories} allBrands={brands || []} /></div></SheetContent>
+   817→      </Sheet>
+   818→    </div>
+   819→  );
+   820→}
+   821→
+   822→// ============ PRODUCT DETAIL PAGE ============
+   823→
+   824→function ProductDetailPage() {
+   825→  const { selectedProductId } = useNavigationStore();
+   826→  const { data: product, isLoading } = useQuery({
+   827→    queryKey: ['product', selectedProductId],
+   828→    queryFn: () => fetch(`/api/products/${selectedProductId}`).then(r => r.json()).then((r: ApiResponse<Product>) => r.data),
+   829→    enabled: !!selectedProductId,
+   830→  });
+   831→  const { isAuthenticated, user } = useAuthStore();
+   832→  const { addItem } = useCartStore();
+   833→  const { toggleItem, hasItem } = useWishlistStore();
+   834→  const requireAuth = useRequireAuth();
+   835→  const [selectedImage, setSelectedImage] = useState(0);
+   836→  const [quantity, setQuantity] = useState(1);
+   837→  const [activeTab, setActiveTab] = useState('specs');
+   838→  const [pincode, setPincode] = useState('');
+   839→  const [checkingPincode, setCheckingPincode] = useState(false);
+   840→  const [deliveryResult, setDeliveryResult] = useState<{available: boolean; date?: string} | null>(null);
+   841→  const [showWishlistConfirm, setShowWishlistConfirm] = useState(false);
+   842→  const checkPincode = async () => {
+   843→    setCheckingPincode(true);
+   844→    try {
+   845→      const res = await fetch(`/api/products/${selectedProductId}/delivery-check?pincode=${pincode}`);
+   846→      const data = await res.json();
+   847→      setDeliveryResult(data.data || { available: false });
+   848→    } catch { setDeliveryResult({ available: false }); }
+   849→    setCheckingPincode(false);
+   850→  };
+   851→
+   852→  const { data: similarProducts = [] } = useQuery({
+   853→    queryKey: ['similar-products', selectedProductId, product?.categoryId],
+   854→    queryFn: () => fetch(`/api/products?categoryId=${product?.categoryId}&limit=4`).then(r => r.json()).then((r: any) => (r.data || []).filter((p: any) => p.id !== selectedProductId).slice(0, 4)),
+   855→    enabled: !!product?.categoryId,
+   856→  });
+   857→
+   858→  const { data: frequentlyBought = [] } = useQuery({
+   859→    queryKey: ['frequently-bought', selectedProductId, product?.vendorId],
+   860→    queryFn: () => fetch(`/api/products?vendorId=${product?.vendorId}&limit=4`).then(r => r.json()).then((r: any) => (r.data || []).filter((p: any) => p.id !== selectedProductId).slice(0, 4)),
+   861→    enabled: !!product?.vendorId,
+   862→  });
+   863→
+   864→  const { data: qaList = [] } = useQuery({
+   865→    queryKey: ['product-qa', selectedProductId],
+   866→    queryFn: () => fetch(`/api/products/${selectedProductId}/qa`).then(r => r.json()).then((r: any) => r.data || []),
+   867→    enabled: !!selectedProductId,
+   868→  });
+   869→
+   870→  const variantsByType = useMemo(() => {
+   871→    const map: Record<string, string[]> = {};
+   872→    product?.variants?.forEach(v => { if (!map[v.name]) map[v.name] = []; if (!map[v.name].includes(v.value)) map[v.name].push(v.value); });
+   873→    return map;
+   874→  }, [product?.variants]);
+   875→
+   876→  if (isLoading) return <div className="container mx-auto px-4 py-8"><Skeleton className="h-96 rounded-xl" /></div>;
+   877→  if (!product) return <div className="container mx-auto px-4 py-16 text-center"><p className="text-muted-foreground">Product not found</p></div>;
+   878→
+   879→  const isWishlisted = hasItem(product.id);
+   880→  const discount = discountPercent(product.price, product.compareAtPrice);
+   881→  const mainImage = product.images?.[selectedImage]?.url;
+   882→
+   883→  return (
+   884→    <div className="container mx-auto px-4 py-6">
+   885→      <Breadcrumb className="mb-6">
+   886→        <BreadcrumbList>
+   887→          <BreadcrumbItem><BreadcrumbLink onClick={() => useNavigationStore.getState().setCustomerView('home')} className="cursor-pointer">Home</BreadcrumbLink></BreadcrumbItem>
+   888→          <BreadcrumbSeparator />
+   889→          <BreadcrumbItem><BreadcrumbLink onClick={() => { useNavigationStore.getState().setSelectedCategory(product.category?.slug || null); useNavigationStore.getState().setCustomerView('products'); }} className="cursor-pointer">{product.category?.name}</BreadcrumbLink></BreadcrumbItem>
+   890→          <BreadcrumbSeparator />
+   891→          <BreadcrumbItem><BreadcrumbLink className="text-foreground font-medium truncate max-w-48">{product.name}</BreadcrumbLink></BreadcrumbItem>
+   892→        </BreadcrumbList>
+   893→      </Breadcrumb>
+   894→
+   895→      <div className="grid md:grid-cols-2 gap-8">
+   896→        {/* Images */}
+   897→        <div className="space-y-3">
+   898→          <div className="aspect-square rounded-xl overflow-hidden bg-muted/30 border">
+   899→            {mainImage ? <img src={mainImage} alt={product.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={64} className="text-muted-foreground/30" /></div>}
+   900→          </div>
+   901→          {product.images && product.images.length > 1 && (
+   902→            <div className="flex gap-2 overflow-x-auto pb-1">{product.images.map((img, i) => (
+   903→              <button key={img.id} className={`w-16 h-16 rounded-lg overflow-hidden border-2 shrink-0 ${i === selectedImage ? 'border-orange-500' : 'border-transparent'}`} onClick={() => setSelectedImage(i)}>
+   904→                <img src={img.url} alt={img.alt || ''} className="w-full h-full object-cover" />
+   905→              </button>
+   906→            ))}</div>
+   907→          )}
+   908→        </div>
+   909→
+   910→        {/* Product Info */}
+   911→        <div className="space-y-4">
+   912→          <div>
+   913→            <p className="text-sm text-muted-foreground mb-1">Brand: <span className="text-foreground font-medium">{product.brand?.name}</span></p>
+   914→            <h1 className="text-2xl md:text-3xl font-bold">{product.name}</h1>
+   915→            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+   916→              <StarRating rating={product.rating} /> <span>{product.rating}</span> ({product.reviewCount} reviews) | {product.totalSold} sold
+   917→            </p>
+   918→          </div>
+   919→
+   920→          <div className="flex items-baseline gap-3">
+   921→            <span className="text-3xl font-bold text-orange-500">{formatCurrency(product.price)}</span>
+   922→            {product.compareAtPrice && product.compareAtPrice > product.price && (
+   923→              <>
+   924→                <span className="text-xl text-muted-foreground line-through">{formatCurrency(product.compareAtPrice)}</span>
+   925→                <Badge className="bg-green-600">{discount}% OFF</Badge>
+   926→              </>
+   927→            )}
+   928→          </div>
+   929→
+   930→          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+   931→            <span className={`font-medium ${product.stock > 5 ? 'text-green-600' : product.stock > 0 ? 'text-amber-600' : 'text-red-600'}`}>
+   932→              {product.stock > 5 ? 'In Stock' : product.stock > 0 ? `Only ${product.stock} left` : 'Out of Stock'}
+   933→            </span>
+   934→            <span>|</span>
+   935→            <span>Sold by: <span className="text-orange-500 font-medium">{product.vendor?.businessName}</span></span>
+   936→          </div>
+   937→          <div className="flex items-center gap-2 mt-2">
+   938→            <MapPin size={16} className="text-orange-500 shrink-0" />
+   939→            <Input placeholder="Enter pincode" className="h-8 w-36 text-sm" value={pincode} onChange={e => setPincode(e.target.value)} maxLength={6} />
+   940→            <Button size="sm" variant="outline" className="h-8" onClick={checkPincode} disabled={pincode.length !== 6 || checkingPincode}>
+   941→              {checkingPincode ? 'Checking...' : 'Check'}
+   942→            </Button>
+   943→            {deliveryResult && (
+   944→              <span className={`text-xs font-medium ${deliveryResult.available ? 'text-green-600' : 'text-red-500'}`}>
+   945→                {deliveryResult.available ? `✓ Delivery available by ${deliveryResult.date}` : '✗ Delivery not available'}
+   946→              </span>
+   947→            )}
+   948→          </div>
+   949→
+   950→          <Separator />
+   951→
+   952→          {/* Variants */}
+   953→          {Object.entries(variantsByType).map(([type, values]) => (
+   954→            <div key={type}>
+   955→              <Label className="text-sm font-medium mb-2 block">{type}</Label>
+   956→              <div className="flex gap-2 flex-wrap">
+   957→                {values.map(v => (
+   958→                  <Button key={v} variant="outline" size="sm" className={type === 'Color' ? `w-10 h-10 p-0 rounded-full` : ''}>{v}</Button>
+   959→                ))}
+   960→              </div>
+   961→            </div>
+   962→          ))}
+   963→
+   964→          {/* Quantity */}
+   965→          <div>
+   966→            <Label className="text-sm font-medium mb-2 block">Quantity</Label>
+   967→            <div className="flex items-center gap-3">
+   968→              <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.max(1, q - 1))}><Minus size={16} /></Button>
+   969→              <span className="w-10 text-center font-medium">{quantity}</span>
+   970→              <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.min(product.stock, q + 1))}><Plus size={16} /></Button>
+   971→            </div>
+   972→          </div>
+   973→
+   974→          {/* Actions */}
+   975→          <div className="flex gap-3 pt-2">
+   976→            <Button size="lg" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white h-12" disabled={product.stock === 0}
+   977→              onClick={() => {
+   978→                if (!requireAuth('add items to cart')) return;
+   979→                for (let i = 0; i < quantity; i++) addItem({ productId: product.id, name: product.name, price: product.price, image: mainImage || '', vendorName: product.vendor?.businessName || '', vendorId: product.vendorId, stock: product.stock });
+   980→                toast.success('Added to cart', { description: `${product.name} has been added to your cart.` });
+   981→              }}>
+   982→              <ShoppingCart size={20} className="mr-2" />Add to Cart
+   983→            </Button>
+   984→            <Button size="lg" variant="outline" className="h-12" onClick={() => {
+   985→              if (isWishlisted) {
+   986→                setShowWishlistConfirm(true);
+   987→              } else {
+   988→                if (!requireAuth('add items to wishlist')) return;
+   989→                toggleItem(product.id);
+   990→                toast.success('Added to wishlist', { description: product.name });
+   991→              }
+   992→            }}>
+   993→              <Heart size={20} className={isWishlisted ? 'fill-red-500 text-red-500' : ''} />
+   994→            </Button>
+   995→          </div>
+   996→
+   997→          {/* Wishlist Remove Confirmation */}
+   998→          <AlertDialog open={showWishlistConfirm} onOpenChange={setShowWishlistConfirm}>
+   999→            <AlertDialogContent>
+  1000→              <AlertDialogHeader>
+  1001→                <AlertDialogTitle>Remove from wishlist?</AlertDialogTitle>
+  1002→                <AlertDialogDescription>{product.name} will be removed from your wishlist.</AlertDialogDescription>
+  1003→              </AlertDialogHeader>
+  1004→              <AlertDialogFooter>
+  1005→                <AlertDialogCancel>Cancel</AlertDialogCancel>
+  1006→                <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => { toggleItem(product.id); toast.info('Removed from wishlist'); setShowWishlistConfirm(false); }}>Remove</AlertDialogAction>
+  1007→              </AlertDialogFooter>
+  1008→            </AlertDialogContent>
+  1009→          </AlertDialog>
+  1010→
+  1011→          {/* Share Buttons */}
+  1012→          <div className="flex items-center gap-2 mt-3">
+  1013→            <span className="text-sm text-muted-foreground">Share:</span>
+  1014→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(product.name + ' ' + window.location.href)}`)}><MessageCircle size={14} /></Button>
+  1015→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`)}><Facebook size={14} /></Button>
+  1016→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(product.name)}&url=${encodeURIComponent(window.location.href)}`)}><Twitter size={14} /></Button>
+  1017→            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success('Link copied!'); }}><LinkIcon size={14} /></Button>
+  1018→          </div>
+  1019→
+  1020→          {/* Features */}
+  1021→          <div className="grid grid-cols-1 gap-3 pt-2">
+  1022→            <div className="flex items-center gap-2 text-sm"><Truck size={16} className="text-orange-500" /><span>Estimated delivery: {product.estimatedDeliveryDays || 5}-{(product.estimatedDeliveryDays || 5) + 3} business days</span></div>
+  1023→            <div className="grid grid-cols-2 gap-3">
+  1024→            {[
+  1025→              { icon: <Truck size={16} />, text: 'Free delivery above ₹500' },
+  1026→              { icon: <RefreshCw size={16} />, text: '7-day easy returns' },
+  1027→              { icon: <Shield size={16} />, text: 'Secure transactions' },
+  1028→              { icon: <Package size={16} />, text: product.warranty || 'Standard warranty' },
+  1029→            ].map((f, i) => (
+  1030→              <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground"><span className="text-orange-500">{f.icon}</span>{f.text}</div>
+  1031→            ))}
+  1032→            </div>
+  1033→          </div>
+  1034→        </div>
+  1035→      </div>
+  1036→
+  1037→      {/* Tabs: Description, Specs, Reviews, Q&A */}
+  1038→      <div className="mt-10">
+  1039→        <Tabs value={activeTab} onValueChange={setActiveTab}>
+  1040→          <TabsList className="w-full justify-start border-b rounded-none h-auto p-0">
+  1041→            {['specs', 'description', 'reviews', 'qa'].map(t => (
+  1042→              <TabsTrigger key={t} value={t} className="rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500 data-[state=active]:shadow-none px-6 py-3 capitalize">{t === 'qa' ? 'Q&A' : t}</TabsTrigger>
+  1043→            ))}
+  1044→          </TabsList>
+  1045→          <TabsContent value="specs" className="pt-4">
+  1046→            {product.specs && product.specs.length > 0 ? (
+  1047→              <div className="max-w-2xl"><Table><TableBody>{product.specs.map(s => (
+  1048→                <TableRow key={s.id}><TableCell className="font-medium w-40 bg-muted/30">{s.key}</TableCell><TableCell>{s.value}</TableCell></TableRow>
+  1049→              ))}</TableBody></Table></div>
+  1050→            ) : <p className="text-muted-foreground">No specifications available</p>}
+  1051→          </TabsContent>
+  1052→          <TabsContent value="description" className="pt-4">
+  1053→            <div className="max-w-3xl prose dark:prose-invert" dangerouslySetInnerHTML={{ __html: product.description || '<p>No description available</p>' }} />
+  1054→          </TabsContent>
+  1055→          <TabsContent value="reviews" className="pt-4">
+  1056→            <ReviewsSection productId={product.id} reviews={product.reviews || []} reviewCount={product._count?.reviews || 0} rating={product.rating} />
+  1057→          </TabsContent>
+  1058→          <TabsContent value="qa" className="pt-4">
+  1059→            <ProductQASection productId={product.id} qaList={qaList} />
+  1060→          </TabsContent>
+  1061→        </Tabs>
+  1062→      </div>
+  1063→
+  1064→      {/* Similar Products */}
+  1065→      {similarProducts.length > 0 && (
+  1066→        <div className="mt-10">
+  1067→          <h2 className="text-xl font-bold mb-4">Similar Products</h2>
+  1068→          <ProductGrid products={similarProducts} />
+  1069→        </div>
+  1070→      )}
+  1071→
+  1072→      {/* Frequently Bought Together */}
+  1073→      {frequentlyBought.length > 0 && (
+  1074→        <div className="mt-10">
+  1075→          <h2 className="text-xl font-bold mb-4">Frequently Bought Together</h2>
+  1076→          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+  1077→            {frequentlyBought.map(p => <ProductCard key={p.id} product={p} />)}
+  1078→          </div>
+  1079→        </div>
+  1080→      )}
+  1081→
+  1082→      {/* Customers Also Bought */}
+  1083→      <div className="mt-10">
+  1084→        <h2 className="text-xl font-bold mb-4">Customers Also Bought</h2>
+  1085→        <CustomersAlsoBought productId={product.id} />
+  1086→      </div>
+  1087→    </div>
+  1088→  );
+  1089→}
+  1090→
+  1091→function Table({ children, className }: { children: React.ReactNode; className?: string }) {
+  1092→  return <div className={`rounded-lg border overflow-hidden ${className || ''}`}><table className="w-full text-sm">{children}</table></div>;
+  1093→}
+  1094→function TableBody({ children }: { children: React.ReactNode }) { return <tbody>{children}</tbody>; }
+  1095→function TableRow({ children, className }: { children: React.ReactNode; className?: string }) { return <tr className={`border-b last:border-0 ${className || ''}`}>{children}</tr>; }
+  1096→function TableCell({ children, className }: { children: React.ReactNode; className?: string }) { return <td className={`px-4 py-3 ${className || ''}`}>{children}</td>; }
+  1097→
+  1098→function CustomersAlsoBought({ productId }: { productId: string }) {
+  1099→  const { data: products = [], isLoading } = useQuery({
+  1100→    queryKey: ['customers-also-bought', productId],
+  1101→    queryFn: () => fetch(`/api/products?limit=8&exclude=${productId}`).then(r => r.json()).then((r: any) => (r.data || []).sort(() => Math.random() - 0.5).slice(0, 4)),
+  1102→    enabled: !!productId,
+  1103→  });
+  1104→  if (isLoading) return <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{Array.from({length:4}).map((_,i)=><Skeleton key={i} className="aspect-square rounded-xl" />)}</div>;
+  1105→  if (!products.length) return null;
+  1106→  return <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{products.map(p => <ProductCard key={p.id} product={p} />)}</div>;
+  1107→}
+  1108→
+  1109→function ReviewsSection({ productId, reviews, reviewCount, rating }: { productId: string; reviews: any[]; reviewCount: number; rating: number }) {
+  1110→  const { isAuthenticated, user } = useAuthStore();
+  1111→  const queryClient = useQueryClient();
+  1112→  const requireAuth = useRequireAuth();
+  1113→  const [showForm, setShowForm] = useState(false);
+  1114→  const [form, setForm] = useState({ rating: 5, title: '', comment: '', images: '' });
+  1115→  const [sortBy, setSortBy] = useState('latest');
+  1116→  const sortedReviews = useMemo(() => {
+  1117→    const r = [...reviews];
+  1118→    switch(sortBy) {
+  1119→      case 'highest': return r.sort((a,b) => b.rating - a.rating);
+  1120→      case 'lowest': return r.sort((a,b) => a.rating - b.rating);
+  1121→      case 'helpful': return r.sort((a,b) => (b.helpfulCount||0) - (a.helpfulCount||0));
+  1122→      default: return r.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  1123→    }
+  1124→  }, [reviews, sortBy]);
+  1125→
+  1126→  const submitReview = useMutation({
+  1127→    mutationFn: async () => {
+  1128→      const res = await fetch('/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user!.id, productId, rating: form.rating, title: form.title, comment: form.comment, images: form.images.trim() || undefined }) });
+  1129→      return res.json();
+  1130→    },
+  1131→    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['product', productId] }); toast.success('Review submitted!'); setShowForm(false); setForm({ rating: 5, title: '', comment: '', images: '' }); },
+  1132→    onError: () => toast.error('Failed to submit review'),
+  1133→  });
+  1134→
+  1135→  return (
+  1136→    <div className="space-y-6">
+  1137→      <div className="flex items-center justify-between">
+  1138→        <div className="flex items-center gap-4">
+  1139→          <div className="text-center"><div className="text-4xl font-bold">{rating}</div><StarRating rating={rating} size={16} /><p className="text-sm text-muted-foreground mt-1">{reviewCount} reviews</p></div>
+  1140→        </div>
+  1141→        {isAuthenticated && <Button variant="outline" onClick={() => { if (!requireAuth('write a review')) return; setShowForm(!showForm); }}>{showForm ? 'Cancel' : 'Write a Review'}</Button>}
+  1142→      </div>
+  1143→
+  1144→      {showForm && (
+  1145→        <Card className="p-4 space-y-4">
+  1146→          <div><Label>Rating</Label><div className="flex gap-1 mt-1">{[1,2,3,4,5].map(s => <button key={s} aria-label={`Rate ${s} out of 5 stars`} onClick={() => setForm(f => ({...f, rating: s}))}><Star size={24} className={s <= form.rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'} /></button>)}</div></div>
+  1147→          <div><Label>Title</Label><Input placeholder="Summary of your experience" value={form.title} onChange={e => setForm(f => ({...f, title: e.target.value}))} className="mt-1" /></div>
+  1148→          <div><Label>Review</Label><Textarea placeholder="Tell us more..." value={form.comment} onChange={e => setForm(f => ({...f, comment: e.target.value}))} className="mt-1" rows={3} /></div>
+  1149→          <div><Label>Images (URLs, one per line)</Label><Textarea placeholder="Paste image URLs here..." value={form.images} onChange={e => setForm(f => ({...f, images: e.target.value}))} className="mt-1" rows={2} /></div>
+  1150→          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => submitReview.mutate()} disabled={submitReview.isPending || !form.comment.trim()}>{submitReview.isPending ? 'Submitting...' : 'Submit Review'}</Button>
+  1151→        </Card>
+  1152→      )}
+  1153→
+  1154→      <div className="space-y-4">
+  1155→        <div className="flex items-center justify-between">
+  1156→          <span className="text-sm text-muted-foreground">Sort by:</span>
+  1157→          <Select value={sortBy} onValueChange={setSortBy}>
+  1158→            <SelectTrigger aria-label="Sort reviews" className="w-40 h-8 text-sm"><SelectValue /></SelectTrigger>
+  1159→            <SelectContent>
+  1160→              <SelectItem value="latest">Latest</SelectItem>
+  1161→              <SelectItem value="highest">Highest Rated</SelectItem>
+  1162→              <SelectItem value="lowest">Lowest Rated</SelectItem>
+  1163→              <SelectItem value="helpful">Most Helpful</SelectItem>
+  1164→            </SelectContent>
+  1165→          </Select>
+  1166→        </div>
+  1167→        {sortedReviews.length === 0 && <p className="text-muted-foreground text-center py-8">No reviews yet. Be the first to review!</p>}
+  1168→        {sortedReviews.map((review: any) => (
+  1169→          <Card key={review.id} className="p-4">
+  1170→            <div className="flex items-start justify-between">
+  1171→              <div className="flex items-center gap-3">
+  1172→                <Avatar className="h-10 w-10"><AvatarFallback>{review.user?.name?.[0] || 'U'}</AvatarFallback></Avatar>
+  1173→                <div>
+  1174→                  <p className="font-medium text-sm">{review.user?.name || 'Anonymous'}</p>
+  1175→                  {review.verifiedPurchase && <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs ml-2">✓ Verified Purchase</Badge>}
+  1176→                  <div className="flex items-center gap-2"><StarRating rating={review.rating} size={12} /><span className="text-xs text-muted-foreground">{new Date(review.createdAt).toLocaleDateString()}</span></div>
+  1177→                </div>
+  1178→              </div>
+  1179→            </div>
+  1180→            {review.title && <p className="font-medium mt-2">{review.title}</p>}
+  1181→            {review.comment && <p className="text-sm text-muted-foreground mt-1">{review.comment}</p>}
+  1182→            {review.images && (
+  1183→              <div className="flex gap-2 mt-2 flex-wrap">
+  1184→                {review.images.split(',').filter(Boolean).map((img: string, i: number) => (
+  1185→                  <img key={i} src={img.trim()} alt="Review" className="w-16 h-16 rounded-lg object-cover border" />
+  1186→                ))}
+  1187→              </div>
+  1188→            )}
+  1189→          </Card>
+  1190→        ))}
+  1191→      </div>
+  1192→    </div>
+  1193→  );
+  1194→}
+  1195→
+  1196→function ProductQASection({ productId, qaList }: { productId: string; qaList: any[] }) {
+  1197→  const { isAuthenticated, user } = useAuthStore();
+  1198→  const queryClient = useQueryClient();
+  1199→  const [showDialog, setShowDialog] = useState(false);
+  1200→  const [question, setQuestion] = useState('');
+  1201→
+  1202→  const submitQuestion = useMutation({
+  1203→    mutationFn: async () => {
+  1204→      const res = await fetch(`/api/products/${productId}/qa`, {
+  1205→        method: 'POST',
+  1206→        headers: { 'Content-Type': 'application/json' },
+  1207→        body: JSON.stringify({ userId: user!.id, question }),
+  1208→      });
+  1209→      return res.json();
+  1210→    },
+  1211→    onSuccess: () => {
+  1212→      queryClient.invalidateQueries({ queryKey: ['product-qa', productId] });
+  1213→      toast.success('Question submitted!');
+  1214→      setShowDialog(false);
+  1215→      setQuestion('');
+  1216→    },
+  1217→    onError: () => toast.error('Failed to submit question'),
+  1218→  });
+  1219→
+  1220→  return (
+  1221→    <div className="space-y-6">
+  1222→      <div className="flex items-center justify-between">
+  1223→        <div className="flex items-center gap-2">
+  1224→          <HelpCircle size={20} className="text-orange-500" />
+  1225→          <h3 className="text-lg font-bold">Questions & Answers</h3>
+  1226→          <Badge variant="secondary">{qaList.length}</Badge>
+  1227→        </div>
+  1228→        <Button variant="outline" onClick={() => { if (!isAuthenticated) { toast.info('Please login to ask a question'); return; } setShowDialog(true); }}>
+  1229→          <Send size={14} className="mr-1.5" />Ask Question
+  1230→        </Button>
+  1231→      </div>
+  1232→
+  1233→      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+  1234→        <DialogContent>
+  1235→          <DialogHeader>
+  1236→            <DialogTitle>Ask a Question</DialogTitle>
+  1237→            <DialogDescription>Get answers from the community and seller</DialogDescription>
+  1238→          </DialogHeader>
+  1239→          <div className="space-y-4 py-2">
+  1240→            <div>
+  1241→              <Label>Your Question</Label>
+  1242→              <Textarea placeholder="What would you like to know about this product?" value={question} onChange={e => setQuestion(e.target.value)} className="mt-1" rows={3} />
+  1243→            </div>
+  1244→          </div>
+  1245→          <DialogFooter>
+  1246→            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
+  1247→            <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => submitQuestion.mutate()} disabled={!question.trim() || submitQuestion.isPending}>
+  1248→              {submitQuestion.isPending ? 'Submitting...' : 'Submit Question'}
+  1249→            </Button>
+  1250→          </DialogFooter>
+  1251→        </DialogContent>
+  1252→      </Dialog>
+  1253→
+  1254→      <div className="space-y-4">
+  1255→        {qaList.length === 0 && (
+  1256→          <p className="text-muted-foreground text-center py-8">No questions yet. Be the first to ask!</p>
+  1257→        )}
+  1258→        {qaList.map((qa: any) => (
+  1259→          <Card key={qa.id} className="p-4">
+  1260→            <div className="flex items-start gap-3">
+  1261→              <Avatar className="h-8 w-8 shrink-0"><AvatarFallback className="text-xs">{qa.user?.name?.[0] || 'U'}</AvatarFallback></Avatar>
+  1262→              <div className="flex-1 min-w-0">
+  1263→                <div className="flex items-center gap-2">
+  1264→                  <p className="font-medium text-sm">{qa.user?.name || 'Anonymous'}</p>
+  1265→                  <span className="text-xs text-muted-foreground">{new Date(qa.createdAt).toLocaleDateString()}</span>
+  1266→                </div>
+  1267→                <p className="text-sm mt-1">{qa.question}</p>
+  1268→                {qa.answer && (
+  1269→                  <div className="mt-3 ml-4 pl-4 border-l-2 border-orange-500 bg-orange-50 dark:bg-orange-900/10 rounded-r-lg p-3">
+  1270→                    <div className="flex items-center gap-2 mb-1">
+  1271→                      <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Seller Answer</span>
+  1272→                    </div>
+  1273→                    <p className="text-sm text-muted-foreground">{qa.answer}</p>
+  1274→                  </div>
+  1275→                )}
+  1276→                {!qa.answer && (
+  1277→                  <p className="text-xs text-muted-foreground mt-1 italic">No answer yet</p>
+  1278→                )}
+  1279→              </div>
+  1280→            </div>
+  1281→          </Card>
+  1282→        ))}
+  1283→      </div>
+  1284→    </div>
+  1285→  );
+  1286→}
+  1287→
+  1288→// ============ CART PAGE ============
+  1289→
+  1290→function CartPage() {
+  1291→  const { items, removeItem, updateQuantity, getSubtotal, getShipping, getTax, getTotal, couponCode, couponDiscount, applyCoupon, removeCoupon, clearCart, addItem } = useCartStore();
+  1292→  const { navigateTo } = useNavigationStore();
+  1293→  const requireAuth = useRequireAuth();
+  1294→  const { data: coupons } = useQuery({ queryKey: ['coupons'], queryFn: () => fetch('/api/coupons').then(r => r.json()).then((r: ApiResponse<any[]>) => r.data || []) });
+  1295→  const [couponInput, setCouponInput] = useState('');
+  1296→  const [savedForLater, setSavedForLater] = useState<any[]>([]);
+  1297→  const [cartPageRemoveTarget, setCartPageRemoveTarget] = useState<{id: string; name: string} | null>(null);
+  1298→  const qc = useQueryClient();
+  1299→
+  1300→  const handleApplyCoupon = () => {
+  1301→    const coupon = coupons?.find(c => c.code.toUpperCase() === couponInput.toUpperCase());
+  1302→    if (!coupon) { toast.error('Invalid coupon code', { description: 'Please check the code and try again.' }); return; }
+  1303→    const subtotal = getSubtotal();
+  1304→    if (coupon.minOrder && subtotal < coupon.minOrder) { toast.error('Minimum order amount not met', { description: `You need to order at least ${formatCurrency(coupon.minOrder)} to use this coupon.` }); return; }
+  1305→    let discount = 0;
+  1306→    if (coupon.discountType === 'PERCENTAGE') discount = (subtotal * coupon.discountValue) / 100;
+  1307→    else discount = coupon.discountValue;
+  1308→    if (coupon.maxDiscount) discount = Math.min(discount, coupon.maxDiscount);
+  1309→    applyCoupon(coupon.code, discount);
+  1310→    toast.success('Coupon applied!', { description: 'You save ' + formatCurrency(discount) });
+  1311→  };
+  1312→
+  1313→  const handleCartPageRemove = (id: string, name: string) => {
+  1314→    removeItem(id);
+  1315→    toast.info('Removed from cart', { description: `${name} removed.` });
+  1316→    setCartPageRemoveTarget(null);
+  1317→  };
+  1318→
+  1319→  if (items.length === 0) {
+  1320→    return (
+  1321→      <div className="flex flex-col items-center justify-center py-16 text-center">
+  1322→        <ShoppingBag size={64} className="text-muted-foreground/30 mb-4" />
+  1323→        <h2 className="text-xl font-bold">Your cart is empty</h2>
+  1324→        <p className="text-muted-foreground mt-2">Looks like you haven&apos;t added anything yet</p>
+  1325→        <Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Browse Products</Button>
+  1326→      </div>
+  1327→    );
+  1328→  }
+  1329→
+  1330→  return (
+  1331→    <div className="container mx-auto px-4 py-6">
+  1332→      <h1 className="text-2xl font-bold mb-6">Shopping Cart ({items.length} items)</h1>
+  1333→      <div className="grid lg:grid-cols-3 gap-6">
+  1334→        <div className="lg:col-span-2 space-y-4">
+  1335→          {items.map(item => (
+  1336→            <Card key={item.productId} className="flex gap-4 p-4">
+  1337→              <div className="w-24 h-24 rounded-lg overflow-hidden bg-muted shrink-0">
+  1338→                {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={24} /></div>}
+  1339→              </div>
+  1340→              <div className="flex-1 min-w-0">
+  1341→                <h3 className="font-medium">{item.name}</h3>
+  1342→                <p className="text-sm text-muted-foreground">{item.vendorName}</p>
+  1343→                <p className="text-lg font-bold text-orange-500 mt-1">{formatCurrency(item.price)}</p>
+  1344→                <div className="flex items-center gap-3 mt-2">
+  1345→                  <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.productId, item.quantity - 1)}><Minus size={14} /></Button>
+  1346→                  <span className="w-8 text-center">{item.quantity}</span>
+  1347→                  <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateQuantity(item.productId, Math.min(item.stock, item.quantity + 1))}><Plus size={14} /></Button>
+  1348→                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setCartPageRemoveTarget({id: item.productId, name: item.name})}><Trash2 size={16} className="mr-1" />Remove</Button>
+  1349→                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => { setSavedForLater(prev => [...prev, item]); removeItem(item.productId); toast.success('Saved for later'); }}>
+  1350→                    <Bookmark size={14} className="mr-1" />Save for Later
+  1351→                  </Button>
+  1352→                </div>
+  1353→              </div>
+  1354→              <div className="text-right shrink-0"><p className="font-bold">{formatCurrency(item.price * item.quantity)}</p></div>
+  1355→            </Card>
+  1356→          ))}
+  1357→        </div>
+  1358→        {savedForLater.length > 0 && (
+  1359→          <Card className="p-4 mt-4">
+  1360→            <h3 className="font-bold mb-3">Saved for Later ({savedForLater.length})</h3>
+  1361→            <div className="space-y-2">
+  1362→              {savedForLater.map(item => (
+  1363→                <div key={item.productId} className="flex items-center gap-3 p-2 border rounded-lg">
+  1364→                  {item.image && <img src={item.image} className="w-12 h-12 object-cover rounded" alt="" />}
+  1365→                  <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{item.name}</p><p className="text-sm text-orange-500 font-bold">₹{item.price.toLocaleString('en-IN')}</p></div>
+  1366→                  <Button size="sm" onClick={() => { setSavedForLater(prev => prev.filter(i => i.productId !== item.productId)); addItem(item); toast.success('Moved to cart'); }}>Move to Cart</Button>
+  1367→                </div>
+  1368→              ))}
+  1369→            </div>
+  1370→          </Card>
+  1371→        )}
+  1372→        <div>
+  1373→          <Card className="p-6 sticky top-24 space-y-4">
+  1374→            <h3 className="font-bold text-lg">Order Summary</h3>
+  1375→            <div className="space-y-2 text-sm">
+  1376→              <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(getSubtotal())}</span></div>
+  1377→              <div className="flex justify-between"><span>Shipping</span><span>{getShipping() === 0 ? <span className="text-green-600 font-medium">FREE</span> : formatCurrency(getShipping())}</span></div>
+  1378→              <div className="flex justify-between"><span>Tax (GST 18%)</span><span>{formatCurrency(getTax())}</span></div>
+  1379→              {couponDiscount > 0 && <div className="flex justify-between text-green-600"><span>Coupon Discount</span><span>-{formatCurrency(couponDiscount)}</span></div>}
+  1380→              <Separator />
+  1381→              <div className="flex justify-between text-lg font-bold"><span>Total</span><span className="text-orange-500">{formatCurrency(getTotal())}</span></div>
+  1382→            </div>
+  1383→            {!couponCode ? (
+  1384→              <div className="flex gap-2"><Input placeholder="Coupon code" value={couponInput} onChange={e => setCouponInput(e.target.value)} className="uppercase" /><Button variant="outline" onClick={handleApplyCoupon}>Apply</Button></div>
+  1385→            ) : (
+  1386→              <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 p-2 rounded"><span className="text-sm text-green-600">Code: {couponCode}</span><Button variant="ghost" size="sm" className="text-destructive h-6" onClick={removeCoupon}>Remove</Button></div>
+  1387→            )}
+  1388→            <div className="mt-3">
+  1389→              <p className="text-xs text-muted-foreground mb-2">Available Coupons:</p>
+  1390→              <div className="flex flex-wrap gap-2">
+  1391→                {coupons?.filter((c: any) => c.isActive).slice(0, 3).map((c: any) => (
+  1392→                  <Badge key={c.id} variant="outline" className="cursor-pointer hover:bg-orange-50 text-xs" onClick={() => setCouponInput(c.code)}>
+  1393→                    {c.code} - {c.discountType === 'PERCENTAGE' ? `${c.discountValue}% off` : `₹${c.discountValue} off`}
+  1394→                  </Badge>
+  1395→                ))}
+  1396→              </div>
+  1397→            </div>
+  1398→            <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 text-lg" onClick={() => { if (!requireAuth('proceed to checkout')) return; navigateTo('checkout'); }}>
+  1399→              Proceed to Checkout
+  1400→            </Button>
+  1401→            <Button variant="ghost" className="w-full" onClick={() => navigateTo('home')}>Continue Shopping</Button>
+  1402→          </Card>
+  1403→        </div>
+  1404→      </div>
+  1405→      <AlertDialog open={!!cartPageRemoveTarget} onOpenChange={() => setCartPageRemoveTarget(null)}>
+  1406→        <AlertDialogContent>
+  1407→          <AlertDialogHeader>
+  1408→            <AlertDialogTitle>Remove {cartPageRemoveTarget?.name} from cart?</AlertDialogTitle>
+  1409→            <AlertDialogDescription>This item will be removed from your cart.</AlertDialogDescription>
+  1410→          </AlertDialogHeader>
+  1411→          <AlertDialogFooter>
+  1412→            <AlertDialogCancel>Cancel</AlertDialogCancel>
+  1413→            <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => cartPageRemoveTarget && handleCartPageRemove(cartPageRemoveTarget.id, cartPageRemoveTarget.name)}>Remove</AlertDialogAction>
+  1414→          </AlertDialogFooter>
+  1415→        </AlertDialogContent>
+  1416→      </AlertDialog>
+  1417→    </div>
+  1418→  );
+  1419→}
+  1420→
+  1421→function CheckoutPage() {
+  1422→  const { user, isAuthenticated } = useAuthStore();
+  1423→  const { items, getSubtotal, getShipping, getTax, getTotal, clearCart, couponDiscount } = useCartStore();
+  1424→  const { navigateTo } = useNavigationStore();
+  1425→  const [paymentMethod, setPaymentMethod] = useState('COD');
+  1426→  const [address, setAddress] = useState({ fullName: user?.name || '', phone: user?.phone || '', addressLine1: '', city: '', state: '', pincode: '' });
+  1427→  const [placing, setPlacing] = useState(false);
+  1428→  const [isGuest, setIsGuest] = useState(!isAuthenticated);
+  1429→  const [guestInfo, setGuestInfo] = useState({ email: '', phone: '' });
+  1430→  const [sameAddress, setSameAddress] = useState(true);
+  1431→  const [billingForm, setBillingForm] = useState({ fullName: '', phone: '', address: '', city: '', state: '', pincode: '' });
+  1432→  const qc = useQueryClient();
+  1433→
+  1434→  // Payment form states
+  1435→  const [upiId, setUpiId] = useState('');
+  1436→  const [cardNumber, setCardNumber] = useState('');
+  1437→  const [cardExpiry, setCardExpiry] = useState('');
+  1438→  const [cardCvv, setCardCvv] = useState('');
+  1439→  const [cardName, setCardName] = useState(user?.name || '');
+  1440→  const [selectedBank, setSelectedBank] = useState('');
+  1441→  const [paymentErrors, setPaymentErrors] = useState<Record<string, string>>({});
+  1442→
+  1443→  const validatePayment = (): boolean => {
+  1444→    const errors: Record<string, string> = {};
+  1445→    if (paymentMethod === 'UPI') {
+  1446→      if (!upiId.trim()) { errors.upiId = 'Enter your UPI ID'; }
+  1447→      else if (!/^[\w.\-]+@[\w]+$/.test(upiId.trim())) { errors.upiId = 'Invalid UPI ID (e.g. name@upi)'; }
+  1448→    } else if (paymentMethod === 'Credit Card' || paymentMethod === 'Debit Card') {
+  1449→      const num = cardNumber.replace(/\s/g, '');
+  1450→      if (!num) { errors.cardNumber = 'Enter card number'; }
+  1451→      else if (!/^\d{16}$/.test(num)) { errors.cardNumber = 'Card number must be 16 digits'; }
+  1452→      if (!cardExpiry.trim()) { errors.cardExpiry = 'Enter expiry date'; }
+  1453→      else if (!/^\d{2}\/\d{2}$/.test(cardExpiry.trim())) { errors.cardExpiry = 'Use MM/YY format'; }
+  1454→      if (!cardCvv.trim()) { errors.cardCvv = 'Enter CVV'; }
+  1455→      else if (!/^\d{3,4}$/.test(cardCvv.trim())) { errors.cardCvv = 'CVV must be 3 or 4 digits'; }
+  1456→      if (!cardName.trim()) { errors.cardName = 'Enter cardholder name'; }
+  1457→    } else if (paymentMethod === 'Net Banking') {
+  1458→      if (!selectedBank) { errors.bank = 'Select a bank'; }
+  1459→    }
+  1460→    setPaymentErrors(errors);
+  1461→    return Object.keys(errors).length === 0;
+  1462→  };
+  1463→
+  1464→  const formatCardNumber = (val: string) => {
+  1465→    const digits = val.replace(/\D/g, '').slice(0, 16);
+  1466→    return digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+  1467→  };
+  1468→  const formatExpiry = (val: string) => {
+  1469→    const digits = val.replace(/\D/g, '').slice(0, 4);
+  1470→    if (digits.length >= 3) return digits.slice(0, 2) + '/' + digits.slice(2);
+  1471→    return digits;
+  1472→  };
+  1473→
+  1474→  const banks = ['State Bank of India', 'HDFC Bank', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra Bank', 'Punjab National Bank', 'Bank of Baroda', 'Canara Bank', 'Union Bank of India', 'IndusInd Bank'];
+  1475→
+  1476→  useEffect(() => { if (items.length === 0) navigateTo('cart'); }, [items.length, navigateTo]);
+  1477→  useEffect(() => { setPaymentErrors({}); }, [paymentMethod]);
+  1478→  if (items.length === 0) return null;
+  1479→  if (!isAuthenticated && !isGuest) {
+  1480→    return (
+  1481→      <div className="container mx-auto px-4 py-16 max-w-lg text-center space-y-4">
+  1482→        <Package size={64} className="mx-auto text-muted-foreground/30" />
+  1483→        <h2 className="text-xl font-bold">Continue to Checkout</h2>
+  1484→        <p className="text-muted-foreground">Log in for a faster experience, or continue as guest.</p>
+  1485→        <div className="flex gap-3 justify-center">
+  1486→          <Button variant="outline" onClick={() => navigateTo('login')}>Login</Button>
+  1487→          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setIsGuest(true)}>Continue as Guest</Button>
+  1488→        </div>
+  1489→      </div>
+  1490→    );
+  1491→  }
+  1492→
+  1493→  const handlePlaceOrder = async () => {
+  1494→    if (paymentMethod !== 'COD' && !validatePayment()) { toast.error('Please fill payment details'); return; }
+  1495→    if (!address.fullName) { toast.error('Please enter your full name'); return; }
+  1496→    if (!address.addressLine1) { toast.error('Please enter your address'); return; }
+  1497→    if (!address.city) { toast.error('Please enter your city'); return; }
+  1498→    if (!address.pincode) { toast.error('Please enter your pincode'); return; }
+  1499→    if (!/^\d{6}$/.test(address.pincode)) { toast.error('Invalid pincode', { description: 'Pincode must be exactly 6 digits.' }); return; }
+  1500→    if (!address.phone) { toast.error('Please enter your phone number'); return; }
+  1501→    if (!/^\d{10}$/.test(address.phone.replace(/\s/g, ''))) { toast.error('Invalid phone number', { description: 'Phone number must be exactly 10 digits.' }); return; }
+  1502→    if (!isAuthenticated && (!guestInfo.email || !guestInfo.phone)) {
+  1503→      toast.error('Please fill guest email and phone'); return;
+  1504→    }
+  1505→    setPlacing(true);
+  1506→    try {
+  1507→      const res = await fetch('/api/orders', {
+  1508→        method: 'POST',
+  1509→        headers: { 'Content-Type': 'application/json' },
+  1510→        body: JSON.stringify({
+  1511→          ...(isAuthenticated ? { userId: user!.id } : { guestEmail: guestInfo.email, guestPhone: guestInfo.phone }),
+  1512→          items: items.map(i => ({ productId: i.productId, quantity: i.quantity })),
+  1513→          shippingAddress: {
+  1514→            name: address.fullName,
+  1515→            address: `${address.addressLine1}${address.addressLine2 ? ', ' + address.addressLine2 : ''}`,
+  1516→            city: address.city,
+  1517→            state: address.state,
+  1518→            pincode: address.pincode,
+  1519→            phone: address.phone,
+  1520→          },
+  1521→          paymentMethod,
+  1522→        }),
+  1523→      });
+  1524→      const data = await res.json();
+  1525→      if (data.success) {
+  1526→        clearCart();
+  1527→        toast.success('Order placed successfully!', { description: 'Your order has been confirmed.' });
+  1528→        navigateTo('orders');
+  1529→        qc.invalidateQueries({ queryKey: ['orders'] });
+  1530→      } else { toast.error(data.error || 'Failed to place order'); }
+  1531→    } catch { toast.error('Something went wrong'); }
+  1532→    setPlacing(false);
+  1533→  };
+  1534→
+  1535→  return (
+  1536→    <div className="container mx-auto px-4 py-6">
+  1537→      <h1 className="text-2xl font-bold mb-6">Checkout</h1>
+  1538→      {isGuest && !isAuthenticated && (
+  1539→        <Card className="p-4 mb-4">
+  1540→          <h3 className="font-semibold mb-3">Guest Information</h3>
+  1541→          <div className="grid sm:grid-cols-2 gap-3">
+  1542→            <div><Label>Email *</Label><Input className="mt-1" type="email" value={guestInfo.email} onChange={e => setGuestInfo(g => ({...g, email: e.target.value}))} /></div>
+  1543→            <div><Label>Phone *</Label><Input className="mt-1" value={guestInfo.phone} onChange={e => setGuestInfo(g => ({...g, phone: e.target.value}))} /></div>
+  1544→          </div>
+  1545→        </Card>
+  1546→      )}
+  1547→      <div className="grid lg:grid-cols-3 gap-6">
+  1548→        <div className="lg:col-span-2 space-y-6">
+  1549→          <Card className="p-6">
+  1550→            <h2 className="font-bold text-lg mb-4 flex items-center gap-2"><MapPin size={20} className="text-orange-500" />Shipping Address</h2>
+  1551→            <div className="grid sm:grid-cols-2 gap-4">
+  1552→              <div><Label>Full Name</Label><Input value={address.fullName} onChange={e => setAddress(a => ({...a, fullName: e.target.value}))} className="mt-1" /></div>
+  1553→              <div><Label>Phone</Label><Input value={address.phone} onChange={e => setAddress(a => ({...a, phone: e.target.value}))} className="mt-1" /></div>
+  1554→              <div className="sm:col-span-2"><Label>Address</Label><Textarea value={address.addressLine1} onChange={e => setAddress(a => ({...a, addressLine1: e.target.value}))} className="mt-1" /></div>
+  1555→              <div><Label>City</Label><Input value={address.city} onChange={e => setAddress(a => ({...a, city: e.target.value}))} className="mt-1" /></div>
+  1556→              <div><Label>State</Label><Input value={address.state} onChange={e => setAddress(a => ({...a, state: e.target.value}))} className="mt-1" /></div>
+  1557→              <div><Label>Pincode</Label><Input value={address.pincode} onChange={e => setAddress(a => ({...a, pincode: e.target.value}))} className="mt-1" /></div>
+  1558→            </div>
+  1559→          </Card>
+  1560→
+  1561→          <div className="flex items-center gap-2 mb-4">
+  1562→            <Checkbox id="same-billing" checked={sameAddress} onCheckedChange={(v) => setSameAddress(v === true)} />
+  1563→            <Label htmlFor="same-billing" className="text-sm">Billing address same as shipping</Label>
+  1564→          </div>
+  1565→          {!sameAddress && (
+  1566→            <Card className="p-4 mb-4 border-dashed">
+  1567→              <h3 className="font-semibold mb-3">Billing Address</h3>
+  1568→              <div className="grid sm:grid-cols-2 gap-3">
+  1569→                <div><Label>Full Name</Label><Input className="mt-1" value={billingForm.fullName} onChange={e => setBillingForm(f => ({...f, fullName: e.target.value}))} /></div>
+  1570→                <div><Label>Phone</Label><Input className="mt-1" value={billingForm.phone} onChange={e => setBillingForm(f => ({...f, phone: e.target.value}))} /></div>
+  1571→                <div className="sm:col-span-2"><Label>Address</Label><Textarea className="mt-1" rows={2} value={billingForm.address} onChange={e => setBillingForm(f => ({...f, address: e.target.value}))} /></div>
+  1572→                <div><Label>City</Label><Input className="mt-1" value={billingForm.city} onChange={e => setBillingForm(f => ({...f, city: e.target.value}))} /></div>
+  1573→                <div><Label>State</Label><Input className="mt-1" value={billingForm.state} onChange={e => setBillingForm(f => ({...f, state: e.target.value}))} /></div>
+  1574→                <div><Label>Pincode</Label><Input className="mt-1" value={billingForm.pincode} onChange={e => setBillingForm(f => ({...f, pincode: e.target.value}))} /></div>
+  1575→              </div>
+  1576→            </Card>
+  1577→          )}
+  1578→
+  1579→          <Card className="p-6">
+  1580→            <h2 className="font-bold text-lg mb-4 flex items-center gap-2"><CreditCard size={20} className="text-orange-500" />Payment Method</h2>
+  1581→            <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-3">
+  1582→              {[
+  1583→                { value: 'COD', label: 'Cash on Delivery', icon: <Banknote size={20} />, desc: 'Pay when you receive' },
+  1584→                { value: 'UPI', label: 'UPI Payment', icon: <Smartphone size={20} />, desc: 'GPay, PhonePe, Paytm' },
+  1585→                { value: 'Credit Card', label: 'Credit Card', icon: <CreditCard size={20} />, desc: 'Visa, Mastercard' },
+  1586→                { value: 'Debit Card', label: 'Debit Card', icon: <CreditCard size={20} />, desc: 'All banks supported' },
+  1587→                { value: 'Net Banking', label: 'Net Banking', icon: <Building2 size={20} />, desc: 'All major banks' },
+  1588→              ].map(pm => (
+  1589→                <Label key={pm.value} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/50 ${paymentMethod === pm.value ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/10' : ''}`}>
+  1590→                  <RadioGroupItem value={pm.value} />
+  1591→                  <span className="text-orange-500">{pm.icon}</span>
+  1592→                  <div><p className="font-medium text-sm">{pm.label}</p><p className="text-xs text-muted-foreground">{pm.desc}</p></div>
+  1593→                </Label>
+  1594→              ))}
+  1595→            </RadioGroup>
+  1596→
+  1597→            {/* UPI Form */}
+  1598→            {paymentMethod === 'UPI' && (
+  1599→              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 p-4 rounded-lg border bg-muted/30 space-y-3">
+  1600→                <div className="flex items-center gap-2 mb-2"><Smartphone size={16} className="text-orange-500" /><span className="font-medium text-sm">Enter UPI Details</span></div>
+  1601→                <div><Label>UPI ID *</Label><Input className="mt-1" placeholder="yourname@upi" value={upiId} onChange={e => setUpiId(e.target.value.toLowerCase())} />
+  1602→                {paymentErrors.upiId && <p className="text-xs text-destructive mt-1">{paymentErrors.upiId}</p>}</div>
+  1603→                <p className="text-xs text-muted-foreground">Pay using Google Pay, PhonePe, Paytm or any UPI app</p>
+  1604→              </motion.div>
+  1605→            )}
+  1606→
+  1607→            {/* Credit/Debit Card Form */}
+  1608→            {(paymentMethod === 'Credit Card' || paymentMethod === 'Debit Card') && (
+  1609→              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 p-4 rounded-lg border bg-muted/30 space-y-3">
+  1610→                <div className="flex items-center gap-2 mb-2"><CreditCard size={16} className="text-orange-500" /><span className="font-medium text-sm">Enter {paymentMethod} Details</span></div>
+  1611→                <div><Label>Card Number *</Label><Input className="mt-1 font-mono tracking-wider" placeholder="1234 5678 9012 3456" value={cardNumber} onChange={e => setCardNumber(formatCardNumber(e.target.value))} maxLength={19} />
+  1612→                {paymentErrors.cardNumber && <p className="text-xs text-destructive mt-1">{paymentErrors.cardNumber}</p>}</div>
+  1613→                <div className="grid grid-cols-2 gap-3">
+  1614→                  <div><Label>Expiry *</Label><Input className="mt-1 font-mono" placeholder="MM/YY" value={cardExpiry} onChange={e => setCardExpiry(formatExpiry(e.target.value))} maxLength={5} />
+  1615→                  {paymentErrors.cardExpiry && <p className="text-xs text-destructive mt-1">{paymentErrors.cardExpiry}</p>}</div>
+  1616→                  <div><Label>CVV *</Label><Input className="mt-1 font-mono" type="password" placeholder="•••" value={cardCvv} onChange={e => setCardCvv(e.target.value.replace(/\D/g, ''))} maxLength={4} />
+  1617→                  {paymentErrors.cardCvv && <p className="text-xs text-destructive mt-1">{paymentErrors.cardCvv}</p>}</div>
+  1618→                </div>
+  1619→                <div><Label>Cardholder Name *</Label><Input className="mt-1" placeholder="Name on card" value={cardName} onChange={e => setCardName(e.target.value)} />
+  1620→                {paymentErrors.cardName && <p className="text-xs text-destructive mt-1">{paymentErrors.cardName}</p>}</div>
+  1621→                <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+  1622→                  <ShieldCheck size={14} className="text-green-500" /> Your card details are encrypted and secure
+  1623→                </div>
+  1624→              </motion.div>
+  1625→            )}
+  1626→
+  1627→            {/* Net Banking Form */}
+  1628→            {paymentMethod === 'Net Banking' && (
+  1629→              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 p-4 rounded-lg border bg-muted/30 space-y-3">
+  1630→                <div className="flex items-center gap-2 mb-2"><Building2 size={16} className="text-orange-500" /><span className="font-medium text-sm">Select Your Bank</span></div>
+  1631→                <Select value={selectedBank} onValueChange={setSelectedBank}>
+  1632→                  <SelectTrigger><SelectValue placeholder="Choose a bank" /></SelectTrigger>
+  1633→                  <SelectContent className="max-h-60">{banks.map(bank => <SelectItem key={bank} value={bank}>{bank}</SelectItem>)}</SelectContent>
+  1634→                </Select>
+  1635→                {paymentErrors.bank && <p className="text-xs text-destructive mt-1">{paymentErrors.bank}</p>}
+  1636→                <p className="text-xs text-muted-foreground">You will be redirected to your bank's login page</p>
+  1637→              </motion.div>
+  1638→            )}
+  1639→          </Card>
+  1640→        </div>
+  1641→
+  1642→        <Card className="p-6 h-fit sticky top-24 space-y-4">
+  1643→          <h3 className="font-bold text-lg">Order Summary</h3>
+  1644→          <ScrollArea className="max-h-48"><div className="space-y-3">{items.map(item => (
+  1645→            <div key={item.productId} className="flex gap-3"><div className="w-12 h-12 rounded bg-muted shrink-0 overflow-hidden">{item.image && <img src={item.image} alt="" className="w-full h-full object-cover" />}</div><div className="flex-1 min-w-0"><p className="text-sm truncate">{item.name}</p><p className="text-xs text-muted-foreground">Qty: {item.quantity}</p></div><p className="text-sm font-medium shrink-0">{formatCurrency(item.price * item.quantity)}</p></div>
+  1646→          ))}</div></ScrollArea>
+  1647→          <Separator />
+  1648→          <div className="space-y-2 text-sm">
+  1649→            <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(getSubtotal())}</span></div>
+  1650→            <div className="flex justify-between"><span>Shipping</span><span>{getShipping() === 0 ? 'FREE' : formatCurrency(getShipping())}</span></div>
+  1651→            <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(getTax())}</span></div>
+  1652→            {couponDiscount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(couponDiscount)}</span></div>}
+  1653→            <Separator />
+  1654→            <div className="flex justify-between text-lg font-bold"><span>Total</span><span className="text-orange-500">{formatCurrency(getTotal())}</span></div>
+  1655→          </div>
+  1656→          <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 text-lg" onClick={handlePlaceOrder} disabled={placing}>
+  1657→            {placing ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Placing Order...</> : `Place Order • ${formatCurrency(getTotal())}`}
+  1658→          </Button>
+  1659→        </Card>
+  1660→      </div>
+  1661→    </div>
+  1662→  );
+  1663→}
+  1664→
+  1665→// ============ ORDERS PAGE ============
+  1666→
+  1667→function OrdersPage() {
+  1668→  const { user, isAuthenticated } = useAuthStore();
+  1669→  const { navigateTo, setSelectedOrderId } = useNavigationStore();
+  1670→  const { data, isLoading } = useQuery({
+  1671→    queryKey: ['orders', user?.id],
+  1672→    queryFn: () => fetch(`/api/orders?userId=${user?.id}`).then(r => r.json()).then((r: ApiResponse<Order[]>) => r.data || []),
+  1673→    enabled: !!user?.id,
+  1674→  });
+  1675→
+  1676→  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  1677→  if (!isAuthenticated) return null;
+  1678→
+  1679→  const statusColor: Record<string, string> = {
+  1680→    NEW: 'bg-blue-100 text-blue-700', PROCESSING: 'bg-amber-100 text-amber-700', PACKED: 'bg-purple-100 text-purple-700',
+  1681→    SHIPPED: 'bg-orange-100 text-orange-700', DELIVERED: 'bg-green-100 text-green-700', CANCELLED: 'bg-red-100 text-red-700',
+  1682→    RETURNED: 'bg-gray-100 text-gray-700', REFUNDED: 'bg-teal-100 text-teal-700',
+  1683→  };
+  1684→
+  1685→  return (
+  1686→    <div className="container mx-auto px-4 py-6">
+  1687→      <h1 className="text-2xl font-bold mb-6">My Orders</h1>
+  1688→      {isLoading ? <div className="space-y-4">{Array.from({length: 3}).map((_, i) => (
+  1689→        <Card key={i} className="p-4">
+  1690→          <div className="flex items-center justify-between mb-3">
+  1691→            <div className="space-y-2"><Skeleton className="h-4 w-32" /><Skeleton className="h-3 w-24" /></div>
+  1692→            <Skeleton className="h-6 w-20 rounded-full" />
+  1693→          </div>
+  1694→          <div className="flex gap-3 mb-3">
+  1695→            {Array.from({length: 3}).map((_, j) => (
+  1696→              <div key={j} className="flex items-center gap-2">
+  1697→                <Skeleton className="w-12 h-12 rounded" />
+  1698→                <div className="space-y-1.5"><Skeleton className="h-3 w-28" /><Skeleton className="h-2.5 w-16" /></div>
+  1699→              </div>
+  1700→            ))}
+  1701→          </div>
+  1702→          <Skeleton className="h-px w-full" />
+  1703→          <div className="flex justify-between items-center mt-3">
+  1704→            <Skeleton className="h-3 w-16" />
+  1705→            <Skeleton className="h-4 w-20" />
+  1706→          </div>
+  1707→        </Card>
+  1708→      ))}</div> :
+  1709→      !data?.length ? <div className="flex flex-col items-center justify-center py-16 text-center"><Package size={64} className="text-muted-foreground/30 mb-4" /><h3 className="text-lg font-medium">No orders yet</h3><p className="text-sm text-muted-foreground mt-1">When you place your first order, it will appear here</p><Button className="mt-4 bg-orange-500 hover:bg-orange-600" onClick={() => navigateTo('home')}>Start Shopping</Button></div> :
+  1710→      <div className="space-y-4">{data.map(order => (
+  1711→        <Card key={order.id} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setSelectedOrderId(order.id); navigateTo('order-detail'); }}>
+  1712→          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+  1713→            <div><p className="font-medium">Order #{order.orderNumber}</p><p className="text-sm text-muted-foreground">{new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+  1714→            <Badge className={statusColor[order.status] || ''}>{order.status}</Badge>
+  1715→          </div>
+  1716→          <div className="flex gap-3 overflow-x-auto pb-1">{order.items?.slice(0, 3).map(item => (
+  1717→            <div key={item.id} className="flex items-center gap-2 shrink-0"><div className="w-12 h-12 rounded bg-muted shrink-0 overflow-hidden">{item.productImage && <img src={item.productImage} alt="" className="w-full h-full object-cover" />}</div><div><p className="text-sm truncate max-w-32">{item.productName}</p><p className="text-xs text-muted-foreground">Qty: {item.quantity}</p></div></div>
+  1718→          ))}</div>
+  1719→          <Separator className="my-3" />
+  1720→          <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">{order.items?.length || 0} items</span><span className="font-bold">{formatCurrency(order.total)}</span></div>
+  1721→        </Card>
+  1722→      ))}</div>}
+  1723→    </div>
+  1724→  );
+  1725→}
+  1726→
+  1727→function formatShippingAddress(addr: string | Record<string, string>): string {
+  1728→  if (typeof addr === 'object' && addr !== null) {
+  1729→    const a = addr as Record<string, string>;
+  1730→    return `${a.name}, ${a.address}, ${a.city}, ${a.state} - ${a.pincode}, Phone: ${a.phone}`;
+  1731→  }
+  1732→  return String(addr);
+  1733→}
+  1734→
+  1735→function OrderDetailPage() {
+  1736→  const { user, isAuthenticated } = useAuthStore();
+  1737→  const { selectedOrderId, navigateTo } = useNavigationStore();
+  1738→  const { addItem } = useCartStore();
+  1739→  const qc = useQueryClient();
+  1740→  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  1741→  const [showReturnDialog, setShowReturnDialog] = useState(false);
+  1742→  const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  1743→  const [returnReason, setReturnReason] = useState('');
+  1744→  const [cancelReason, setCancelReason] = useState('');
+  1745→  const cancelMutation = useMutation({
+  1746→    mutationFn: () => fetch(`/api/orders/${selectedOrderId}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: cancelReason }) }).then(r => r.json()),
+  1747→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Order cancelled', { description: 'Refund will be processed.' }); setShowCancelDialog(false); },
+  1748→  });
+  1749→  const returnMutation = useMutation({
+  1750→    mutationFn: () => fetch(`/api/orders/${selectedOrderId}/return`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: returnReason }) }).then(r => r.json()),
+  1751→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['order'] }); toast.success('Return request submitted', { description: 'We will review your request shortly.' }); setShowReturnDialog(false); },
+  1752→  });
+  1753→  const { data: order, isLoading } = useQuery({
+  1754→    queryKey: ['order', selectedOrderId],
+  1755→    queryFn: () => fetch(`/api/orders/${selectedOrderId}`).then(r => r.json()).then((r: ApiResponse<Order>) => r.data),
+  1756→    enabled: !!selectedOrderId,
+  1757→  });
+  1758→
+  1759→  useEffect(() => { if (!isAuthenticated) navigateTo('login'); }, [isAuthenticated, navigateTo]);
+  1760→  if (!isAuthenticated) return null;
+  1761→  if (isLoading) return <div className="container mx-auto px-4 py-8"><Skeleton className="h-64 rounded-xl" /></div>;
+  1762→  if (!order) return <div className="container mx-auto px-4 py-16 text-center"><p>Order not found</p></div>;
+  1763→
+  1764→  const steps = ['NEW', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED'];
+  1765→  const currentIdx = steps.indexOf(order.status);
+  1766→  const statusColor: Record<string, string> = {
+  1767→    NEW: 'bg-blue-100 text-blue-700', PROCESSING: 'bg-amber-100 text-amber-700', PACKED: 'bg-purple-100 text-purple-700',
+  1768→    SHIPPED: 'bg-orange-100 text-orange-700', DELIVERED: 'bg-green-100 text-green-700', CANCELLED: 'bg-red-100 text-red-700',
+  1769→  };
+  1770→
+  1771→  const handleReorder = async () => {
+  1772→    if (!order.items) return;
+  1773→    order.items.forEach(item => {
+  1774→      for (let i = 0; i < item.quantity; i++) {
+  1775→        addItem({ productId: item.productId, name: item.productName, price: item.price, image: item.productImage || '', vendorName: item.vendorName || '', vendorId: item.vendorId, stock: 999 });
+  1776→      }
+  1777→    });
+  1778→    toast.success('Items added to cart', { description: 'You can review them before checkout.' });
+  1779→    navigateTo('cart');
+  1780→  };
+  1781→
+  1782→  const handleInvoice = () => { setShowInvoiceDialog(true); };
+  1783→
+  1784→  return (
+  1785→    <div className="container mx-auto px-4 py-6">
+  1786→      <Button variant="ghost" onClick={() => navigateTo('orders')} className="mb-4"><ChevronLeft size={16} className="mr-1" />Back to Orders</Button>
+  1787→      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+  1788→        <div><h1 className="text-2xl font-bold">Order #{order.orderNumber}</h1><p className="text-sm text-muted-foreground">{new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
+  1789→        <Badge className={`${statusColor[order.status] || ''} text-sm px-3 py-1`}>{order.status}</Badge>
+  1790→      </div>
+  1791→
+  1792→      {/* Status Timeline */}
+  1793→      {order.status !== 'CANCELLED' && order.status !== 'RETURNED' && order.status !== 'REFUNDED' && (
+  1794→        <Card className="p-6 mb-6">
+  1795→          <div className="flex items-center justify-between relative">
+  1796→            <div className="absolute top-4 left-8 right-8 h-0.5 bg-muted" />
+  1797→            {steps.map((step, i) => (
+  1798→              <div key={step} className="flex flex-col items-center relative z-10">
+  1799→                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${i <= currentIdx ? 'bg-orange-500 text-white' : 'bg-muted text-muted-foreground'}`}>{i <= currentIdx ? <CheckCircle size={16} /> : i + 1}</div>
+  1800→                <span className="text-xs mt-2 text-center hidden sm:block">{step}</span>
+  1801→              </div>
+  1802→            ))}
+  1803→          </div>
+  1804→        </Card>
+  1805→      )}
+  1806→
+  1807→      <div className="grid lg:grid-cols-3 gap-6">
+  1808→        <div className="lg:col-span-2 space-y-6">
+  1809→          <Card className="p-6"><h2 className="font-bold mb-4">Items Ordered</h2>
+  1810→            <div className="space-y-4">{order.items?.map(item => (
+  1811→              <div key={item.id} className="flex gap-4"><div className="w-16 h-16 rounded bg-muted shrink-0 overflow-hidden">{item.productImage && <img src={item.productImage} alt="" className="w-full h-full object-cover" />}</div><div className="flex-1"><p className="font-medium">{item.productName}</p><p className="text-sm text-muted-foreground">Seller: {item.vendorName} | Qty: {item.quantity}</p></div><p className="font-medium">{formatCurrency(item.total)}</p></div>
+  1812→            ))}</div>
+  1813→          </Card>
+  1814→          {order.trackingId && <Card className="p-4"><p className="text-sm text-muted-foreground">Tracking ID</p><p className="font-medium">{order.trackingId}</p>{order.courierName && <p className="text-sm text-muted-foreground">Courier: {order.courierName}</p>}</Card>}
+  1815→          {/* Actions */}
+  1816→          <div className="flex flex-wrap gap-2 mt-4">
+  1817→            {order?.status === 'NEW' && <Button variant="destructive" size="sm" onClick={() => setShowCancelDialog(true)}><XCircle size={14} className="mr-1" />Cancel Order</Button>}
+  1818→            {order?.status === 'DELIVERED' && <Button variant="outline" size="sm" onClick={() => setShowReturnDialog(true)}><RotateCcw size={14} className="mr-1" />Request Return</Button>}
+  1819→            <Button variant="outline" size="sm" onClick={handleReorder}><ShoppingCart size={14} className="mr-1" />Reorder</Button>
+  1820→            <Button variant="outline" size="sm" onClick={handleInvoice}><Printer size={14} className="mr-1" />Download Invoice</Button>
+  1821→          </div>
+  1822→        </div>
+  1823→        <Card className="p-6 h-fit space-y-3">
+  1824→          <h3 className="font-bold">Order Summary</h3>
+  1825→          <div className="space-y-2 text-sm">
+  1826→            <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(order.subtotal)}</span></div>
+  1827→            <div className="flex justify-between"><span>Shipping</span><span>{order.shippingCost === 0 ? 'FREE' : formatCurrency(order.shippingCost)}</span></div>
+  1828→            <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(order.tax)}</span></div>
+  1829→            {order.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(order.discount)}</span></div>}
+  1830→            <Separator />
+  1831→            <div className="flex justify-between font-bold text-lg"><span>Total</span><span className="text-orange-500">{formatCurrency(order.total)}</span></div>
+  1832→          </div>
+  1833→          <Separator />
+  1834→          <div className="text-sm space-y-1">
+  1835→            <p><span className="text-muted-foreground">Payment:</span> {order.paymentMethod}</p>
+  1836→            <p><span className="text-muted-foreground">Status:</span> <Badge variant={order.paymentStatus === 'PAID' ? 'default' : 'secondary'}>{order.paymentStatus}</Badge></p>
+  1837→          </div>
+  1838→          <Separator />
+  1839→          <div className="text-sm"><p className="text-muted-foreground mb-1">Shipping Address</p><p>{formatShippingAddress(order.shippingAddress as string | Record<string, string>)}</p></div>
+  1840→        </Card>
+  1841→      </div>
+  1842→
+  1843→      {/* Cancel Order Dialog */}
+  1844→      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+  1845→        <DialogContent><DialogHeader><DialogTitle>Cancel Order</DialogTitle></DialogHeader>
+  1846→        <p className="text-sm text-muted-foreground">Are you sure? This action cannot be undone.</p>
+  1847→        <Textarea placeholder="Reason for cancellation (optional)" value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
+  1848→        <DialogFooter><Button variant="outline" onClick={() => setShowCancelDialog(false)}>Keep Order</Button><Button variant="destructive" onClick={() => cancelMutation.mutate()} disabled={cancelMutation.isPending}>Cancel Order</Button></DialogFooter>
+  1849→        </DialogContent>
+  1850→      </Dialog>
+  1851→
+  1852→      {/* Return Order Dialog */}
+  1853→      <Dialog open={showReturnDialog} onOpenChange={setShowReturnDialog}>
+  1854→        <DialogContent><DialogHeader><DialogTitle>Request Return</DialogTitle></DialogHeader>
+  1855→        <Select value={returnReason} onValueChange={setReturnReason}><SelectTrigger><SelectValue placeholder="Select reason" /></SelectTrigger>
+  1856→          <SelectContent><SelectItem value="defective">Defective Product</SelectItem><SelectItem value="wrong">Wrong Item Received</SelectItem><SelectItem value="not_as_described">Not as Described</SelectItem><SelectItem value="changed_mind">Changed My Mind</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select>
+  1857→        <DialogFooter><Button variant="outline" onClick={() => setShowReturnDialog(false)}>Cancel</Button><Button onClick={() => returnMutation.mutate()} disabled={!returnReason || returnMutation.isPending}>Submit Request</Button></DialogFooter>
+  1858→        </DialogContent>
+  1859→      </Dialog>
+  1860→
+  1861→      {/* Invoice Dialog */}
+  1862→      <Dialog open={showInvoiceDialog} onOpenChange={setShowInvoiceDialog}>
+  1863→        <DialogContent className="max-w-2xl">
+  1864→          <DialogHeader>
+  1865→            <DialogTitle className="flex items-center gap-2"><Printer size={18} />Invoice - Order #{order.orderNumber}</DialogTitle>
+  1866→          </DialogHeader>
+  1867→          <div id="invoice-content" className="border rounded-lg p-6 space-y-4 bg-white text-black dark:bg-white dark:text-black">
+  1868→            <div className="flex justify-between items-start">
+  1869→              <div><h2 className="text-xl font-bold text-orange-600">MarketHub</h2><p className="text-sm text-gray-500">Your one-stop marketplace</p></div>
+  1870→              <div className="text-right"><p className="font-bold">INVOICE</p><p className="text-sm text-gray-500">#{order.orderNumber}</p><p className="text-sm text-gray-500">{new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
+  1871→            </div>
+  1872→            <Separator />
+  1873→            <div className="grid grid-cols-2 gap-4 text-sm">
+  1874→              <div><p className="font-medium text-gray-500">Bill To</p><p className="font-medium">{user?.name}</p><p>{user?.email}</p></div>
+  1875→              <div className="text-right"><p className="font-medium text-gray-500">Ship To</p><p>{formatShippingAddress(order.shippingAddress as string | Record<string, string>)}</p></div>
+  1876→            </div>
+  1877→            <Separator />
+  1878→            <table className="w-full text-sm">
+  1879→              <thead><tr className="border-b"><th className="text-left py-2">Item</th><th className="text-center py-2">Qty</th><th className="text-right py-2">Price</th><th className="text-right py-2">Total</th></tr></thead>
+  1880→              <tbody>
+  1881→                {order.items?.map(item => (
+  1882→                  <tr key={item.id} className="border-b"><td className="py-2">{item.productName}</td><td className="text-center py-2">{item.quantity}</td><td className="text-right py-2">{formatCurrency(item.price)}</td><td className="text-right py-2">{formatCurrency(item.total)}</td></tr>
+  1883→                ))}
+  1884→              </tbody>
+  1885→            </table>
+  1886→            <div className="flex justify-end">
+  1887→              <div className="w-48 space-y-1 text-sm">
+  1888→                <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(order.subtotal)}</span></div>
+  1889→                <div className="flex justify-between"><span>Shipping</span><span>{order.shippingCost === 0 ? 'FREE' : formatCurrency(order.shippingCost)}</span></div>
+  1890→                <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(order.tax)}</span></div>
+  1891→                {order.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(order.discount)}</span></div>}
+  1892→                <Separator />
+  1893→                <div className="flex justify-between font-bold text-base"><span>Total</span><span className="text-orange-600">{formatCurrency(order.total)}</span></div>
+  1894→              </div>
+  1895→            </div>
+  1896→            <p className="text-xs text-gray-400 text-center">Thank you for shopping with MarketHub!</p>
+  1897→          </div>
+  1898→          <DialogFooter>
+  1899→            <Button variant="outline" onClick={() => setShowInvoiceDialog(false)}>Close</Button>
+  1900→            <Button variant="outline" onClick={() => { window.print(); }}><Printer size={14} className="mr-1" />Print</Button>
+  1901→          </DialogFooter>
+  1902→        </DialogContent>
+  1903→      </Dialog>
+  1904→    </div>
+  1905→  );
+  1906→}
+  1907→
+  1908→// ============ LOGIN / REGISTER / VENDOR REGISTER ============
+  1909→
+  1910→function LoginPage() {
+  1911→  const { login, setLoading, isLoading } = useAuthStore();
+  1912→  const { navigateTo, setAppView } = useNavigationStore();
+  1913→  const [mode, setMode] = useState<'login' | 'register' | 'vendor-register'>('login');
+  1914→  const [form, setForm] = useState({
+  1915→    email: '', password: '', name: '', phone: '', confirmPassword: '',
+  1916→    businessName: '', businessEmail: '', businessPhone: '',
+  1917→    businessAddress: '', gstNumber: '', panNumber: '',
+  1918→    bankName: '', bankAccount: '', bankIfsc: '', description: '',
+  1919→  });
+  1920→
+  1921→  const updateForm = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }));
+  1922→
+  1923→  const handleLogin = async (e: React.FormEvent) => {
+  1924→    e.preventDefault();
+  1925→    if (!form.email || !form.password) { toast.error('Please fill all fields'); return; }
+  1926→    if (!EMAIL_REGEX.test(form.email)) { toast.error('Invalid email format'); return; }
+  1927→    if (form.password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
+  1928→    setLoading(true);
+  1929→    try {
+  1930→      const res = await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.email, password: form.password }) });
+  1931→      const data = await res.json();
+  1932→      if (data.success) {
+  1933→        login(data.data.user, data.data.token, data.data.vendorId, data.data.vendorStatus);
+  1934→        // Show vendor status warning if pending/rejected
+  1935→        if (data.data.user.role === 'VENDOR' && data.data.vendorStatus && data.data.vendorStatus !== 'APPROVED') {
+  1936→          authToast.loginSuccess(data.data.user.name, data.data.user.role);
+  1937→          vendorStatusToast(data.data.vendorStatus);
+  1938→        } else {
+  1939→          authToast.loginSuccess(data.data.user.name, data.data.user.role);
+  1940→        }
+  1941→        if (data.data.user.role === 'ADMIN') { useNavigationStore.getState().setAppView('admin'); }
+  1942→        else if (data.data.user.role === 'VENDOR') { useNavigationStore.getState().setAppView('vendor'); }
+  1943→        else { navigateTo('home'); }
+  1944→      } else { authErrorToast(data.error || 'Login failed', res.status); }
+  1945→    } catch { toast.error('Something went wrong. Please check your connection.'); }
+  1946→    setLoading(false);
+  1947→  };
+  1948→
+  1949→  const handleRegister = async (e: React.FormEvent) => {
+  1950→    e.preventDefault();
+  1951→    if (!form.name || !form.email || !form.password) { toast.error('Please fill all required fields'); return; }
+  1952→    if (!EMAIL_REGEX.test(form.email)) { toast.error('Invalid email format'); return; }
+  1953→    if (form.password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
+  1954→    if (form.password !== form.confirmPassword) { toast.error('Passwords do not match'); return; }
+  1955→    setLoading(true);
+  1956→    try {
+  1957→      const res = await fetch('/api/auth', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, email: form.email, password: form.password, phone: form.phone }) });
+  1958→      const data = await res.json();
+  1959→      if (data.success) { login(data.data.user, data.data.token); authToast.registerSuccess(data.data.user.name); navigateTo('home'); }
+  1960→      else { authErrorToast(data.error || 'Registration failed', res.status); }
+  1961→    } catch { toast.error('Something went wrong'); }
+  1962→    setLoading(false);
+  1963→  };
+  1964→
+  1965→  const handleVendorRegister = async (e: React.FormEvent) => {
+  1966→    e.preventDefault();
+  1967→    if (!form.name || !form.email || !form.password || !form.businessName) {
+  1968→      toast.error('Please fill all required fields');
+  1969→      return;
+  1970→    }
+  1971→    if (!EMAIL_REGEX.test(form.email)) { toast.error('Invalid email format'); return; }
+  1972→    if (form.password.length < 6) {
+  1973→      toast.error('Password must be at least 6 characters');
+  1974→      return;
+  1975→    }
+  1976→    if (form.phone && !/^\d{10}$/.test(form.phone.replace(/\s/g, ''))) { toast.error('Invalid phone number', { description: 'Phone number must be exactly 10 digits.' }); return; }
+  1977→    if (form.gstNumber && form.gstNumber.length !== 15) { toast.error('Invalid GST number', { description: 'GST number must be exactly 15 characters.' }); return; }
+  1978→    if (form.panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(form.panNumber)) { toast.error('Invalid PAN number', { description: 'PAN format should be: 5 letters, 4 digits, 1 letter (e.g., ABCDE1234F).' }); return; }
+  1979→    setLoading(true);
+  1980→    try {
+  1981→      const res = await fetch('/api/auth/vendor-register', {
+  1982→        method: 'POST',
+  1983→        headers: { 'Content-Type': 'application/json' },
+  1984→        body: JSON.stringify({
+  1985→          name: form.name,
+  1986→          email: form.email,
+  1987→          password: form.password,
+  1988→          phone: form.phone,
+  1989→          businessName: form.businessName,
+  1990→          businessEmail: form.businessEmail || form.email,
+  1991→          businessPhone: form.businessPhone,
+  1992→          businessAddress: form.businessAddress,
+  1993→          gstNumber: form.gstNumber,
+  1994→          panNumber: form.panNumber,
+  1995→          bankName: form.bankName,
+  1996→          bankAccount: form.bankAccount,
+  1997→          bankIfsc: form.bankIfsc,
+  1998→          description: form.description,
+  1999→        }),
+  2000→      });
+
+[showing lines 1-2000 of 2768; use offset=2001 with limit to continue reading]
