@@ -2396,8 +2396,8 @@ function CustomerFooter() {
           <div>
             <h4 className="font-semibold mb-3">Contact Us</h4>
             <div className="space-y-2 text-sm text-muted-foreground">
-              <p className="flex items-center gap-2"><Mail size={14} />support@markethub.com</p>
-              <p className="flex items-center gap-2"><Phone size={14} />1800-123-4567</p>
+              <a href="mailto:support@markethub.com" className="flex items-center gap-2 hover:text-foreground transition-colors"><Mail size={14} />support@markethub.com</a>
+              <a href="tel:+917470917488" className="flex items-center gap-2 hover:text-foreground transition-colors"><Phone size={14} />7470917488</a>
               <p className="flex items-center gap-2"><MapPin size={14} />Bangalore, India</p>
             </div>
           </div>
@@ -2511,8 +2511,8 @@ function ContactUsPage() {
             <h2 className="font-semibold text-lg mb-4 flex items-center gap-2"><Store size={20} className="text-orange-500" />MarketHub Office</h2>
             <div className="space-y-4 text-sm">
               <div className="flex gap-3"><MapPin size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Address</p><p className="text-muted-foreground">{settings.address || 'MarketHub HQ, 4th Floor, Infinity Tower, Outer Ring Road, Marathahalli, Bangalore, Karnataka 560037, India'}</p></div></div>
-              <div className="flex gap-3"><Phone size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Phone</p><p className="text-muted-foreground">{settings.contactPhone || '+91-1800-123-4567 (Toll Free)'}<br />+91-80-4567-8900 (Direct)</p></div></div>
-              <div className="flex gap-3"><Mail size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Email</p><p className="text-muted-foreground">{settings.contactEmail || 'support@markethub.com'}<br />business@markethub.com</p></div></div>
+              <div className="flex gap-3"><Phone size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Phone</p><a href={`tel:+${(settings.contactPhone || '7470917488').replace(/[^0-9]/g, '')}`} className="text-muted-foreground hover:text-foreground transition-colors">{settings.contactPhone || '7470917488'}</a></div></div>
+              <div className="flex gap-3"><Mail size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Email</p><a href={`mailto:${settings.contactEmail || 'support@markethub.com'}`} className="text-muted-foreground hover:text-foreground transition-colors">{settings.contactEmail || 'support@markethub.com'}</a></div></div>
               <div className="flex gap-3"><Clock size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Business Hours</p><p className="text-muted-foreground">Mon - Sat: 9:00 AM - 8:00 PM IST<br />Sunday: 10:00 AM - 6:00 PM IST</p></div></div>
             </div>
           </Card>

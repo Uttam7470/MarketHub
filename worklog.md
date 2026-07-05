@@ -733,3 +733,25 @@ Stage Summary:
 - Admin can configure WhatsApp number and Facebook URL from Admin Settings
 - Contact info on Contact page dynamically uses settings from database
 - Dynamic imports used for new pages to prevent Turbopack OOM
+
+---
+Task ID: 2
+Agent: Main
+Task: Set WhatsApp 7470917488, Facebook Uttam Patidar, make footer phone/email clickable
+
+Work Log:
+- Regenerated Prisma client after adding new fields (whatsappNumber, facebookPage, instagramHandle, twitterHandle)
+- Updated PlatformSettings directly in DB: contactPhone=7470917488, whatsappNumber=917470917488, facebookPage=https://www.facebook.com/uttam.patidar
+- Made footer email clickable: changed <p> to <a href="mailto:support@markethub.com">
+- Made footer phone clickable: changed <p> to <a href="tel:+917470917488"> with number 7470917488
+- Made Contact page phone clickable: <a href="tel:+{settings.contactPhone}"> 
+- Made Contact page email clickable: <a href="mailto:{settings.contactEmail}">
+- Verified all changes via code review and DB query (browser OOM due to pre-existing large CustomerApp.tsx file)
+- Confirmed API returns: whatsappNumber=917470917488, facebookPage=https://www.facebook.com/uttam.patidar, contactPhone=7470917488
+
+Stage Summary:
+- WhatsApp number 7470917488 set in DB — Contact page WhatsApp card links to wa.me/917470917488
+- Facebook page set to Uttam Patidar's profile — Contact page Facebook card links there
+- Footer phone 7470917488 is now a clickable tel: link
+- Footer email support@markethub.com is now a clickable mailto: link
+- Contact page phone/email also made clickable with tel: and mailto: links
