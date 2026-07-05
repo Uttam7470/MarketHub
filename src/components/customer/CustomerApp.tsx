@@ -2374,7 +2374,7 @@ function CustomerFooter() {
             <div className="space-y-2 text-sm text-muted-foreground">
               <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('home')}>Home</p>
               <p className="hover:text-foreground cursor-pointer" onClick={() => { useNavigationStore.getState().setSelectedCategory(null); useNavigationStore.getState().setCustomerView('products'); }}>All Products</p>
-              <p className="hover:text-foreground">About Us</p>
+              <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('about')}>About Us</p>
               <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('contact')}>Contact</p>
             </div>
           </div>
@@ -2431,27 +2431,53 @@ function CustomerFooter() {
 // ============ CONTACT US PAGE ============
 
 function ContactUsPage() {
-  const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
+  const { user, isAuthenticated } = useAuthStore();
+  const [form, setForm] = useState({ name: user?.name || '', email: user?.email || '', subject: '', message: '' });
   const submitMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch('/api/support/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
       return res.json();
     },
-    onSuccess: () => { toast.success('Message sent! We\'ll get back to you soon.'); setForm({ name: '', email: '', subject: '', message: '' }); },
+    onSuccess: () => { toast.success('Message sent! We\'ll get back to you soon.'); setForm({ name: user?.name || '', email: user?.email || '', subject: '', message: '' }); },
     onError: () => toast.error('Failed to send message'),
   });
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl">
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
       <h1 className="text-2xl font-bold mb-6">Contact Us</h1>
-      <Card className="p-6 space-y-4">
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div><Label>Name</Label><Input className="mt-1" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} /></div>
-          <div><Label>Email</Label><Input type="email" className="mt-1" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} /></div>
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="space-y-6">
+          <Card className="p-6">
+            <h2 className="font-semibold text-lg mb-4 flex items-center gap-2"><Store size={20} className="text-orange-500" />MarketHub Office</h2>
+            <div className="space-y-4 text-sm">
+              <div className="flex gap-3"><MapPin size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Address</p><p className="text-muted-foreground">MarketHub HQ, 4th Floor, Infinity Tower, <br />Outer Ring Road, Marathahalli, <br />Bangalore, Karnataka 560037, India</p></div></div>
+              <div className="flex gap-3"><Phone size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Phone</p><p className="text-muted-foreground">+91-1800-123-4567 (Toll Free)<br />+91-80-4567-8900 (Direct)</p></div></div>
+              <div className="flex gap-3"><Mail size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Email</p><p className="text-muted-foreground">support@markethub.com<br />business@markethub.com</p></div></div>
+              <div className="flex gap-3"><Clock size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Business Hours</p><p className="text-muted-foreground">Mon - Sat: 9:00 AM - 8:00 PM IST<br />Sunday: 10:00 AM - 6:00 PM IST<br />Holidays: Closed</p></div></div>
+            </div>
+          </Card>
+          <Card className="p-6">
+            <h3 className="font-semibold mb-3">Connect With Us</h3>
+            <div className="flex gap-3">
+              {[{ icon: <Facebook size={18} />, label: 'Facebook' }, { icon: <Twitter size={18} />, label: 'Twitter' }, { icon: <MessageCircle size={18} />, label: 'WhatsApp' }].map(s => (
+                <Button key={s.label} variant="outline" size="sm" className="gap-2"><span className="text-orange-500">{s.icon}</span>{s.label}</Button>
+              ))}
+            </div>
+          </Card>
         </div>
-        <div><Label>Subject</Label><Input className="mt-1" value={form.subject} onChange={e => setForm(f => ({...f, subject: e.target.value}))} /></div>
-        <div><Label>Message</Label><Textarea className="mt-1" rows={5} value={form.message} onChange={e => setForm(f => ({...f, message: e.target.value}))} /></div>
-        <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending || !form.name || !form.email || !form.message}>{submitMutation.isPending ? 'Sending...' : 'Send Message'}</Button>
-      </Card>
+        <Card className="p-6 space-y-4 h-fit">
+          <h2 className="font-semibold text-lg">Send Us a Message</h2>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div><Label>Full Name *</Label><Input className="mt-1" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} /></div>
+            <div><Label>Email *</Label><Input type="email" className="mt-1" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} /></div>
+          </div>
+          <div><Label>Subject *</Label><Input className="mt-1" placeholder="What is this about?" value={form.subject} onChange={e => setForm(f => ({...f, subject: e.target.value}))} /></div>
+          <div><Label>Message *</Label><Textarea className="mt-1" rows={5} placeholder="Tell us how we can help you..." value={form.message} onChange={e => setForm(f => ({...f, message: e.target.value}))} /></div>
+          <p className="text-xs text-muted-foreground">We usually respond within 2-4 business hours.</p>
+          <Button className="w-full bg-orange-500 hover:bg-orange-600" onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending || !form.name || !form.email || !form.subject || !form.message}>
+            {submitMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending...</> : 'Send Message'}
+          </Button>
+        </Card>
+      </div>
     </div>
   );
 }
@@ -2460,36 +2486,245 @@ function ContactUsPage() {
 
 function HelpCenterPage() {
   const { data: faqs = [] } = useQuery({ queryKey: ['faqs'], queryFn: () => fetch('/api/faq').then(r => r.json()).then((r: any) => r.data || []) });
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+
+  const topics = [
+    {
+      id: 'shipping', icon: <Truck size={22} />, title: 'Orders & Shipping', desc: 'Delivery timelines, tracking, shipping charges',
+      content: (
+        <div className="space-y-6 text-sm">
+          <div><h3 className="font-semibold text-base mb-2">🚚 Delivery Timelines</h3>
+            <p className="text-muted-foreground mb-3">We strive to deliver your orders as quickly as possible. Delivery times depend on your location and the seller.</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {[
+                { zone: 'Metro Cities (Delhi, Mumbai, Bangalore, etc.)', time: '2-3 business days' },
+                { zone: 'Tier 1 Cities', time: '3-5 business days' },
+                { zone: 'Tier 2/3 Cities', time: '5-7 business days' },
+                { zone: 'Remote Locations', time: '7-10 business days' },
+              ].map(z => (
+                <div key={z.zone} className="p-3 rounded-lg border"><p className="font-medium text-xs">{z.zone}</p><p className="text-orange-600 font-semibold">{z.time}</p></div>
+              ))}
+            </div>
+          </div>
+          <div><h3 className="font-semibold text-base mb-2">📦 Shipping Charges</h3>
+            <div className="space-y-2 text-muted-foreground">
+              <p>• <span className="font-medium text-foreground">FREE shipping</span> on orders above ₹500</p>
+              <p>• Flat shipping fee of <span className="font-medium text-foreground">₹99</span> for orders below ₹500</p>
+              <p>• Shipping charges may vary for heavy/bulky items (furniture, appliances)</p>
+              <p>• Each vendor ships separately — multi-vendor orders may arrive in multiple packages</p>
+            </div>
+          </div>
+          <div><h3 className="font-semibold text-base mb-2">📍 Order Tracking</h3>
+            <div className="text-muted-foreground space-y-1">
+              <p>• Track your order in real-time from <strong>My Orders</strong> section</p>
+              <p>• You&apos;ll receive email & notification updates at every stage:</p>
+              <p className="pl-4">Order Placed → Confirmed → Packed → Shipped → Out for Delivery → Delivered</p>
+              <p>• Tracking ID is shared once the order is shipped</p>
+            </div>
+          </div>
+          <div><h3 className="font-semibold text-base mb-2">🔒 Safe & Secure Delivery</h3>
+            <div className="text-muted-foreground space-y-1">
+              <p>• All packages are sealed and tamper-proof</p>
+              <p>• OTP-based delivery verification</p>
+              <p>• Doorstep delivery with photo confirmation</p>
+              <p>• If you receive a damaged package, reject it at delivery and contact us immediately</p>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'returns', icon: <RotateCcw size={22} />, title: 'Returns & Refunds', desc: 'Return policy, refund process, timelines',
+      content: (
+        <div className="space-y-6 text-sm">
+          <div><h3 className="font-semibold text-base mb-2">↩️ Return Policy</h3>
+            <div className="text-muted-foreground space-y-2">
+              <p>• <span className="font-medium text-foreground">7-day return window</span> from the date of delivery</p>
+              <p>• Products must be unused, unwashed, and in original packaging with all tags intact</p>
+              <p>• Returns are not accepted for:</p>
+              <p className="pl-4">– Personal hygiene products (opened)<br />– Customized/personalized items<br />– Perishable goods<br />– Software, CDs, DVDs (if seal broken)</p>
+            </div>
+          </div>
+          <div><h3 className="font-semibold text-base mb-2">💰 Refund Process</h3>
+            <div className="text-muted-foreground space-y-2">
+              <p><strong>Step 1:</strong> Go to <strong>My Orders</strong> → Select order → Click &quot;Request Return&quot;</p>
+              <p><strong>Step 2:</strong> Select reason and submit (photos help speed up approval)</p>
+              <p><strong>Step 3:</strong> Our team reviews within 24-48 hours</p>
+              <p><strong>Step 4:</strong> Once approved, arrange pickup (free for approved returns)</p>
+              <p><strong>Step 5:</strong> Refund initiated after product is received and inspected</p>
+            </div>
+          </div>
+          <div><h3 className="font-semibold text-base mb-2">⏱️ Refund Timelines</h3>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {[
+                { method: 'Original Payment (Card/UPI)', time: '5-7 business days' },
+                { method: 'Wallet Credit', time: 'Instant after approval' },
+                { method: 'Bank Transfer (NEFT)', time: '3-5 business days' },
+                { method: 'Replacement/Exchange', time: '5-8 business days' },
+              ].map(r => (
+                <div key={r.method} className="p-3 rounded-lg border"><p className="font-medium text-xs">{r.method}</p><p className="text-orange-600 font-semibold">{r.time}</p></div>
+              ))}
+            </div>
+          </div>
+          <div className="p-4 bg-orange-50 dark:bg-orange-900/10 rounded-lg border border-orange-200 dark:border-orange-800">
+            <p className="font-medium text-orange-700 dark:text-orange-300 mb-1">⚠️ Damaged or Wrong Item?</p>
+            <p className="text-muted-foreground text-xs">If you received a damaged, defective, or wrong product, raise a return request within 48 hours of delivery with photos. We&apos;ll arrange a free pickup and provide a full refund or replacement — no questions asked.</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'payments', icon: <CreditCard size={22} />, title: 'Payments', desc: 'Payment methods, billing, GST invoices',
+      content: (
+        <div className="space-y-6 text-sm">
+          <div><h3 className="font-semibold text-base mb-2">💳 Accepted Payment Methods</h3>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {[
+                { method: 'UPI', desc: 'Google Pay, PhonePe, Paytm, BHIM, all UPI apps', icon: <Smartphone size={16} /> },
+                { method: 'Credit Card', desc: 'Visa, Mastercard, RuPay, Amex', icon: <CreditCard size={16} /> },
+                { method: 'Debit Card', desc: 'All major bank debit cards', icon: <CreditCard size={16} /> },
+                { method: 'Net Banking', desc: 'SBI, HDFC, ICICI, Axis, and 50+ banks', icon: <Building2 size={16} /> },
+                { method: 'Cash on Delivery', desc: 'Pay when you receive (₹49 extra fee)', icon: <Banknote size={16} /> },
+                { method: 'Wallets', desc: 'Paytm Wallet, Amazon Pay, Mobikwik', icon: <Smartphone size={16} /> },
+              ].map(p => (
+                <div key={p.method} className="flex gap-3 p-3 rounded-lg border items-start">
+                  <span className="text-orange-500 mt-0.5">{p.icon}</span>
+                  <div><p className="font-medium">{p.method}</p><p className="text-xs text-muted-foreground">{p.desc}</p></div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div><h3 className="font-semibold text-base mb-2">🔒 Security</h3>
+            <div className="text-muted-foreground space-y-1">
+              <p>• All payments are processed through <span className="font-medium text-foreground">Razorpay</span> — PCI DSS Level 1 compliant</p>
+              <p>• Your card details are never stored on our servers</p>
+              <p>• 256-bit SSL encryption on all transactions</p>
+              <p>• 3D Secure authentication for international cards</p>
+            </div>
+          </div>
+          <div><h3 className="font-semibold text-base mb-2">🧾 GST Invoice</h3>
+            <div className="text-muted-foreground space-y-1">
+              <p>• GST invoice is automatically generated for every order</p>
+              <p>• Download from <strong>My Orders</strong> → Order Detail → Invoice</p>
+              <p>• For business purchases, add your GSTIN during checkout</p>
+              <p>• Input Tax Credit (ITC) can be claimed on B2B purchases</p>
+            </div>
+          </div>
+          <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800">
+            <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">❓ Payment Failed?</p>
+            <p className="text-muted-foreground text-xs">If money was deducted but order wasn&apos;t placed, don&apos;t worry — it will be automatically refunded to your source within 5-7 business days. If not, contact us with your transaction ID.</p>
+          </div>
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-3xl">
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="text-center mb-8">
         <HelpCircle size={48} className="mx-auto text-orange-500 mb-3" />
         <h1 className="text-2xl font-bold">Help Center</h1>
-        <p className="text-muted-foreground mt-1">Find answers to common questions</p>
+        <p className="text-muted-foreground mt-1">Find answers to common questions and detailed information</p>
       </div>
-      <div className="grid sm:grid-cols-3 gap-4 mb-8">
-        {[
-          { icon: <Package size={24} />, title: 'Orders & Shipping', desc: 'Track orders, shipping info', view: 'orders' },
-          { icon: <RotateCcw size={24} />, title: 'Returns & Refunds', desc: 'Return policy, refund status' },
-          { icon: <CreditCard size={24} />, title: 'Payments', desc: 'Payment methods, billing' },
-        ].map((item, i) => (
-          <Card key={i} className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => item.view && useNavigationStore.getState().setCustomerView(item.view as any)}>
-            <div className="text-orange-500 mb-2">{item.icon}</div>
-            <h3 className="font-semibold">{item.title}</h3>
-            <p className="text-sm text-muted-foreground mt-1">{item.desc}</p>
-          </Card>
+
+      {activeTab === null ? (
+        <>
+          <div className="grid sm:grid-cols-3 gap-4 mb-8">
+            {topics.map(topic => (
+              <Card key={topic.id} className="p-5 hover:shadow-md transition-shadow cursor-pointer group" onClick={() => setActiveTab(topic.id)}>
+                <div className="text-orange-500 mb-3 group-hover:scale-110 transition-transform">{topic.icon}</div>
+                <h3 className="font-semibold">{topic.title}</h3>
+                <p className="text-sm text-muted-foreground mt-1">{topic.desc}</p>
+                <p className="text-xs text-orange-500 font-medium mt-3 flex items-center gap-1">View Details <ChevronRight size={12} /></p>
+              </Card>
+            ))}
+          </div>
+          <Separator className="my-8" />
+          <h2 className="text-lg font-bold mb-4">Frequently Asked Questions</h2>
+          <Accordion type="single" collapsible className="w-full">
+            {faqs.filter((f: any) => f.isActive).map((faq: any) => (
+              <AccordionItem key={faq.id} value={faq.id}>
+                <AccordionTrigger className="text-left text-sm">{faq.question}</AccordionTrigger>
+                <AccordionContent className="text-sm text-muted-foreground">{faq.answer}</AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+          {faqs.length === 0 && <p className="text-center text-muted-foreground py-8">No FAQs available yet</p>}
+        </>
+      ) : (
+        <>
+          <button onClick={() => setActiveTab(null)} className="text-sm text-orange-500 hover:underline mb-4 flex items-center gap-1"><ChevronLeft size={14} /> Back to Help Center</button>
+          <Card className="p-6">{topics.find(t => t.id === activeTab)?.content}</Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============ ABOUT PAGE ============
+
+function AboutPage() {
+  const stats = [
+    { label: 'Active Vendors', value: '5,000+', icon: <Store size={20} /> },
+    { label: 'Products Listed', value: '2 Lakh+', icon: <ShoppingBag size={20} /> },
+    { label: 'Happy Customers', value: '10 Lakh+', icon: <Users size={20} /> },
+    { label: 'Orders Delivered', value: '25 Lakh+', icon: <Package size={20} /> },
+  ];
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <Breadcrumb className="mb-6"><BreadcrumbList><BreadcrumbItem><BreadcrumbLink onClick={() => useNavigationStore.getState().setCustomerView('home')}>Home</BreadcrumbLink></BreadcrumbItem><BreadcrumbSeparator /><BreadcrumbItem><span className="text-muted-foreground">About Us</span></BreadcrumbItem></BreadcrumbList></Breadcrumb>
+
+      <div className="text-center mb-10">
+        <div className="flex items-center justify-center gap-2 mb-4"><Store size={36} className="text-orange-500" /><h1 className="text-3xl font-bold">About MarketHub</h1></div>
+        <p className="text-muted-foreground max-w-2xl mx-auto">India&apos;s trusted multi-vendor marketplace connecting millions of buyers with thousands of verified sellers across 500+ categories.</p>
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+        {stats.map(s => (
+          <Card key={s.label} className="p-4 text-center"><div className="text-orange-500 mx-auto mb-2">{s.icon}</div><p className="text-2xl font-bold">{s.value}</p><p className="text-sm text-muted-foreground">{s.label}</p></Card>
         ))}
       </div>
-      <h2 className="text-lg font-bold mb-4">Frequently Asked Questions</h2>
-      <Accordion type="single" collapsible className="w-full">
-        {faqs.filter((f: any) => f.isActive).map((faq: any) => (
-          <AccordionItem key={faq.id} value={faq.id}>
-            <AccordionTrigger className="text-left text-sm">{faq.question}</AccordionTrigger>
-            <AccordionContent className="text-sm text-muted-foreground">{faq.answer}</AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
-      {faqs.length === 0 && <p className="text-center text-muted-foreground py-8">No FAQs available yet</p>}
+
+      <div className="grid md:grid-cols-2 gap-6 mb-10">
+        <Card className="p-6">
+          <h2 className="font-semibold text-lg mb-3 flex items-center gap-2"><TrendingUp size={20} className="text-orange-500" />Our Mission</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">To empower small and medium businesses across India by providing them with a world-class digital marketplace. We believe every entrepreneur deserves access to the same tools and reach as the biggest brands. MarketHub levels the playing field — whether you&apos;re a handmade crafts seller from Jaipur or an electronics wholesaler from Delhi, we help you reach customers nationwide.</p>
+        </Card>
+        <Card className="p-6">
+          <h2 className="font-semibold text-lg mb-3 flex items-center gap-2"><Shield size={20} className="text-orange-500" />Our Promise</h2>
+          <div className="text-sm text-muted-foreground space-y-2">
+            <div className="flex gap-2"><CheckCircle size={14} className="text-green-500 shrink-0 mt-0.5" /><p><span className="font-medium text-foreground">100% Genuine Products</span> — Every seller is verified and products are quality-checked</p></div>
+            <div className="flex gap-2"><CheckCircle size={14} className="text-green-500 shrink-0 mt-0.5" /><p><span className="font-medium text-foreground">Secure Payments</span> — PCI DSS Level 1 compliant via Razorpay</p></div>
+            <div className="flex gap-2"><CheckCircle size={14} className="text-green-500 shrink-0 mt-0.5" /><p><span className="font-medium text-foreground">Easy Returns</span> — 7-day hassle-free return policy</p></div>
+            <div className="flex gap-2"><CheckCircle size={14} className="text-green-500 shrink-0 mt-0.5" /><p><span className="font-medium text-foreground">Fast Delivery</span> — 2-3 days in metro cities</p></div>
+            <div className="flex gap-2"><CheckCircle size={14} className="text-green-500 shrink-0 mt-0.5" /><p><span className="font-medium text-foreground">24/7 Support</span> — Email, chat, and phone support</p></div>
+          </div>
+        </Card>
+      </div>
+
+      <Card className="p-6 mb-10">
+        <h2 className="font-semibold text-lg mb-3">How MarketHub Works</h2>
+        <div className="grid sm:grid-cols-4 gap-6 text-center text-sm">
+          {[
+            { step: '1', title: 'Browse & Discover', desc: 'Explore thousands of products across 500+ categories with smart filters and search', icon: <Search size={24} /> },
+            { step: '2', title: 'Add to Cart', desc: 'Compare prices, read reviews, check seller ratings, and add to your cart', icon: <ShoppingCart size={24} /> },
+            { step: '3', title: 'Secure Checkout', desc: 'Multiple payment options with 256-bit encryption and buyer protection', icon: <Shield size={24} /> },
+            { step: '4', title: 'Fast Delivery', desc: 'Track your order in real-time and receive it at your doorstep', icon: <Truck size={24} /> },
+          ].map(s => (
+            <div key={s.step}>
+              <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/20 text-orange-600 flex items-center justify-center mx-auto mb-2">{s.icon}</div>
+              <p className="font-semibold">{s.title}</p>
+              <p className="text-xs text-muted-foreground mt-1">{s.desc}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="font-semibold text-lg mb-3">Want to Sell on MarketHub?</h2>
+        <p className="text-sm text-muted-foreground mb-4">Join 5,000+ verified sellers and reach millions of customers across India. Zero listing fees, low commissions, and dedicated seller support.</p>
+        <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => useNavigationStore.getState().setCustomerView('register')}>Register as a Vendor</Button>
+      </Card>
     </div>
   );
 }
@@ -2517,6 +2752,7 @@ export default function CustomerApp() {
       case 'register': return <LoginPage />;
       case 'contact': return <ContactUsPage />;
       case 'help': return <HelpCenterPage />;
+      case 'about': return <AboutPage />;
       default: return <HomePage />;
     }
   };
