@@ -14,7 +14,7 @@ import {
   Settings, LogOut, Bell, Sun, Moon, Monitor, Filter, SlidersHorizontal,
   Bookmark, Send, Printer, RotateCcw, XCircle,
   MessageCircle, Facebook, Twitter, Link as LinkIcon, HelpCircle, Headphones, SearchX, ShoppingBag,
-  Loader2
+  Loader2, ShieldCheck
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -1431,6 +1431,48 @@ function CheckoutPage() {
   const [billingForm, setBillingForm] = useState({ fullName: '', phone: '', address: '', city: '', state: '', pincode: '' });
   const qc = useQueryClient();
 
+  // Payment form states
+  const [upiId, setUpiId] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [cardName, setCardName] = useState(user?.name || '');
+  const [selectedBank, setSelectedBank] = useState('');
+  const [paymentErrors, setPaymentErrors] = useState<Record<string, string>>({});
+
+  const validatePayment = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (paymentMethod === 'UPI') {
+      if (!upiId.trim()) { errors.upiId = 'Enter your UPI ID'; }
+      else if (!/^[\w.\-]+@[\w]+$/.test(upiId.trim())) { errors.upiId = 'Invalid UPI ID (e.g. name@upi)'; }
+    } else if (paymentMethod === 'Credit Card' || paymentMethod === 'Debit Card') {
+      const num = cardNumber.replace(/\s/g, '');
+      if (!num) { errors.cardNumber = 'Enter card number'; }
+      else if (!/^\d{16}$/.test(num)) { errors.cardNumber = 'Card number must be 16 digits'; }
+      if (!cardExpiry.trim()) { errors.cardExpiry = 'Enter expiry date'; }
+      else if (!/^\d{2}\/\d{2}$/.test(cardExpiry.trim())) { errors.cardExpiry = 'Use MM/YY format'; }
+      if (!cardCvv.trim()) { errors.cardCvv = 'Enter CVV'; }
+      else if (!/^\d{3,4}$/.test(cardCvv.trim())) { errors.cardCvv = 'CVV must be 3 or 4 digits'; }
+      if (!cardName.trim()) { errors.cardName = 'Enter cardholder name'; }
+    } else if (paymentMethod === 'Net Banking') {
+      if (!selectedBank) { errors.bank = 'Select a bank'; }
+    }
+    setPaymentErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const formatCardNumber = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 16);
+    return digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+  };
+  const formatExpiry = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 4);
+    if (digits.length >= 3) return digits.slice(0, 2) + '/' + digits.slice(2);
+    return digits;
+  };
+
+  const banks = ['State Bank of India', 'HDFC Bank', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra Bank', 'Punjab National Bank', 'Bank of Baroda', 'Canara Bank', 'Union Bank of India', 'IndusInd Bank'];
+
   useEffect(() => { if (items.length === 0) navigateTo('cart'); }, [items.length, navigateTo]);
   if (items.length === 0) return null;
   if (!isAuthenticated && !isGuest) {
@@ -1447,7 +1489,11 @@ function CheckoutPage() {
     );
   }
 
+  // Clear payment errors when switching methods
+  useEffect(() => { setPaymentErrors({}); }, [paymentMethod]);
+
   const handlePlaceOrder = async () => {
+    if (paymentMethod !== 'COD' && !validatePayment()) { toast.error('Please fill payment details'); return; }
     if (!address.fullName) { toast.error('Please enter your full name'); return; }
     if (!address.addressLine1) { toast.error('Please enter your address'); return; }
     if (!address.city) { toast.error('Please enter your city'); return; }
@@ -1549,6 +1595,49 @@ function CheckoutPage() {
                 </Label>
               ))}
             </RadioGroup>
+
+            {/* UPI Form */}
+            {paymentMethod === 'UPI' && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 p-4 rounded-lg border bg-muted/30 space-y-3">
+                <div className="flex items-center gap-2 mb-2"><Smartphone size={16} className="text-orange-500" /><span className="font-medium text-sm">Enter UPI Details</span></div>
+                <div><Label>UPI ID *</Label><Input className="mt-1" placeholder="yourname@upi" value={upiId} onChange={e => setUpiId(e.target.value.toLowerCase())} />
+                {paymentErrors.upiId && <p className="text-xs text-destructive mt-1">{paymentErrors.upiId}</p>}</div>
+                <p className="text-xs text-muted-foreground">Pay using Google Pay, PhonePe, Paytm or any UPI app</p>
+              </motion.div>
+            )}
+
+            {/* Credit/Debit Card Form */}
+            {(paymentMethod === 'Credit Card' || paymentMethod === 'Debit Card') && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 p-4 rounded-lg border bg-muted/30 space-y-3">
+                <div className="flex items-center gap-2 mb-2"><CreditCard size={16} className="text-orange-500" /><span className="font-medium text-sm">Enter {paymentMethod} Details</span></div>
+                <div><Label>Card Number *</Label><Input className="mt-1 font-mono tracking-wider" placeholder="1234 5678 9012 3456" value={cardNumber} onChange={e => setCardNumber(formatCardNumber(e.target.value))} maxLength={19} />
+                {paymentErrors.cardNumber && <p className="text-xs text-destructive mt-1">{paymentErrors.cardNumber}</p>}</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Expiry *</Label><Input className="mt-1 font-mono" placeholder="MM/YY" value={cardExpiry} onChange={e => setCardExpiry(formatExpiry(e.target.value))} maxLength={5} />
+                  {paymentErrors.cardExpiry && <p className="text-xs text-destructive mt-1">{paymentErrors.cardExpiry}</p>}</div>
+                  <div><Label>CVV *</Label><Input className="mt-1 font-mono" type="password" placeholder="•••" value={cardCvv} onChange={e => setCardCvv(e.target.value.replace(/\D/g, ''))} maxLength={4} />
+                  {paymentErrors.cardCvv && <p className="text-xs text-destructive mt-1">{paymentErrors.cardCvv}</p>}</div>
+                </div>
+                <div><Label>Cardholder Name *</Label><Input className="mt-1" placeholder="Name on card" value={cardName} onChange={e => setCardName(e.target.value)} />
+                {paymentErrors.cardName && <p className="text-xs text-destructive mt-1">{paymentErrors.cardName}</p>}</div>
+                <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+                  <ShieldCheck size={14} className="text-green-500" /> Your card details are encrypted and secure
+                </div>
+              </motion.div>
+            )}
+
+            {/* Net Banking Form */}
+            {paymentMethod === 'Net Banking' && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 p-4 rounded-lg border bg-muted/30 space-y-3">
+                <div className="flex items-center gap-2 mb-2"><Building2 size={16} className="text-orange-500" /><span className="font-medium text-sm">Select Your Bank</span></div>
+                <Select value={selectedBank} onValueChange={setSelectedBank}>
+                  <SelectTrigger><SelectValue placeholder="Choose a bank" /></SelectTrigger>
+                  <SelectContent className="max-h-60">{banks.map(bank => <SelectItem key={bank} value={bank}>{bank}</SelectItem>)}</SelectContent>
+                </Select>
+                {paymentErrors.bank && <p className="text-xs text-destructive mt-1">{paymentErrors.bank}</p>}
+                <p className="text-xs text-muted-foreground">You will be redirected to your bank's login page</p>
+              </motion.div>
+            )}
           </Card>
         </div>
 
