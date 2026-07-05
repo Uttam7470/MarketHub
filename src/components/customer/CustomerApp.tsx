@@ -43,12 +43,6 @@ import { useTheme } from 'next-themes';
 import { useAuthStore, useNavigationStore, useCartStore, useWishlistStore, useCompareStore, useNotificationStore } from '@/stores';
 import { useNotifications } from '@/hooks/use-notifications';
 import type { Product, Category, Brand, Order, Banner, CustomerAddress, ApiResponse } from '@/types';
-import dynamic from 'next/dynamic';
-
-const ShippingPolicyPage = dynamic(() => import('./pages/ShippingPolicyPage'));
-const ReturnPolicyPage = dynamic(() => import('./pages/ReturnPolicyPage'));
-const PrivacyPolicyPage = dynamic(() => import('./pages/PrivacyPolicyPage'));
-const TermsOfServicePage = dynamic(() => import('./pages/TermsOfServicePage'));
 
 // ============ HELPERS ============
 
@@ -2387,17 +2381,14 @@ function CustomerFooter() {
           <div>
             <h4 className="font-semibold mb-3">Customer Service</h4>
             <div className="space-y-2 text-sm text-muted-foreground">
-              <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('help')}>Help Center</p>
-              <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('shipping-policy')}>Shipping Info</p>
-              <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('return-policy')}>Returns & Refunds</p>
-              <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('help')}>FAQ</p>
+              <p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('help')}>Help Center</p><p>Returns & Refunds</p><p>Shipping Info</p><p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('help')}>FAQ</p>
             </div>
           </div>
           <div>
             <h4 className="font-semibold mb-3">Contact Us</h4>
             <div className="space-y-2 text-sm text-muted-foreground">
-              <a href="mailto:support@markethub.com" className="flex items-center gap-2 hover:text-foreground transition-colors"><Mail size={14} />support@markethub.com</a>
-              <a href="tel:+917470917488" className="flex items-center gap-2 hover:text-foreground transition-colors"><Phone size={14} />7470917488</a>
+              <p className="flex items-center gap-2"><Mail size={14} />support@markethub.com</p>
+              <p className="flex items-center gap-2"><Phone size={14} />+91-1800-123-4567</p>
               <p className="flex items-center gap-2"><MapPin size={14} />Bangalore, India</p>
             </div>
           </div>
@@ -2405,7 +2396,7 @@ function CustomerFooter() {
         <Separator className="my-6" />
         <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
           <p>&copy; 2025 MarketHub. All rights reserved.</p>
-          <div className="flex gap-4"><p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('privacy-policy')}>Privacy Policy</p><p className="hover:text-foreground cursor-pointer" onClick={() => useNavigationStore.getState().setCustomerView('terms-of-service')}>Terms & Conditions</p></div>
+          <div className="flex gap-4"><p className="hover:text-foreground">Privacy Policy</p><p className="hover:text-foreground">Terms & Conditions</p></div>
         </div>
       </div>
 
@@ -2442,12 +2433,6 @@ function CustomerFooter() {
 function ContactUsPage() {
   const { user, isAuthenticated } = useAuthStore();
   const [form, setForm] = useState({ name: user?.name || '', email: user?.email || '', subject: '', message: '' });
-  const { data: settingsData } = useQuery({
-    queryKey: ['public-settings'],
-    queryFn: () => fetch('/api/settings').then(r => r.json()).then((r: any) => r.data ?? {}),
-  });
-  const settings = settingsData || {};
-
   const submitMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch('/api/support/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
@@ -2456,83 +2441,26 @@ function ContactUsPage() {
     onSuccess: () => { toast.success('Message sent! We\'ll get back to you soon.'); setForm({ name: user?.name || '', email: user?.email || '', subject: '', message: '' }); },
     onError: () => toast.error('Failed to send message'),
   });
-
-  const whatsappNumber = settings.whatsappNumber || '919876543210';
-  const whatsappMsg = encodeURIComponent('Hi MarketHub! I need help with my order/query.');
-  const whatsappLink = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${whatsappMsg}`;
-  const facebookPage = settings.facebookPage || 'https://facebook.com/markethub';
-
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <Breadcrumb className="mb-6"><BreadcrumbList><BreadcrumbItem><BreadcrumbLink onClick={() => useNavigationStore.getState().setCustomerView('home')}>Home</BreadcrumbLink></BreadcrumbItem><BreadcrumbSeparator /><BreadcrumbItem><span className="text-muted-foreground">Contact Us</span></BreadcrumbItem></BreadcrumbList></Breadcrumb>
-
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold mb-2">Contact Us</h1>
-        <p className="text-muted-foreground">We&apos;re here to help! Reach out through any channel below.</p>
-      </div>
-
-      {/* Quick Contact Cards — WhatsApp & Facebook */}
-      <div className="grid sm:grid-cols-2 gap-4 mb-8">
-        <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="block">
-          <Card className="p-5 hover:shadow-lg transition-shadow border-green-200 dark:border-green-800 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 cursor-pointer group">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-green-500 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-green-800 dark:text-green-300">Chat on WhatsApp</h3>
-                <p className="text-sm text-green-700 dark:text-green-400 mt-0.5">Get instant replies from our support team</p>
-                <p className="text-xs text-green-600/70 dark:text-green-500/70 mt-1">Available 9 AM – 9 PM IST</p>
-              </div>
-              <ArrowRight size={20} className="text-green-400 group-hover:translate-x-1 transition-transform shrink-0" />
-            </div>
-          </Card>
-        </a>
-        <a href={facebookPage} target="_blank" rel="noopener noreferrer" className="block">
-          <Card className="p-5 hover:shadow-lg transition-shadow border-blue-200 dark:border-blue-800 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 cursor-pointer group">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-blue-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                <Facebook size={28} className="text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-blue-800 dark:text-blue-300">Message on Facebook</h3>
-                <p className="text-sm text-blue-700 dark:text-blue-400 mt-0.5">Reach us on our Facebook Page</p>
-                <p className="text-xs text-blue-600/70 dark:text-blue-500/70 mt-1">We respond within 1-2 hours</p>
-              </div>
-              <ArrowRight size={20} className="text-blue-400 group-hover:translate-x-1 transition-transform shrink-0" />
-            </div>
-          </Card>
-        </a>
-      </div>
-
+      <h1 className="text-2xl font-bold mb-6">Contact Us</h1>
       <div className="grid md:grid-cols-2 gap-6">
         <div className="space-y-6">
           <Card className="p-6">
             <h2 className="font-semibold text-lg mb-4 flex items-center gap-2"><Store size={20} className="text-orange-500" />MarketHub Office</h2>
             <div className="space-y-4 text-sm">
-              <div className="flex gap-3"><MapPin size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Address</p><p className="text-muted-foreground">{settings.address || 'MarketHub HQ, 4th Floor, Infinity Tower, Outer Ring Road, Marathahalli, Bangalore, Karnataka 560037, India'}</p></div></div>
-              <div className="flex gap-3"><Phone size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Phone</p><a href={`tel:+${(settings.contactPhone || '7470917488').replace(/[^0-9]/g, '')}`} className="text-muted-foreground hover:text-foreground transition-colors">{settings.contactPhone || '7470917488'}</a></div></div>
-              <div className="flex gap-3"><Mail size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Email</p><a href={`mailto:${settings.contactEmail || 'support@markethub.com'}`} className="text-muted-foreground hover:text-foreground transition-colors">{settings.contactEmail || 'support@markethub.com'}</a></div></div>
-              <div className="flex gap-3"><Clock size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Business Hours</p><p className="text-muted-foreground">Mon - Sat: 9:00 AM - 8:00 PM IST<br />Sunday: 10:00 AM - 6:00 PM IST</p></div></div>
+              <div className="flex gap-3"><MapPin size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Address</p><p className="text-muted-foreground">MarketHub HQ, 4th Floor, Infinity Tower, <br />Outer Ring Road, Marathahalli, <br />Bangalore, Karnataka 560037, India</p></div></div>
+              <div className="flex gap-3"><Phone size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Phone</p><p className="text-muted-foreground">+91-1800-123-4567 (Toll Free)<br />+91-80-4567-8900 (Direct)</p></div></div>
+              <div className="flex gap-3"><Mail size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Email</p><p className="text-muted-foreground">support@markethub.com<br />business@markethub.com</p></div></div>
+              <div className="flex gap-3"><Clock size={16} className="text-orange-500 shrink-0 mt-0.5" /><div><p className="font-medium">Business Hours</p><p className="text-muted-foreground">Mon - Sat: 9:00 AM - 8:00 PM IST<br />Sunday: 10:00 AM - 6:00 PM IST<br />Holidays: Closed</p></div></div>
             </div>
           </Card>
           <Card className="p-6">
             <h3 className="font-semibold mb-3">Connect With Us</h3>
             <div className="flex gap-3">
-              <a href={facebookPage} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="sm" className="gap-2 hover:bg-blue-50 hover:border-blue-300"><span className="text-blue-600"><Facebook size={18} /></span>Facebook</Button>
-              </a>
-              <a href={whatsappLink} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="sm" className="gap-2 hover:bg-green-50 hover:border-green-300">
-                  <span className="text-green-600">
-                    <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                  </span>
-                  WhatsApp
-                </Button>
-              </a>
-              <a href="https://twitter.com/markethub" target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="sm" className="gap-2 hover:bg-sky-50 hover:border-sky-300"><span className="text-sky-500"><Twitter size={18} /></span>Twitter</Button>
-              </a>
+              {[{ icon: <Facebook size={18} />, label: 'Facebook' }, { icon: <Twitter size={18} />, label: 'Twitter' }, { icon: <MessageCircle size={18} />, label: 'WhatsApp' }].map(s => (
+                <Button key={s.label} variant="outline" size="sm" className="gap-2"><span className="text-orange-500">{s.icon}</span>{s.label}</Button>
+              ))}
             </div>
           </Card>
         </div>
@@ -2544,7 +2472,7 @@ function ContactUsPage() {
           </div>
           <div><Label>Subject *</Label><Input className="mt-1" placeholder="What is this about?" value={form.subject} onChange={e => setForm(f => ({...f, subject: e.target.value}))} /></div>
           <div><Label>Message *</Label><Textarea className="mt-1" rows={5} placeholder="Tell us how we can help you..." value={form.message} onChange={e => setForm(f => ({...f, message: e.target.value}))} /></div>
-          <p className="text-xs text-muted-foreground">We usually respond within 2-4 business hours. For instant help, use WhatsApp or Facebook above.</p>
+          <p className="text-xs text-muted-foreground">We usually respond within 2-4 business hours.</p>
           <Button className="w-full bg-orange-500 hover:bg-orange-600" onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending || !form.name || !form.email || !form.subject || !form.message}>
             {submitMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending...</> : 'Send Message'}
           </Button>
@@ -2825,10 +2753,6 @@ export default function CustomerApp() {
       case 'contact': return <ContactUsPage />;
       case 'help': return <HelpCenterPage />;
       case 'about': return <AboutPage />;
-      case 'shipping-policy': return <ShippingPolicyPage />;
-      case 'return-policy': return <ReturnPolicyPage />;
-      case 'privacy-policy': return <PrivacyPolicyPage />;
-      case 'terms-of-service': return <TermsOfServicePage />;
       default: return <HomePage />;
     }
   };
