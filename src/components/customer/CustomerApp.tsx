@@ -12,7 +12,7 @@ import {
   ArrowRight, GitCompare,
   Store, Smartphone,
   LogOut, Bell, Sun, Moon, Monitor, Filter, SlidersHorizontal,
-  MessageCircle, Facebook, Twitter, Headphones, ShoppingBag,
+  MessageCircle, Facebook, Twitter, Headphones, ShoppingBag, Instagram,
   Loader2
 } from 'lucide-react';
 
@@ -995,9 +995,16 @@ function ContactUsPage() {
           </Card>
           <Card className="p-6">
             <h3 className="font-semibold mb-3">Connect With Us</h3>
-            <div className="flex gap-3">
-              {[{ icon: <Facebook size={18} />, label: 'Facebook' }, { icon: <Twitter size={18} />, label: 'Twitter' }, { icon: <MessageCircle size={18} />, label: 'WhatsApp' }].map(s => (
-                <Button key={s.label} variant="outline" size="sm" className="gap-2"><span className="text-orange-500">{s.icon}</span>{s.label}</Button>
+            <div className="flex flex-wrap gap-3">
+              {[
+                { icon: <Facebook size={18} />, label: 'Facebook', url: 'https://facebook.com/MarketHub' },
+                { icon: <Twitter size={18} />, label: 'Twitter', url: 'https://twitter.com/MarketHub' },
+                { icon: <Instagram size={18} />, label: 'Instagram', url: 'https://instagram.com/MarketHub' },
+                { icon: <MessageCircle size={18} />, label: 'WhatsApp', url: 'https://wa.me/9118001234567' },
+              ].map(s => (
+                <a key={s.label} href={s.url} target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" size="sm" className="gap-2 cursor-pointer"><span className="text-orange-500">{s.icon}</span>{s.label}</Button>
+                </a>
               ))}
             </div>
           </Card>
@@ -1024,6 +1031,11 @@ function ContactUsPage() {
 
 export default function CustomerApp() {
   const { customerView } = useNavigationStore();
+
+  // Scroll to top whenever the view changes (footer links, navigation, etc.)
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [customerView]);
 
   const renderView = () => {
     switch (customerView) {
