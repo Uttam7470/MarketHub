@@ -124,12 +124,13 @@ interface CartState {
     stock: number;
   }>;
   couponCode: string | null;
+  couponId: string | null;
   couponDiscount: number;
   addItem: (item: Omit<CartState['items'][0], 'quantity'>) => void;
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
-  applyCoupon: (code: string, discount: number) => void;
+  applyCoupon: (code: string, discount: number, id?: string) => void;
   removeCoupon: () => void;
   getItemCount: () => number;
   getSubtotal: () => number;
@@ -143,6 +144,7 @@ export const useCartStore = create<CartState>()(
     (set, get) => ({
       items: [],
       couponCode: null,
+      couponId: null,
       couponDiscount: 0,
 
       addItem: (item) => {
@@ -172,9 +174,9 @@ export const useCartStore = create<CartState>()(
         }
       },
 
-      clearCart: () => set({ items: [], couponCode: null, couponDiscount: 0 }),
-      applyCoupon: (code, discount) => set({ couponCode: code, couponDiscount: discount }),
-      removeCoupon: () => set({ couponCode: null, couponDiscount: 0 }),
+      clearCart: () => set({ items: [], couponCode: null, couponId: null, couponDiscount: 0 }),
+      applyCoupon: (code, discount, id) => set({ couponCode: code, couponDiscount: discount, couponId: id || null }),
+      removeCoupon: () => set({ couponCode: null, couponId: null, couponDiscount: 0 }),
       getItemCount: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
       getSubtotal: () => get().items.reduce((sum, i) => sum + i.price * i.quantity, 0),
       getShipping: () => {

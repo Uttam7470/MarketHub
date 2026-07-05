@@ -783,3 +783,89 @@ Stage Summary:
 - 8 new files created under src/components/customer/ (helpers, shared, pages)
 - All page navigation works correctly via dynamic imports
 - WhatsApp/Facebook/clickable phone-email changes remain reverted from previous task
+
+---
+Task ID: 10
+Agent: Sub-agent (Admin Coupons UI)
+Task: Enhance AdminCoupons component with scope filtering, full CRUD, and new model fields
+
+Work Log:
+- Read worklog.md and existing AdminApp.tsx to understand patterns and available imports
+- Reviewed Coupon type definition (scope, vendorId, applicableType, categoryIds, autoSuggest fields)
+- Replaced the basic AdminCoupons function (lines 953-1012) with an enhanced version (~290 lines)
+- Added scope filter tabs (All / Platform / Vendor) using segmented button group
+- Enhanced table with 9 columns: Code, Scope (amber/blue badges), Discount, Vendor, Min Order, Usage, Status, Auto-suggest toggle (Switch, disabled display), Actions (Edit + Toggle Active + Delete)
+- Added empty state row when no coupons match filter
+- Created unified Create/Edit dialog with proper form reset between modes via `resetAndOpen` helper
+- Dialog fields: Code (uppercase), Scope (PLATFORM/VENDOR select), Vendor ID (shown when VENDOR scope), Discount Type (PERCENTAGE/FIXED), Discount Value, Min Order, Max Discount, Usage Limit, Start Date, End Date, Applicable Type (only when PLATFORM scope), Category IDs (shown when applicableType=CATEGORY with category name hints), Auto Suggest (Switch)
+- Save mutation handles both POST (create) and PUT (edit) based on editingId state
+- Toggle active mutation uses PUT /api/coupons with isActive toggle
+- Delete mutation unchanged (DELETE /api/coupons?id=xxx)
+- Used only existing imports (Switch instead of Checkbox which was not imported)
+- Used Loader2 for save button pending state
+- Type-check passed: no new errors introduced (pre-existing errors in other files unchanged)
+
+Stage Summary:
+- AdminCoupons fully enhanced with scope filtering, edit/toggle/delete actions, and all new Coupon model fields
+- Form state properly resets between create and edit modes via emptyForm constant and resetAndOpen helper
+- Uses `includeVendor=true` query param for vendor name display
+- Categories query added for category name hints in applicable type field
+---
+Task ID: Vendor Coupons UI
+Agent: Sub-agent
+Task: Add Vendor Coupons page to the Vendor panel
+
+Work Log:
+- Added `Tag` to lucide-react imports in VendorApp.tsx
+- Added `Coupon` to type imports from `@/types`
+- Added `{ key: 'vendor-coupons', label: 'Coupons', icon: Tag }` to VENDOR_NAV before 'vendor-wallet'
+- Created `VendorCoupons` component with full CRUD functionality:
+  - Fetches vendor coupons via `GET /api/vendor/coupons?vendorId=${vendorId}`
+  - Stats cards: Total Coupons, Active Coupons, Total Used (sum of usedCount)
+  - Table with columns: Code, Discount, Min Order, Usage, Status, Actions (Edit/Toggle/Delete)
+  - Status badges: Active (green), Scheduled (blue), Expired (amber), Inactive (gray)
+  - Create/Edit dialog with fields: Code (uppercase, disabled on edit), Discount Type (PERCENTAGE/FIXED), Discount Value, Min Order, Max Discount, Usage Limit, Start/End Date, Auto Suggest toggle button
+  - Create: POST /api/vendor/coupons with vendorId
+  - Edit: PUT /api/vendor/coupons with id and vendorId
+  - Toggle active/inactive: PUT /api/vendor/coupons with id, vendorId, isActive toggled
+  - Delete: DELETE /api/vendor/coupons?id=xxx&vendorId=xxx with confirmation dialog
+- Added `case 'vendor-coupons': return <VendorCoupons />;` to view switch
+- Used only existing imports (Button for autoSuggest toggle, no new component imports)
+- Follows same patterns as VendorWalletPage and other vendor components
+- TypeScript compiles cleanly (no new errors introduced)
+
+Stage Summary:
+- Vendor Coupons page fully functional in vendor panel
+- Navigation entry added between Reports and Wallet
+- Full CRUD with optimistic query invalidation
+- No new shadcn component imports needed
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Implement dual (Admin + Vendor) coupon system for MarketHub
+
+Work Log:
+- Explored full codebase: schema, types, stores, admin/vendor/customer panels, APIs
+- Updated Prisma Coupon model: added scope (PLATFORM|VENDOR), vendorId (relation to Vendor), applicableType (ALL|CATEGORY|VENDOR_PRODUCTS), categoryIds
+- Added reverse relation `coupons Coupon[]` to Vendor model
+- Pushed schema to DB with `bun run db:push`
+- Updated Coupon TypeScript interface with new fields
+- Added 'vendor-coupons' to VendorView type union
+- Added 'own_coupons' to VENDOR RBAC permissions
+- Enhanced /api/coupons route: GET with scope/vendorId/active/includeVendor params, PUT for edit/toggle
+- Created /api/coupons/validate/route.ts: backend validation checking scope, vendor eligibility, dates, usage limits, min order
+- Created /api/vendor/coupons/route.ts: vendor-scoped CRUD with ownership checks
+- Enhanced AdminCoupons UI (subagent): scope filter tabs (All/Platform/Vendor), enhanced table, create/edit dialog with all new fields, toggle active, vendor name column
+- Created VendorCoupons UI (subagent): stats cards, coupon table, create/edit dialog, toggle, delete with confirmation
+- Updated CartPage: backend validation via /api/coupons/validate, loading state, auto-suggest shows scope badge
+- Updated CartStore: added couponId field, applyCoupon accepts optional id param
+- Updated CheckoutPage: sends couponId and discount to order API, shows coupon code in summary
+- Fixed Order API: uses clientDiscount for order total, sets couponId on order, increments coupon usedCount in transaction
+
+Stage Summary:
+- 12 files modified/created
+- Full dual coupon system: Admin (platform-wide) + Vendor (store-specific)
+- Backend validation with proper scope checking (platform vs vendor coupons)
+- Cart, Checkout, and Order flow fully integrated with coupon discount
+- No compile errors, no runtime errors in dev log

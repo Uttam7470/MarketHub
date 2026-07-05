@@ -20,7 +20,7 @@ import { toast } from '@/lib/sonner';
 
 function CheckoutPage() {
   const { user, isAuthenticated } = useAuthStore();
-  const { items, getSubtotal, getShipping, getTax, getTotal, clearCart, couponDiscount } = useCartStore();
+  const { items, getSubtotal, getShipping, getTax, getTotal, clearCart, couponDiscount, couponId, couponCode } = useCartStore();
   const { navigateTo } = useNavigationStore();
   const [paymentMethod, setPaymentMethod] = useState('COD');
   const [address, setAddress] = useState({ fullName: user?.name || '', phone: user?.phone || '', addressLine1: '', city: '', state: '', pincode: '' });
@@ -119,6 +119,8 @@ function CheckoutPage() {
             phone: address.phone,
           },
           paymentMethod,
+          couponId: couponId || undefined,
+          discount: couponDiscount,
         }),
       });
       const data = await res.json();
@@ -249,7 +251,7 @@ function CheckoutPage() {
             <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(getSubtotal())}</span></div>
             <div className="flex justify-between"><span>Shipping</span><span>{getShipping() === 0 ? 'FREE' : formatCurrency(getShipping())}</span></div>
             <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(getTax())}</span></div>
-            {couponDiscount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(couponDiscount)}</span></div>}
+            {couponDiscount > 0 && <div className="flex justify-between text-green-600"><span>Discount{couponCode ? ` (${couponCode})` : ''}</span><span>-{formatCurrency(couponDiscount)}</span></div>}
             <Separator />
             <div className="flex justify-between text-lg font-bold"><span>Total</span><span className="text-orange-500">{formatCurrency(getTotal())}</span></div>
           </div>

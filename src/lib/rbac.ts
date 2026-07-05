@@ -4,7 +4,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPPORT_ADMIN: ['tickets', 'returns', 'customers', 'faq', 'orders', 'support'],
   INVENTORY_ADMIN: ['products', 'categories', 'brands', 'stock', 'inventory'],
   ADMIN: ['*'],
-  VENDOR: ['own_products', 'own_orders', 'own_wallet', 'own_reports'],
+  VENDOR: ['own_products', 'own_orders', 'own_wallet', 'own_reports', 'own_coupons'],
   CUSTOMER: ['own_orders', 'own_profile', 'cart', 'wishlist'],
 };
 

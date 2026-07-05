@@ -100,6 +100,7 @@ model Vendor {
   wallet           VendorWallet?
   payouts          Payout[]
   walletTransactions WalletTransaction[]
+  coupons          Coupon[]
 }
 
 model VendorWallet {
@@ -428,7 +429,10 @@ model Review {
 model Coupon {
   id              String   @id @default(cuid())
   code            String   @unique
-  discountType    String   @default("PERCENTAGE")
+  scope           String   @default("PLATFORM")    // PLATFORM | VENDOR
+  vendorId        String?
+  vendor          Vendor?  @relation(fields: [vendorId], references: [id])
+  discountType    String   @default("PERCENTAGE")   // PERCENTAGE | FIXED
   discountValue   Float
   minOrder        Float?
   maxDiscount     Float?
@@ -436,6 +440,8 @@ model Coupon {
   usedCount       Int      @default(0)
   startDate       DateTime
   endDate         DateTime
+  applicableType  String   @default("ALL")          // ALL | CATEGORY | VENDOR_PRODUCTS
+  categoryIds     String?                            // JSON array of category IDs (for CATEGORY scope)
   isActive        Boolean  @default(true)
   autoSuggest     Boolean  @default(false)
   createdAt       DateTime @default(now())

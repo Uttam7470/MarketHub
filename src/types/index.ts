@@ -334,6 +334,9 @@ export interface Review {
 export interface Coupon {
   id: string;
   code: string;
+  scope: 'PLATFORM' | 'VENDOR';
+  vendorId?: string | null;
+  vendor?: { id: string; businessName: string } | null;
   discountType: 'PERCENTAGE' | 'FIXED';
   discountValue: number;
   minOrder?: number | null;
@@ -342,6 +345,8 @@ export interface Coupon {
   usedCount: number;
   startDate: string;
   endDate: string;
+  applicableType: 'ALL' | 'CATEGORY' | 'VENDOR_PRODUCTS';
+  categoryIds?: string | null;
   isActive: boolean;
   autoSuggest: boolean;
 }
@@ -586,7 +591,7 @@ export type CustomerView =
 export type VendorView = 
   | 'vendor-login' | 'vendor-dashboard' | 'vendor-products' | 'vendor-add-product'
   | 'vendor-orders' | 'vendor-reports' | 'vendor-profile' | 'vendor-notifications'
-  | 'vendor-settings' | 'vendor-wallet' | 'vendor-inventory';
+  | 'vendor-settings' | 'vendor-wallet' | 'vendor-inventory' | 'vendor-coupons';
 
 export type AdminView = 
   | 'admin-login' | 'admin-dashboard' | 'admin-vendors' | 'admin-vendor-detail'

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Package, ShoppingBag, Minus, Plus, Trash2, Bookmark } from 'lucide-react';
+import { Package, ShoppingBag, Minus, Plus, Trash2, Bookmark, Loader2, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,29 +13,44 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore, useNavigationStore, useCartStore } from '@/stores';
 import { formatCurrency, useRequireAuth } from '../helpers';
 import { toast } from '@/lib/sonner';
-import type { ApiResponse } from '@/types';
+import type { ApiResponse, Coupon } from '@/types';
 
 function CartPage() {
-  const { items, removeItem, updateQuantity, getSubtotal, getShipping, getTax, getTotal, couponCode, couponDiscount, applyCoupon, removeCoupon, clearCart, addItem } = useCartStore();
+  const { items, removeItem, updateQuantity, getSubtotal, getShipping, getTax, getTotal, couponCode, couponDiscount, couponId, applyCoupon, removeCoupon, clearCart, addItem } = useCartStore();
   const { navigateTo } = useNavigationStore();
   const requireAuth = useRequireAuth();
-  const { data: coupons } = useQuery({ queryKey: ['coupons'], queryFn: () => fetch('/api/coupons').then(r => r.json()).then((r: ApiResponse<any[]>) => r.data || []) });
+  const { data: coupons, isLoading: couponsLoading } = useQuery({
+    queryKey: ['coupons'],
+    queryFn: () => fetch('/api/coupons?active=true').then(r => r.json()).then((r: ApiResponse<Coupon[]>) => r.data || [])
+  });
   const [couponInput, setCouponInput] = useState('');
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
   const [savedForLater, setSavedForLater] = useState<any[]>([]);
   const [cartPageRemoveTarget, setCartPageRemoveTarget] = useState<{id: string; name: string} | null>(null);
   const qc = useQueryClient();
 
-  const handleApplyCoupon = () => {
-    const coupon = coupons?.find(c => c.code.toUpperCase() === couponInput.toUpperCase());
-    if (!coupon) { toast.error('Invalid coupon code', { description: 'Please check the code and try again.' }); return; }
-    const subtotal = getSubtotal();
-    if (coupon.minOrder && subtotal < coupon.minOrder) { toast.error('Minimum order amount not met', { description: `You need to order at least ${formatCurrency(coupon.minOrder)} to use this coupon.` }); return; }
-    let discount = 0;
-    if (coupon.discountType === 'PERCENTAGE') discount = (subtotal * coupon.discountValue) / 100;
-    else discount = coupon.discountValue;
-    if (coupon.maxDiscount) discount = Math.min(discount, coupon.maxDiscount);
-    applyCoupon(coupon.code, discount);
-    toast.success('Coupon applied!', { description: 'You save ' + formatCurrency(discount) });
+  const handleApplyCoupon = async () => {
+    if (!couponInput.trim()) return;
+    setApplyingCoupon(true);
+    try {
+      const cartItems = items.map(i => ({ productId: i.productId, vendorId: i.vendorId, price: i.price, quantity: i.quantity }));
+      const res = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: couponInput, cartItems }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        applyCoupon(data.data.code, data.data.discount, data.data.id);
+        toast.success('Coupon applied!', { description: `You save ${formatCurrency(data.data.discount)}${data.data.vendorName ? ` on ${data.data.vendorName} products` : ''}` });
+        setCouponInput('');
+      } else {
+        toast.error(data.error || 'Invalid coupon code', { description: 'Please check the code and try again.' });
+      }
+    } catch {
+      toast.error('Something went wrong', { description: 'Could not validate coupon.' });
+    }
+    setApplyingCoupon(false);
   };
 
   const handleCartPageRemove = (id: string, name: string) => {
@@ -43,6 +58,9 @@ function CartPage() {
     toast.info('Removed from cart', { description: `${name} removed.` });
     setCartPageRemoveTarget(null);
   };
+
+  // If cart items change and a vendor coupon is applied, re-validate
+  // (simplified: just show a note if the coupon might be invalid)
 
   if (items.length === 0) {
     return (
@@ -109,20 +127,30 @@ function CartPage() {
               <div className="flex justify-between text-lg font-bold"><span>Total</span><span className="text-orange-500">{formatCurrency(getTotal())}</span></div>
             </div>
             {!couponCode ? (
-              <div className="flex gap-2"><Input placeholder="Coupon code" value={couponInput} onChange={e => setCouponInput(e.target.value)} className="uppercase" /><Button variant="outline" onClick={handleApplyCoupon}>Apply</Button></div>
-            ) : (
-              <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 p-2 rounded"><span className="text-sm text-green-600">Code: {couponCode}</span><Button variant="ghost" size="sm" className="text-destructive h-6" onClick={removeCoupon}>Remove</Button></div>
-            )}
-            <div className="mt-3">
-              <p className="text-xs text-muted-foreground mb-2">Available Coupons:</p>
-              <div className="flex flex-wrap gap-2">
-                {coupons?.filter((c: any) => c.isActive).slice(0, 3).map((c: any) => (
-                  <Badge key={c.id} variant="outline" className="cursor-pointer hover:bg-orange-50 text-xs" onClick={() => setCouponInput(c.code)}>
-                    {c.code} - {c.discountType === 'PERCENTAGE' ? `${c.discountValue}% off` : `₹${c.discountValue} off`}
-                  </Badge>
-                ))}
+              <div className="flex gap-2">
+                <Input placeholder="Coupon code" value={couponInput} onChange={e => setCouponInput(e.target.value)} className="uppercase" onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()} />
+                <Button variant="outline" onClick={handleApplyCoupon} disabled={applyingCoupon || !couponInput.trim()}>
+                  {applyingCoupon ? <Loader2 size={16} className="animate-spin" /> : 'Apply'}
+                </Button>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 p-2 rounded">
+                <span className="text-sm text-green-600 font-medium">Code: {couponCode}</span>
+                <Button variant="ghost" size="sm" className="text-destructive h-6" onClick={removeCoupon}>Remove</Button>
+              </div>
+            )}
+            {coupons && coupons.filter(c => c.isActive && c.autoSuggest).length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><Tag size={12} /> Available Coupons:</p>
+                <div className="flex flex-wrap gap-2">
+                  {coupons.filter(c => c.isActive && c.autoSuggest).slice(0, 4).map((c: Coupon) => (
+                    <Badge key={c.id} variant="outline" className="cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20 text-xs" onClick={() => setCouponInput(c.code)}>
+                      {c.code} - {c.scope === 'VENDOR' ? '🏪 ' : ''}{c.discountType === 'PERCENTAGE' ? `${c.discountValue}% off` : `₹${c.discountValue} off`}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
             <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 text-lg" onClick={() => { if (!requireAuth('proceed to checkout')) return; navigateTo('checkout'); }}>
               Proceed to Checkout
             </Button>

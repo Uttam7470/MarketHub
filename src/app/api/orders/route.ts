@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { userId, items, shippingAddress, paymentMethod, couponId } = body;
+    const { userId, items, shippingAddress, paymentMethod, couponId, discount: clientDiscount } = body;
 
     // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -131,18 +131,19 @@ export async function POST(req: NextRequest) {
 
     const shippingCost = subtotal >= 500 ? 0 : 99;
     const tax = subtotal * 0.18;
-    const total = subtotal + shippingCost + tax;
+    const discount = Math.max(0, clientDiscount || 0);
+    const total = Math.max(0, subtotal + shippingCost + tax - discount);
     const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`;
 
-    // Use DB transaction to ensure atomicity of order creation,
-    // stock decrement, vendor sales update, and activity logging
-    const [order] = await db.$transaction([
+    // Build transaction operations
+    const txOps: any[] = [
       // 1. Create the order with its items
       db.order.create({
         data: {
           userId,
           orderNumber,
-          subtotal, shippingCost, tax, discount: 0, total,
+          subtotal, shippingCost, tax, discount, total,
+          couponId: couponId || null,
           paymentMethod: paymentMethod || 'COD',
           shippingAddress: typeof shippingAddress === 'string' ? shippingAddress : JSON.stringify(shippingAddress),
           items: { create: orderItems },
@@ -167,7 +168,14 @@ export async function POST(req: NextRequest) {
       db.activityLog.create({
         data: { userId, action: 'ORDER_PLACE', details: `Placed order ${orderNumber}` },
       }),
-    ]);
+    ];
+
+    // 5. If coupon used, increment usedCount
+    if (couponId) {
+      txOps.push(db.coupon.update({ where: { id: couponId }, data: { usedCount: { increment: 1 } } }));
+    }
+
+    const [order] = await db.$transaction(txOps);
 
     return NextResponse.json({ success: true, data: order }, { status: 201 });
   } catch (error: unknown) {

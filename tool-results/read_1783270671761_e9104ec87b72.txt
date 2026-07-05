@@ -1,0 +1,1726 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useMemo } from 'react';
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+     5→import { motion, AnimatePresence } from 'framer-motion';
+     6→import { toast } from '@/lib/sonner';
+     7→import { authToast, vendorStatusToast } from '@/lib/auth-toast';
+     8→import {
+     9→  Package, ShoppingCart, ShoppingBag, DollarSign, Star, TrendingUp, BarChart3, Plus, Pencil, Trash2,
+    10→  Search, Filter, Eye, ChevronLeft, ChevronRight, Upload, Settings, Bell, LogOut, Loader2,
+    11→  Store, Menu, X, User, AlertTriangle, CheckCircle, Clock, Truck, BoxIcon, XCircle, ShieldCheck,
+    12→  Wallet, Copy, Printer, ArrowDownUp, FileText, RotateCcw, Ban, Download, FileSpreadsheet, Tags,
+    13→  ImagePlus, Image as ImageIcon, GripVertical, ArrowUp, ArrowDown, Link
+    14→} from 'lucide-react';
+    15→
+    16→import { Button } from '@/components/ui/button';
+    17→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    18→import { Input } from '@/components/ui/input';
+    19→import { Label } from '@/components/ui/label';
+    20→import { Badge } from '@/components/ui/badge';
+    21→import { Separator } from '@/components/ui/separator';
+    22→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    23→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    24→import { Textarea } from '@/components/ui/textarea';
+    25→import { Skeleton } from '@/components/ui/skeleton';
+    26→import { ScrollArea } from '@/components/ui/scroll-area';
+    27→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    28→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+    29→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+    30→import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
+    31→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+    32→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    33→import { useAuthStore, useNavigationStore, useNotificationStore } from '@/stores';
+    34→import { useNotifications } from '@/hooks/use-notifications';
+    35→import type { Product, Order, ApiResponse, VendorDashboardStats, VendorWallet, WalletTransaction, InventoryHistory } from '@/types';
+    36→
+    37→const formatCurrency = (price: number | undefined | null) => '₹' + (price ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    38→
+    39→function formatShippingAddress(addr: string | Record<string, string>): string {
+    40→  if (typeof addr === 'object' && addr !== null) {
+    41→    const a = addr as Record<string, string>;
+    42→    return `${a.name}, ${a.address}, ${a.city}, ${a.state} - ${a.pincode}, Phone: ${a.phone}`;
+    43→  }
+    44→  return String(addr);
+    45→}
+    46→
+    47→function timeAgo(dateStr: string): string {
+    48→  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    49→  if (seconds < 60) return 'Just now';
+    50→  const minutes = Math.floor(seconds / 60);
+    51→  if (minutes < 60) return `${minutes}m ago`;
+    52→  const hours = Math.floor(minutes / 60);
+    53→  if (hours < 24) return `${hours}h ago`;
+    54→  const days = Math.floor(hours / 24);
+    55→  if (days < 30) return `${days}d ago`;
+    56→  return new Date(dateStr).toLocaleDateString();
+    57→}
+    58→
+    59→function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
+    60→  const stars = [];
+    61→  for (let i = 1; i <= 5; i++) {
+    62→    if (i <= Math.floor(rating)) stars.push(<Star key={i} className="fill-amber-400 text-amber-400" size={size} />);
+    63→    else if (i - 0.5 <= rating) stars.push(<Star key={i} className="fill-amber-400 text-amber-400" size={size} style={{ clipPath: 'inset(0 50% 0 0)' }} />);
+    64→    else stars.push(<Star key={i} className="text-muted-foreground/30" size={size} />);
+    65→  }
+    66→  return <span className="inline-flex items-center gap-0.5">{stars}</span>;
+    67→}
+    68→
+    69→// ============ VENDOR LAYOUT ============
+    70→
+    71→const VENDOR_NAV = [
+    72→  { key: 'vendor-dashboard', label: 'Dashboard', icon: BarChart3 },
+    73→  { key: 'vendor-products', label: 'Products', icon: Package },
+    74→  { key: 'vendor-add-product', label: 'Add Product', icon: Plus },
+    75→  { key: 'vendor-orders', label: 'Orders', icon: ShoppingCart },
+    76→  { key: 'vendor-inventory', label: 'Inventory', icon: BoxIcon },
+    77→  { key: 'vendor-reports', label: 'Reports', icon: TrendingUp },
+    78→  { key: 'vendor-wallet', label: 'Wallet', icon: Wallet },
+    79→  { key: 'vendor-profile', label: 'Profile', icon: User },
+    80→  { key: 'vendor-settings', label: 'Settings', icon: Settings },
+    81→];
+    82→
+    83→function VendorSidebar() {
+    84→  const { vendorView, setVendorView, setAppView } = useNavigationStore();
+    85→  const { user, vendorId, logout } = useAuthStore();
+    86→  const { unreadCount } = useNotificationStore();
+    87→  const [collapsed, setCollapsed] = useState(false);
+    88→
+    89→  return (
+    90→    <aside role="navigation" aria-label="Vendor panel navigation" className={`${collapsed ? 'w-16' : 'w-64'} border-r bg-card flex flex-col transition-all duration-300 hidden lg:flex`}>
+    91→      <div className="p-4 border-b flex items-center gap-3">
+    92→        <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-500 font-bold shrink-0">{user?.name?.[0]}</div>
+    93→        {!collapsed && <div className="min-w-0"><p className="font-semibold text-sm truncate">{user?.name}</p><p className="text-xs text-muted-foreground truncate">Vendor Panel</p></div>}
+    94→      </div>
+    95→      <ScrollArea className="flex-1 py-2">
+    96→        <nav className="px-2 space-y-1">
+    97→          {VENDOR_NAV.map(item => (
+    98→            <TooltipProvider key={item.key} delayDuration={0}>
+    99→              <Tooltip>
+   100→                <TooltipTrigger asChild>
+   101→                  <Button variant={vendorView === item.key ? 'secondary' : 'ghost'} size="sm" aria-current={vendorView === item.key ? 'page' : undefined} className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => setVendorView(item.key as any)}>
+   102→                    <item.icon size={18} />
+   103→                    {!collapsed && <span>{item.label}</span>}
+   104→                  </Button>
+   105→                </TooltipTrigger>
+   106→                {collapsed && <TooltipContent side="right">{item.label}</TooltipContent>}
+   107→              </Tooltip>
+   108→            </TooltipProvider>
+   109→          ))}
+   110→        </nav>
+   111→      </ScrollArea>
+   112→      <div className="p-3 border-t space-y-1">
+   113→        <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 relative ${vendorView === 'vendor-notifications' ? 'bg-secondary' : ''} ${collapsed ? 'justify-center px-0' : ''}`} onClick={() => setVendorView('vendor-notifications')}>
+   114→          <Bell size={18} />
+   115→          {!collapsed && <span>Notifications</span>}
+   116→          {unreadCount > 0 && <Badge className="ml-auto h-5 min-w-5 rounded-full px-1.5 flex items-center justify-center text-[10px] bg-red-500 text-white">{unreadCount}</Badge>}
+   117→        </Button>
+   118→        <Button variant="ghost" size="sm" className={`w-full justify-start gap-3 ${collapsed ? 'justify-center px-0' : ''} text-muted-foreground`} onClick={() => { logout(); setAppView('customer'); authToast.logoutSuccess(); }}>
+   119→          <LogOut size={18} />{!collapsed && <span>Logout</span>}
+   120→        </Button>
+   121→        <Button variant="ghost" size="sm" aria-label="Toggle sidebar" className="w-full justify-center lg:hidden" onClick={() => setCollapsed(!collapsed)}>
+   122→          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+   123→        </Button>
+   124→      </div>
+   125→    </aside>
+   126→  );
+   127→}
+   128→
+   129→function VendorMobileHeader() {
+   130→  const { user, logout } = useAuthStore();
+   131→  const { vendorView, setVendorView, setAppView } = useNavigationStore();
+   132→  const [open, setOpen] = useState(false);
+   133→  const { unreadCount } = useNotificationStore();
+   134→
+   135→  return (
+   136→    <header className="lg:hidden sticky top-0 z-50 bg-background border-b px-4 h-14 flex items-center justify-between">
+   137→      <div className="flex items-center gap-2">
+   138→        <Button variant="ghost" size="icon" onClick={() => setOpen(true)}><Menu size={20} /></Button>
+   139→        <Store size={20} className="text-orange-500" />
+   140→        <span className="font-bold">Vendor Panel</span>
+   141→      </div>
+   142→      <div className="flex items-center gap-1">
+   143→        <Button variant="ghost" size="icon" className="relative" aria-label="Notifications" onClick={() => setVendorView('vendor-notifications')}>
+   144→          <Bell size={20} />
+   145→          {unreadCount > 0 && <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] bg-red-500 text-white border-2 border-background">{unreadCount}</Badge>}
+   146→        </Button>
+   147→        <Avatar className="h-8 w-8"><AvatarFallback className="text-xs bg-orange-100 text-orange-600">{user?.name?.[0]}</AvatarFallback></Avatar>
+   148→      </div>
+   149→      {open && (
+   150→        <div className="fixed inset-0 z-50">
+   151→          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
+   152→          <div className="absolute left-0 top-0 bottom-0 w-72 bg-background border-r p-4 space-y-2">
+   153→            <div className="flex items-center justify-between mb-4"><span className="font-bold">Menu</span><Button variant="ghost" size="icon" onClick={() => setOpen(false)}><X size={20} /></Button></div>
+   154→            {VENDOR_NAV.map(item => (
+   155→              <Button key={item.key} variant={vendorView === item.key ? 'secondary' : 'ghost'} className="w-full justify-start gap-3" onClick={() => { setVendorView(item.key as any); setOpen(false); }}>
+   156→                <item.icon size={18} />{item.label}
+   157→              </Button>
+   158→            ))}
+   159→            <Separator />
+   160→            <Button variant="ghost" className="w-full justify-start gap-3 text-destructive" onClick={() => { authToast.logoutSuccess(); logout(); setAppView('customer'); }}><LogOut size={18} />Logout</Button>
+   161→          </div>
+   162→        </div>
+   163→      )}
+   164→    </header>
+   165→  );
+   166→}
+   167→
+   168→// ============ VENDOR DASHBOARD ============
+   169→
+   170→function VendorDashboard() {
+   171→  const { vendorId } = useAuthStore();
+   172→  const { data, isLoading } = useQuery({
+   173→    queryKey: ['vendor-dashboard', vendorId],
+   174→    queryFn: () => fetch(`/api/vendor/dashboard?vendorId=${vendorId}`).then(r => r.json()).then((r: ApiResponse<VendorDashboardStats>) => r.data),
+   175→    enabled: !!vendorId,
+   176→  });
+   177→
+   178→  if (isLoading) return <div className="p-6 space-y-4">{Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>;
+   179→  if (!data) return <div className="p-6 text-center text-muted-foreground">Failed to load dashboard</div>;
+   180→
+   181→  const stats = [
+   182→    { label: 'Total Revenue', value: formatCurrency(data.totalRevenue), icon: DollarSign, color: 'text-green-600 bg-green-100 dark:bg-green-900/30' },
+   183→    { label: 'Total Orders', value: String(data.totalOrders), icon: ShoppingCart, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30' },
+   184→    { label: 'Products', value: String(data.totalProducts), icon: Package, color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30' },
+   185→    { label: 'Avg Rating', value: data.avgRating?.toFixed(1) || '0', icon: Star, color: 'text-amber-600 bg-amber-100 dark:bg-amber-900/30' },
+   186→  ];
+   187→
+   188→  return (
+   189→    <div className="p-6 space-y-6">
+   190→      <div>
+   191→        <h1 className="text-2xl font-bold">Dashboard</h1>
+   192→        <p className="text-muted-foreground">Welcome back! Here&apos;s your business overview.</p>
+   193→      </div>
+   194→
+   195→      {data.lowStockProducts > 0 && (
+   196→        <Card className="border-amber-500 bg-amber-50 dark:bg-amber-900/10 p-4 flex items-center gap-3">
+   197→          <AlertTriangle className="text-amber-500 shrink-0" size={20} />
+   198→          <p className="text-sm"><span className="font-medium">{data.lowStockProducts} products</span> are running low on stock. <span className="text-amber-600 cursor-pointer underline" onClick={() => useNavigationStore.getState().setVendorView('vendor-products')}>Manage inventory</span></p>
+   199→        </Card>
+   200→      )}
+   201→
+   202→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   203→        {stats.map(s => (
+   204→          <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+   205→            <Card className="p-4"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">{s.label}</p><p className="text-2xl font-bold mt-1">{s.value}</p></div><div className={`w-10 h-10 rounded-lg flex items-center justify-center ${s.color}`}><s.icon size={20} /></div></div></Card>
+   206→          </motion.div>
+   207→        ))}
+   208→      </div>
+   209→
+   210→      {/* Sales Chart */}
+   211→      {data.monthlySales && data.monthlySales.length > 0 && (
+   212→        <Card className="p-6">
+   213→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Monthly Sales</CardTitle></CardHeader>
+   214→          <div className="h-48 flex items-end gap-2">
+   215→            {data.monthlySales.map((ms, i) => {
+   216→              const maxSale = Math.max(...data.monthlySales.map(m => m.sales), 1);
+   217→              const height = (ms.sales / maxSale) * 100;
+   218→              return (
+   219→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+   220→                  <span className="text-xs font-medium">{formatCurrency(ms.sales)}</span>
+   221→                  <div className="w-full bg-orange-500 rounded-t-md transition-all duration-500" style={{ height: `${Math.max(height, 4)}%` }} />
+   222→                  <span className="text-xs text-muted-foreground">{ms.month}</span>
+   223→                </div>
+   224→              );
+   225→            })}
+   226→          </div>
+   227→        </Card>
+   228→      )}
+   229→
+   230→      <div className="grid lg:grid-cols-2 gap-6">
+   231→        {/* Recent Orders */}
+   232→        <Card className="p-6">
+   233→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Recent Orders</CardTitle></CardHeader>
+   234→          <div className="space-y-3">
+   235→            {data.recentOrders?.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No recent orders</p>}
+   236→            {data.recentOrders?.slice(0, 5).map(order => (
+   237→              <div key={order.id} className="flex items-center justify-between py-2 border-b last:border-0">
+   238→                <div>
+   239→                  <p className="text-sm font-medium">#{order.orderNumber}</p>
+   240→                  <p className="text-xs text-muted-foreground">{order.user?.name} • {new Date(order.createdAt).toLocaleDateString()}</p>
+   241→                </div>
+   242→                <div className="text-right">
+   243→                  <p className="text-sm font-bold">{formatCurrency(order.total)}</p>
+   244→                  <Badge variant="secondary" className="text-xs">{order.status}</Badge>
+   245→                </div>
+   246→              </div>
+   247→            ))}
+   248→          </div>
+   249→        </Card>
+   250→
+   251→        {/* Top Products */}
+   252→        <Card className="p-6">
+   253→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Top Products</CardTitle></CardHeader>
+   254→          <div className="space-y-3">
+   255→            {data.topProducts?.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No products yet</p>}
+   256→            {data.topProducts?.map((product, i) => (
+   257→              <div key={product.id} className="flex items-center gap-3 py-2 border-b last:border-0">
+   258→                <span className="text-lg font-bold text-muted-foreground w-6">#{i + 1}</span>
+   259→                <div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">
+   260→                  {product.images?.[0]?.url && <img src={product.images[0].url} alt="" className="w-full h-full object-cover" />}
+   261→                </div>
+   262→                <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{product.name}</p><p className="text-xs text-muted-foreground">{product.totalSold} sold</p></div>
+   263→                <p className="text-sm font-bold">{formatCurrency(product.price)}</p>
+   264→              </div>
+   265→            ))}
+   266→          </div>
+   267→        </Card>
+   268→      </div>
+   269→    </div>
+   270→  );
+   271→}
+   272→
+   273→// ============ VENDOR PRODUCTS ============
+   274→
+   275→function VendorProducts() {
+   276→  const { vendorId } = useAuthStore();
+   277→  const { setSelectedProductId, setVendorView } = useNavigationStore();
+   278→  const qc = useQueryClient();
+   279→  const [page, setPage] = useState(1);
+   280→  const [search, setSearch] = useState('');
+   281→  const [statusFilter, setStatusFilter] = useState<string>('all');
+   282→  const [deleteId, setDeleteId] = useState<string | null>(null);
+   283→  const [importOpen, setImportOpen] = useState(false);
+   284→  const [importFile, setImportFile] = useState<File | null>(null);
+   285→  const [importing, setImporting] = useState(false);
+   286→  const [confirmImport, setConfirmImport] = useState(false);
+   287→
+   288→  const { data, isLoading } = useQuery({
+   289→    queryKey: ['vendor-products', vendorId, page, search, statusFilter],
+   290→    queryFn: () => {
+   291→      const params = new URLSearchParams({ vendorId: vendorId || '', page: String(page), limit: '12', search });
+   292→      if (statusFilter !== 'all') params.set('status', statusFilter);
+   293→      return fetch(`/api/products?${params}`).then(r => r.json()).then((r: ApiResponse<Product[]>) => r);
+   294→    },
+   295→    enabled: !!vendorId,
+   296→  });
+   297→
+   298→  const deleteMutation = useMutation({
+   299→    mutationFn: (id: string) => fetch(`/api/products?id=${id}`, { method: 'DELETE' }).then(r => r.json()),
+   300→    onSuccess: () => { qc.invalidateQueries({ queryKey: ['vendor-products'] }); toast.success('Product deleted'); setDeleteId(null); },
+   301→    onError: () => toast.error('Failed to delete product'),
+   302→  });
+   303→
+   304→  const duplicateMutation = useMutation({
+   305→    mutationFn: (id: string) => fetch(`/api/vendor/products/${id}/duplicate`, { method: 'POST' }).then(r => r.json()),
+   306→    onSuccess: (data) => {
+   307→      if (data.success) { toast.success('Product duplicated successfully'); qc.invalidateQueries({ queryKey: ['vendor-products'] }); }
+   308→      else toast.error(data.error || 'Failed to duplicate');
+   309→    },
+   310→    onError: () => toast.error('Failed to duplicate product'),
+   311→  });
+   312→
+   313→  const handleBulkImport = async () => {
+   314→    if (!importFile || !vendorId) return;
+   315→    setImporting(true);
+   316→    try {
+   317→      const text = await importFile.text();
+   318→      const lines = text.split('\n').filter(l => l.trim());
+   319→      if (lines.length < 2) { toast.error('CSV file is empty or has no data rows'); setImporting(false); return; }
+   320→      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+   321→      const products = [];
+   322→      for (let i = 1; i < lines.length; i++) {
+   323→        const values = lines[i].split(',').map(v => v.trim());
+   324→        const row: Record<string, string> = {};
+   325→        headers.forEach((h, idx) => { row[h] = values[idx] || ''; });
+   326→        products.push(row);
+   327→      }
+   328→      const res = await fetch('/api/vendor/products/bulk-import', {
+   329→        method: 'POST',
+   330→        headers: { 'Content-Type': 'application/json' },
+   331→        body: JSON.stringify({ vendorId, products }),
+   332→      });
+   333→      const result = await res.json();
+   334→      if (result.success) {
+   335→        const d = result.data;
+   336→        toast.success(`Imported ${d.successCount}/${d.totalProducts} products successfully`);
+   337→        if (d.errors.length > 0) toast.error(`${d.errors.length} errors occurred`);
+   338→        qc.invalidateQueries({ queryKey: ['vendor-products'] });
+   339→        setImportOpen(false);
+   340→        setImportFile(null);
+   341→      } else {
+   342→        toast.error(result.error || 'Import failed');
+   343→      }
+   344→    } catch {
+   345→      toast.error('Failed to parse CSV file');
+   346→    }
+   347→    setImporting(false);
+   348→  };
+   349→
+   350→  const downloadTemplate = () => {
+   351→    const csv = 'name,description,price,compareAtPrice,stock,sku,categoryId,brandId,weight\nSample Product,Sample description,999,1299,50,SKU001,cat_id_here,brand_id_here,0.5\n';
+   352→    const blob = new Blob([csv], { type: 'text/csv' });
+   353→    const url = URL.createObjectURL(blob);
+   354→    const a = document.createElement('a');
+   355→    a.href = url; a.download = 'product_import_template.csv'; a.click();
+   356→    URL.revokeObjectURL(url);
+   357→  };
+   358→
+   359→  const handleBulkExport = async () => {
+   360→    try {
+   361→      const params = new URLSearchParams({ vendorId: vendorId || '', page: '1', limit: '9999', search: '' });
+   362→      const res = await fetch(`/api/products?${params}`);
+   363→      const json = await res.json();
+   364→      const products: Product[] = json.data || [];
+   365→      if (products.length === 0) { toast.error('No products to export'); return; }
+   366→      const headers = ['name', 'sku', 'price', 'stock', 'status', 'category'];
+   367→      const rows = products.map(p => [
+   368→        `"${p.name}"`, `"${p.sku || ''}"`, String(p.price), String(p.stock),
+   369→        p.productStatus, `"${p.category?.name || ''}"`
+   370→      ].join(','));
+   371→      const csv = [headers.join(','), ...rows].join('\n');
+   372→      const blob = new Blob([csv], { type: 'text/csv' });
+   373→      const url = URL.createObjectURL(blob);
+   374→      const a = document.createElement('a');
+   375→      a.href = url; a.download = `products_export_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+   376→      URL.revokeObjectURL(url);
+   377→      toast.success(`Exported ${products.length} products`);
+   378→    } catch {
+   379→      toast.error('Failed to export products');
+   380→    }
+   381→  };
+   382→
+   383→  const statusColor: Record<string, string> = {
+   384→    PUBLISHED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+   385→    DRAFT: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+   386→    ARCHIVED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+   387→  };
+   388→
+   389→  const statusFilters = ['all', 'PUBLISHED', 'DRAFT', 'ARCHIVED'];
+   390→
+   391→  return (
+   392→    <div className="p-6 space-y-6">
+   393→      <div className="flex flex-wrap items-center justify-between gap-4">
+   394→        <div><h1 className="text-2xl font-bold">Products</h1><p className="text-muted-foreground text-sm">Manage your product catalog</p></div>
+   395→        <div className="flex items-center gap-2 flex-wrap">
+   396→          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setVendorView('vendor-add-product')}><Plus size={16} className="mr-1.5" />Add Product</Button>
+   397→          <Button variant="outline" onClick={() => setImportOpen(true)}><Upload size={16} className="mr-1.5" />Bulk Import</Button>
+   398→          <Button variant="outline" onClick={handleBulkExport}><Download size={16} className="mr-1.5" />Bulk Export</Button>
+   399→        </div>
+   400→      </div>
+   401→
+   402→      <div className="flex flex-col sm:flex-row gap-3">
+   403→        <div className="relative flex-1 max-w-md"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search products..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9" /></div>
+   404→        <div className="flex gap-2 flex-wrap">
+   405→          {statusFilters.map(s => (
+   406→            <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-orange-500 hover:bg-orange-600' : ''} onClick={() => { setStatusFilter(s); setPage(1); }}>
+   407→              {s === 'all' ? 'All' : s}
+   408→            </Button>
+   409→          ))}
+   410→        </div>
+   411→      </div>
+   412→
+   413→      {isLoading ? <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{Array.from({length: 6}).map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}</div> :
+   414→      <Card>
+   415→        <Table>
+   416→          <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="hidden md:table-cell">Category</TableHead><TableHead>Price</TableHead><TableHead>Stock</TableHead><TableHead className="hidden sm:table-cell">Status</TableHead><TableHead className="hidden sm:table-cell">Rating</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+   417→          <TableBody>
+   418→            {!data?.data?.length && (
+   419→              <TableRow><TableCell colSpan={7} className="p-0"><div className="flex flex-col items-center justify-center py-16 text-center">
+   420→                <Package size={48} className="text-muted-foreground/50 mb-4" />
+   421→                <h3 className="font-medium text-lg mb-1">No products yet</h3>
+   422→                <p className="text-muted-foreground text-sm mb-4">Add your first product to start selling</p>
+   423→                <Button onClick={() => setVendorView('vendor-add-product')} className="bg-orange-500 hover:bg-orange-600"><Plus size={16} className="mr-1" />Add Product</Button>
+   424→              </div></TableCell></TableRow>
+   425→            )}
+   426→            {data?.data?.map(product => (
+   427→              <TableRow key={product.id} className="hover:bg-muted/50 transition-colors duration-150">
+   428→                <TableCell>
+   429→                  <div className="flex items-center gap-3">
+   430→                    <div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">
+   431→                      {product.images?.[0]?.url ? <img src={product.images[0].url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Package size={16} /></div>}
+   432→                    </div>
+   433→                    <div className="min-w-0"><p className="font-medium text-sm truncate max-w-48">{product.name}</p><p className="text-xs text-muted-foreground">SKU: {product.sku || 'N/A'}</p></div>
+   434→                  </div>
+   435→                </TableCell>
+   436→                <TableCell className="hidden md:table-cell"><Badge variant="secondary">{product.category?.name}</Badge></TableCell>
+   437→                <TableCell>
+   438→                  <div><span className="font-medium">{formatCurrency(product.price)}</span></div>
+   439→                  {product.compareAtPrice && <span className="text-xs text-muted-foreground line-through">{formatCurrency(product.compareAtPrice)}</span>}
+   440→                </TableCell>
+   441→                <TableCell>
+   442→                  <span className={`font-medium ${product.stock < 5 ? 'text-red-600' : product.stock < 20 ? 'text-amber-600' : 'text-green-600'}`}>{product.stock}</span>
+   443→                </TableCell>
+   444→                <TableCell className="hidden sm:table-cell">
+   445→                  <Badge variant="secondary" className={statusColor[product.productStatus] || ''}>{product.productStatus}</Badge>
+   446→                </TableCell>
+   447→                <TableCell className="hidden sm:table-cell"><div className="flex items-center gap-1"><StarRating rating={product.rating} size={12} /><span className="text-sm">{product.rating}</span></div></TableCell>
+   448→                <TableCell className="text-right">
+   449→                  <div className="flex items-center justify-end gap-1">
+   450→                    <TooltipProvider delayDuration={0}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateMutation.mutate(product.id)} disabled={duplicateMutation.isPending}><Copy size={14} /></Button></TooltipTrigger><TooltipContent>Duplicate</TooltipContent></Tooltip></TooltipProvider>
+   451→                    <TooltipProvider delayDuration={0}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectedProductId(product.id); setVendorView('vendor-add-product'); }}><Pencil size={14} /></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip></TooltipProvider>
+   452→                    <TooltipProvider delayDuration={0}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(product.id)}><Trash2 size={14} /></Button></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip></TooltipProvider>
+   453→                  </div>
+   454→                </TableCell>
+   455→              </TableRow>
+   456→            ))}
+   457→          </TableBody>
+   458→        </Table>
+   459→        {data?.meta && data.meta.totalPages > 1 && (
+   460→          <div className="flex items-center justify-center gap-2 p-4">
+   461→            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={16} /></Button>
+   462→            {Array.from({ length: Math.min(data.meta.totalPages, 5) }, (_, i) => i + 1).map(p => (
+   463→              <Button key={p} variant={p === page ? 'default' : 'outline'} size="sm" className={p === page ? 'bg-orange-500' : ''} onClick={() => setPage(p)}>{p}</Button>
+   464→            ))}
+   465→            <Button variant="outline" size="sm" disabled={page >= data.meta.totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={16} /></Button>
+   466→          </div>
+   467→        )}
+   468→      </Card>}
+   469→
+   470→      {/* Delete Confirmation AlertDialog */}
+   471→      <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
+   472→        <AlertDialogContent>
+   473→          <AlertDialogHeader>
+   474→            <AlertDialogTitle>Delete Product</AlertDialogTitle>
+   475→            <AlertDialogDescription>
+   476→              Are you sure you want to delete {data?.data?.find((p: Product) => p.id === deleteId)?.name || 'this product'}? This action cannot be undone.
+   477→            </AlertDialogDescription>
+   478→          </AlertDialogHeader>
+   479→          <AlertDialogFooter>
+   480→            <AlertDialogCancel onClick={() => setDeleteId(null)}>Cancel</AlertDialogCancel>
+   481→            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => deleteId && deleteMutation.mutate(deleteId)} disabled={deleteMutation.isPending}>
+   482→              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+   483→            </AlertDialogAction>
+   484→          </AlertDialogFooter>
+   485→        </AlertDialogContent>
+   486→      </AlertDialog>
+   487→
+   488→      {/* Bulk Import Dialog */}
+   489→      <Dialog open={importOpen} onOpenChange={(open) => { setImportOpen(open); if (!open) setImportFile(null); }}>
+   490→        <DialogContent>
+   491→          <DialogHeader>
+   492→            <DialogTitle className="flex items-center gap-2"><FileSpreadsheet size={20} />Bulk Import Products</DialogTitle>
+   493→            <DialogDescription>Upload a CSV file to import products in bulk.</DialogDescription>
+   494→          </DialogHeader>
+   495→          <div className="space-y-4">
+   496→            <div className="border-2 border-dashed rounded-lg p-6 text-center space-y-2">
+   497→              <Upload size={32} className="mx-auto text-muted-foreground" />
+   498→              <p className="text-sm text-muted-foreground">
+   499→                {importFile ? <span className="font-medium text-foreground">{importFile.name}</span> : 'Drag & drop or click to select a CSV file'}
+   500→              </p>
+   501→              <Input
+   502→                type="file"
+   503→                accept=".csv"
+   504→                className="max-w-xs mx-auto"
+   505→                onChange={e => setImportFile(e.target.files?.[0] || null)}
+   506→              />
+   507→            </div>
+   508→            <div className="text-sm text-muted-foreground space-y-1">
+   509→              <p>Required columns: <span className="font-medium text-foreground">name, price, categoryId</span></p>
+   510→              <p>Optional columns: description, compareAtPrice, stock, sku, brandId, weight</p>
+   511→            </div>
+   512→            <Button variant="link" className="p-0 h-auto text-orange-600" onClick={downloadTemplate}>
+   513→              <Download size={14} className="mr-1" />Download CSV Template
+   514→            </Button>
+   515→          </div>
+   516→          <DialogFooter>
+   517→            <Button variant="outline" onClick={() => { setImportOpen(false); setImportFile(null); }}>Cancel</Button>
+   518→            <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setConfirmImport(true)} disabled={!importFile || importing}>
+   519→              {importing ? 'Importing...' : 'Import Products'}
+   520→            </Button>
+   521→          </DialogFooter>
+   522→        </DialogContent>
+   523→      </Dialog>
+   524→
+   525→      {/* Import Confirmation AlertDialog */}
+   526→      <AlertDialog open={confirmImport} onOpenChange={setConfirmImport}>
+   527→        <AlertDialogContent>
+   528→          <AlertDialogHeader>
+   529→            <AlertDialogTitle>Confirm Bulk Import</AlertDialogTitle>
+   530→            <AlertDialogDescription>
+   531→              This will create new products from the CSV file. Existing products won't be affected. Continue?
+   532→            </AlertDialogDescription>
+   533→          </AlertDialogHeader>
+   534→          <AlertDialogFooter>
+   535→            <AlertDialogCancel>Cancel</AlertDialogCancel>
+   536→            <AlertDialogAction className="bg-orange-500 hover:bg-orange-600" onClick={() => { setConfirmImport(false); handleBulkImport(); }}>
+   537→              Yes, Import
+   538→            </AlertDialogAction>
+   539→          </AlertDialogFooter>
+   540→        </AlertDialogContent>
+   541→      </AlertDialog>
+   542→    </div>
+   543→  );
+   544→}
+   545→
+   546→// ============ ADD/EDIT PRODUCT ============
+   547→
+   548→function VendorAddProduct() {
+   549→  const { vendorId } = useAuthStore();
+   550→  const { selectedProductId, setVendorView } = useNavigationStore();
+   551→  const qc = useQueryClient();
+   552→  const isEditing = !!selectedProductId;
+   553→
+   554→  const { data: product } = useQuery({
+   555→    queryKey: ['product', selectedProductId],
+   556→    queryFn: () => fetch(`/api/products/${selectedProductId}`).then(r => r.json()).then((r: ApiResponse<Product>) => r.data),
+   557→    enabled: isEditing,
+   558→  });
+   559→
+   560→  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => fetch('/api/categories').then(r => r.json()).then((r: any) => { const flat: any[] = []; (r.data || []).forEach((c: any) => { flat.push(c); c.children?.forEach((ch: any) => flat.push(ch)); }); return flat; }) });
+   561→  const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => fetch('/api/brands').then(r => r.json()).then((r: any) => r.data || []) });
+   562→
+   563→  const [form, setForm] = useState({
+   564→    name: '', slug: '', description: '', shortDescription: '', sku: '', barcode: '',
+   565→    price: '', compareAtPrice: '', costPrice: '', stock: '10', weight: '', warranty: '', returnPolicy: '',
+   566→    categoryId: '', brandId: '', isFeatured: false, seoTitle: '', seoDescription: '', seoKeywords: '',
+   567→    productStatus: 'DRAFT', badge: 'NONE', estimatedDeliveryDays: '7',
+   568→  });
+   569→  const [images, setImages] = useState<Array<{ url: string; alt: string; sortOrder: number }>>([]);
+   570→  const [urlInput, setUrlInput] = useState('');
+   571→  const fileInputRef = React.useRef<HTMLInputElement>(null);
+   572→
+   573→  React.useEffect(() => {
+   574→    if (product) {
+   575→      setForm({
+   576→        name: product.name || '', slug: product.slug || '', description: product.description || '', shortDescription: product.shortDescription || '',
+   577→        sku: product.sku || '', barcode: product.barcode || '', price: String(product.price || ''), compareAtPrice: String(product.compareAtPrice || ''),
+   578→        costPrice: String(product.costPrice || ''), stock: String(product.stock || '10'), weight: String(product.weight || ''), warranty: product.warranty || '',
+   579→        returnPolicy: product.returnPolicy || '', categoryId: product.categoryId || '', brandId: product.brandId || '',
+   580→        isFeatured: product.isFeatured || false, seoTitle: product.seoTitle || '', seoDescription: product.seoDescription || '', seoKeywords: product.seoKeywords || '',
+   581→        productStatus: product.productStatus || 'DRAFT', badge: product.badge || 'NONE', estimatedDeliveryDays: String(product.estimatedDeliveryDays || 7),
+   582→      });
+   583→      setImages(product.images?.map(img => ({ url: img.url, alt: img.alt || '', sortOrder: img.sortOrder })) || []);
+   584→    }
+   585→  }, [product]);
+   586→
+   587→  const saveMutation = useMutation({
+   588→    mutationFn: async () => {
+   589→      // Form validation
+   590→      if (form.name.trim().length < 3) { toast.error('Product name must be at least 3 characters'); return { success: false, error: '' }; }
+   591→      if (!form.price || parseFloat(form.price) <= 0) { toast.error('Price must be greater than 0'); return { success: false, error: '' }; }
+   592→      if (parseInt(form.stock) < 0) { toast.error('Stock must be 0 or greater'); return { success: false, error: '' }; }
+   593→      if (!form.categoryId) { toast.error('Please select a category'); return { success: false, error: '' }; }
+   594→
+   595→      const finalImages = images.length > 0
+   596→        ? images.map((img, idx) => ({ url: img.url, alt: img.alt || form.name, sortOrder: idx }))
+   597→        : [{ url: `https://placehold.co/600x600/f97316/ffffff?text=${encodeURIComponent(form.name.substring(0, 15))}`, alt: form.name, sortOrder: 0 }];
+   598→      const body = {
+   599→        vendorId,
+   600→        ...form,
+   601→        price: parseFloat(form.price) || 0,
+   602→        compareAtPrice: parseFloat(form.compareAtPrice) || null,
+   603→        costPrice: parseFloat(form.costPrice) || null,
+   604→        stock: parseInt(form.stock) || 0,
+   605→        weight: parseFloat(form.weight) || null,
+   606→        estimatedDeliveryDays: parseInt(form.estimatedDeliveryDays) || 7,
+   607→        badge: form.badge === 'NONE' ? null : form.badge,
+   608→        images: finalImages,
+   609→        specs: [{ key: 'Warranty', value: form.warranty || 'Standard' }],
+   610→      };
+   611→      if (isEditing) {
+   612→        const res = await fetch('/api/products', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedProductId, ...body }) });
+   613→        return res.json();
+   614→      }
+   615→      const res = await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+   616→      return res.json();
+   617→    },
+   618→    onSuccess: (data) => {
+   619→      if (data.success) { toast.success(isEditing ? 'Product updated!' : 'Product created!'); qc.invalidateQueries({ queryKey: ['vendor-products'] }); setVendorView('vendor-products'); }
+   620→      else if (data.error) toast.error(data.error || 'Failed to save product');
+   621→    },
+   622→    onError: () => toast.error('Failed to save product'),
+   623→  });
+   624→
+   625→  const update = (key: string, value: string | boolean) => setForm(f => ({ ...f, [key]: value }));
+   626→
+   627→  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   628→    const files = e.target.files;
+   629→    if (!files) return;
+   630→    const remaining = 5 - images.length;
+   631→    if (remaining <= 0) { toast.error('Maximum 5 images allowed'); e.target.value = ''; return; }
+   632→    const toProcess = Array.from(files).slice(0, remaining);
+   633→    toProcess.forEach(file => {
+   634→      if (file.size > 5 * 1024 * 1024) { toast.error(`${file.name} exceeds 5MB limit`); return; }
+   635→      const reader = new FileReader();
+   636→      reader.onload = () => {
+   637→        setImages(prev => [...prev, { url: reader.result as string, alt: form.name || file.name, sortOrder: prev.length }]);
+   638→      };
+   639→      reader.readAsDataURL(file);
+   640→    });
+   641→    e.target.value = '';
+   642→  };
+   643→
+   644→  const addImageUrl = () => {
+   645→    if (!urlInput.trim()) return;
+   646→    if (images.length >= 5) { toast.error('Maximum 5 images allowed'); return; }
+   647→    try { new URL(urlInput); } catch { toast.error('Please enter a valid URL'); return; }
+   648→    setImages(prev => [...prev, { url: urlInput.trim(), alt: form.name || '', sortOrder: prev.length }]);
+   649→    setUrlInput('');
+   650→  };
+   651→
+   652→  const removeImage = (index: number) => setImages(prev => prev.filter((_, i) => i !== index).map((img, i) => ({ ...img, sortOrder: i })));
+   653→  const moveImage = (index: number, direction: 'up' | 'down') => {
+   654→    const newImages = [...images];
+   655→    const target = direction === 'up' ? index - 1 : index + 1;
+   656→    if (target < 0 || target >= newImages.length) return;
+   657→    [newImages[index], newImages[target]] = [newImages[target], newImages[index]];
+   658→    setImages(newImages.map((img, i) => ({ ...img, sortOrder: i })));
+   659→  };
+   660→
+   661→  return (
+   662→    <div className="p-6 space-y-6">
+   663→      <div className="flex items-center gap-4">
+   664→        <Button variant="ghost" size="icon" onClick={() => { setVendorView('vendor-products'); useNavigationStore.getState().setSelectedProductId(null); }}><ChevronLeft size={20} /></Button>
+   665→        <div><h1 className="text-2xl font-bold">{isEditing ? 'Edit Product' : 'Add New Product'}</h1><p className="text-muted-foreground text-sm">{isEditing ? 'Update product details' : 'Fill in the product information'}</p></div>
+   666→      </div>
+   667→
+   668→      <div className="grid lg:grid-cols-3 gap-6">
+   669→        <div className="lg:col-span-2 space-y-6">
+   670→          <Card className="p-6"><h3 className="font-semibold mb-4">Basic Information</h3>
+   671→            <div className="space-y-4">
+   672→              <div><Label>Product Name *</Label><Input value={form.name} onChange={e => { update('name', e.target.value); update('slug', e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-')); }} className="mt-1" placeholder="Product name" /></div>
+   673→              <div><Label>Slug</Label><Input value={form.slug} onChange={e => update('slug', e.target.value)} className="mt-1" /></div>
+   674→              <div><Label>Short Description</Label><Input value={form.shortDescription} onChange={e => update('shortDescription', e.target.value)} className="mt-1" placeholder="Brief product summary" /></div>
+   675→              <div><Label>Full Description</Label><Textarea value={form.description} onChange={e => update('description', e.target.value)} className="mt-1" rows={4} placeholder="Detailed product description" /></div>
+   676→            </div>
+   677→          </Card>
+   678→
+   679→          <Card className="p-6"><h3 className="font-semibold mb-4 flex items-center gap-2"><ImageIcon size={18} />Product Images</h3>
+   680→            <div className="space-y-4">
+   681→              <p className="text-sm text-muted-foreground">Add up to 5 images. The first image will be the main product photo.</p>
+   682→
+   683→              {/* Upload buttons */}
+   684→              <div className="flex gap-3 flex-wrap">
+   685→                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} />
+   686→                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={images.length >= 5}>
+   687→                  <Upload size={16} className="mr-2" />Upload Images
+   688→                </Button>
+   689→              </div>
+   690→
+   691→              {/* URL input */}
+   692→              <div className="flex gap-2">
+   693→                <div className="relative flex-1">
+   694→                  <Link size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+   695→                  <Input placeholder="Paste image URL (https://...)" value={urlInput} onChange={e => setUrlInput(e.target.value)} className="pl-9" onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addImageUrl())} />
+   696→                </div>
+   697→                <Button type="button" variant="outline" onClick={addImageUrl} disabled={!urlInput.trim() || images.length >= 5}>
+   698→                  <ImagePlus size={16} className="mr-1" />Add URL
+   699→                </Button>
+   700→              </div>
+   701→
+   702→              {/* Image preview grid */}
+   703→              {images.length > 0 && (
+   704→                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+   705→                  {images.map((img, index) => (
+   706→                    <div key={index} className="relative group border rounded-lg overflow-hidden bg-muted aspect-square">
+   707→                      <img src={img.url} alt={img.alt} className="w-full h-full object-cover" />
+   708→                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+   709→                        {index > 0 && <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={() => moveImage(index, 'up')}><ArrowUp size={14} /></Button>}
+   710→                        {index < images.length - 1 && <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={() => moveImage(index, 'down')}><ArrowDown size={14} /></Button>}
+   711→                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-red-500/80" onClick={() => removeImage(index)}><Trash2 size={14} /></Button>
+   712→                      </div>
+   713→                      {index === 0 && <Badge className="absolute top-1 left-1 text-[10px] bg-orange-500">Main</Badge>}
+   714→                      <Badge variant="secondary" className="absolute top-1 right-1 text-[10px]">{index + 1}</Badge>
+   715→                    </div>
+   716→                  ))}
+   717→                </div>
+   718→              )}
+   719→
+   720→              {images.length === 0 && (
+   721→                <div className="border-2 border-dashed rounded-lg p-8 text-center text-muted-foreground">
+   722→                  <ImagePlus size={32} className="mx-auto mb-2 opacity-50" />
+   723→                  <p className="text-sm">No images added yet</p>
+   724→                  <p className="text-xs mt-1">Upload files or paste image URLs above</p>
+   725→                </div>
+   726→              )}
+   727→            </div>
+   728→          </Card>
+   729→
+   730→          <Card className="p-6"><h3 className="font-semibold mb-4">Pricing & Inventory</h3>
+   731→            <div className="grid sm:grid-cols-2 gap-4">
+   732→              <div><Label>Price * (₹)</Label><Input type="number" value={form.price} onChange={e => update('price', e.target.value)} className="mt-1" /></div>
+   733→              <div><Label>Compare at Price (₹)</Label><Input type="number" value={form.compareAtPrice} onChange={e => update('compareAtPrice', e.target.value)} className="mt-1" /></div>
+   734→              <div><Label>Cost Price (₹)</Label><Input type="number" value={form.costPrice} onChange={e => update('costPrice', e.target.value)} className="mt-1" /></div>
+   735→              <div><Label>Stock Quantity *</Label><Input type="number" value={form.stock} onChange={e => update('stock', e.target.value)} className="mt-1" /></div>
+   736→              <div><Label>SKU</Label><Input value={form.sku} onChange={e => update('sku', e.target.value)} className="mt-1" /></div>
+   737→              <div><Label>Barcode</Label><Input value={form.barcode} onChange={e => update('barcode', e.target.value)} className="mt-1" /></div>
+   738→              <div><Label>Weight (kg)</Label><Input type="number" value={form.weight} onChange={e => update('weight', e.target.value)} className="mt-1" /></div>
+   739→            </div>
+   740→          </Card>
+   741→
+   742→          <Card className="p-6"><h3 className="font-semibold mb-4">SEO</h3>
+   743→            <div className="space-y-4">
+   744→              <div><Label>SEO Title</Label><Input value={form.seoTitle} onChange={e => update('seoTitle', e.target.value)} className="mt-1" /></div>
+   745→              <div><Label>SEO Description</Label><Textarea value={form.seoDescription} onChange={e => update('seoDescription', e.target.value)} className="mt-1" rows={2} /></div>
+   746→              <div><Label>SEO Keywords</Label><Input value={form.seoKeywords} onChange={e => update('seoKeywords', e.target.value)} className="mt-1" /></div>
+   747→            </div>
+   748→          </Card>
+   749→
+   750→          {/* SEO Preview */}
+   751→          <Card className="p-4 border bg-muted/30">
+   752→            <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2"><Search size={14} />SEO Preview</h3>
+   753→            <div className="bg-white dark:bg-background rounded-lg p-4 border">
+   754→              <p className="text-blue-700 dark:text-blue-400 text-lg font-medium hover:underline cursor-pointer truncate" style={{ maxWidth: '600px' }}>
+   755→                {form.seoTitle || form.name || 'Product Title'}{" "}<span className="text-xs text-muted-foreground">— MarketHub</span>
+   756→              </p>
+   757→              <p className="text-sm text-green-700 dark:text-green-500 mt-0.5">
+   758→                markethub.com/products/{form.slug || 'product-slug'}
+   759→              </p>
+   760→              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+   761→                {form.seoDescription || form.shortDescription || 'No description provided. Add a SEO description to improve search visibility.'}
+   762→              </p>
+   763→            </div>
+   764→          </Card>
+   765→        </div>
+   766→
+   767→        <div className="space-y-6">
+   768→          <Card className="p-6"><h3 className="font-semibold mb-4">Organization</h3>
+   769→            <div className="space-y-4">
+   770→              <div><Label>Category *</Label><Select value={form.categoryId} onValueChange={v => update('categoryId', v)}><SelectTrigger className="mt-1"><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent>{categories?.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+   771→              <div><Label>Brand</Label><Select value={form.brandId} onValueChange={v => update('brandId', v)}><SelectTrigger className="mt-1"><SelectValue placeholder="Select brand" /></SelectTrigger><SelectContent>{brands?.map((b: any) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select></div>
+   772→            </div>
+   773→          </Card>
+   774→
+   775→          <Card className="p-6"><h3 className="font-semibold mb-4">Publishing</h3>
+   776→            <div className="space-y-4">
+   777→              <div><Label>Status</Label><Select value={form.productStatus} onValueChange={v => update('productStatus', v)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="DRAFT">Draft</SelectItem><SelectItem value="PUBLISHED">Published</SelectItem><SelectItem value="ARCHIVED">Archived</SelectItem></SelectContent></Select></div>
+   778→              <div><Label>Badge</Label><Select value={form.badge} onValueChange={v => update('badge', v)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="NONE">None</SelectItem><SelectItem value="BEST_SELLER">Best Seller</SelectItem><SelectItem value="NEW_ARRIVAL">New Arrival</SelectItem><SelectItem value="LIMITED_TIME">Limited Time</SelectItem><SelectItem value="FESTIVAL_OFFER">Festival Offer</SelectItem></SelectContent></Select></div>
+   779→              <div><Label>Est. Delivery (days)</Label><Input type="number" min={1} max={30} value={form.estimatedDeliveryDays} onChange={e => update('estimatedDeliveryDays', e.target.value)} className="mt-1" /></div>
+   780→            </div>
+   781→          </Card>
+   782→
+   783→          <Card className="p-6"><h3 className="font-semibold mb-4">Policies</h3>
+   784→            <div className="space-y-4">
+   785→              <div><Label>Warranty</Label><Input value={form.warranty} onChange={e => update('warranty', e.target.value)} className="mt-1" placeholder="e.g., 1 year manufacturer warranty" /></div>
+   786→              <div><Label>Return Policy</Label><Input value={form.returnPolicy} onChange={e => update('returnPolicy', e.target.value)} className="mt-1" placeholder="e.g., 7-day easy returns" /></div>
+   787→            </div>
+   788→          </Card>
+   789→
+   790→          <Card className="p-6">
+   791→            <Button className="w-full bg-orange-500 hover:bg-orange-600" size="lg" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.name || !form.price || !form.categoryId}>
+   792→              {saveMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : isEditing ? 'Update Product' : 'Create Product'}
+   793→            </Button>
+   794→          </Card>
+   795→        </div>
+   796→      </div>
+   797→    </div>
+   798→  );
+   799→}
+   800→
+   801→// ============ VENDOR ORDERS ============
+   802→
+   803→function VendorOrders() {
+   804→  const qc = useQueryClient();
+   805→  const { vendorId, user } = useAuthStore();
+   806→  const { setSelectedOrderId, setVendorView } = useNavigationStore();
+   807→  const [statusFilter, setStatusFilter] = useState('all');
+   808→  const [page, setPage] = useState(1);
+   809→  const [printDialog, setPrintDialog] = useState<{ open: boolean; order: Order | null; mode: 'invoice' | 'packing' | 'shipping' }>({ open: false, order: null, mode: 'invoice' });
+   810→
+   811→  const params = new URLSearchParams({ vendorId: vendorId || '', page: String(page), limit: '15' });
+   812→  if (statusFilter !== 'all') params.set('status', statusFilter);
+   813→
+   814→  const { data, isLoading } = useQuery({
+   815→    queryKey: ['vendor-orders', params.toString()],
+   816→    queryFn: () => fetch(`/api/orders?${params}`).then(r => r.json()).then((r: ApiResponse<Order[]>) => r),
+   817→    enabled: !!vendorId,
+   818→  });
+   819→
+   820→  const { data: statsData } = useQuery({
+   821→    queryKey: ['vendor-dashboard', vendorId],
+   822→    queryFn: () => fetch(`/api/vendor/dashboard?vendorId=${vendorId}`).then(r => r.json()).then((r: ApiResponse<VendorDashboardStats>) => r.data),
+   823→    enabled: !!vendorId,
+   824→  });
+   825→
+   826→  const updateMutation = useMutation({
+   827→    mutationFn: ({ orderId, status, trackingId }: { orderId: string; status: string; trackingId?: string }) =>
+   828→      fetch(`/api/orders/${orderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, trackingId }) }).then(r => r.json()),
+   829→    onSuccess: () => { toast.success('Order updated'); qc.invalidateQueries({ queryKey: ['vendor-orders'] }); },
+   830→    onError: () => toast.error('Failed to update order'),
+   831→  });
+   832→
+   833→  const statusColor: Record<string, string> = {
+   834→    NEW: 'bg-blue-100 text-blue-700', PROCESSING: 'bg-amber-100 text-amber-700', PACKED: 'bg-purple-100 text-purple-700',
+   835→    SHIPPED: 'bg-orange-100 text-orange-700', DELIVERED: 'bg-green-100 text-green-700', CANCELLED: 'bg-red-100 text-red-700',
+   836→  };
+   837→
+   838→  const vendorItems = (order: Order | null) => order?.items?.filter(i => i.vendorId === vendorId) || [];
+   839→  const vendorTotal = (order: Order | null) => vendorItems(order).reduce((sum, i) => sum + i.total, 0);
+   840→
+   841→  const openPrint = (order: Order, mode: 'invoice' | 'packing' | 'shipping') => {
+   842→    setPrintDialog({ open: true, order, mode });
+   843→  };
+   844→
+   845→  return (
+   846→    <div className="p-6 space-y-6">
+   847→      <div><h1 className="text-2xl font-bold">Orders</h1><p className="text-muted-foreground text-sm">Manage and fulfill customer orders</p></div>
+   848→
+   849→      {/* Summary Cards */}
+   850→      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   851→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+   852→          <Card className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center"><Ban size={20} className="text-red-600" /></div><div><p className="text-xs text-muted-foreground">Cancelled Orders</p><p className="text-xl font-bold">{statsData?.cancelledOrders || 0}</p></div></div></Card>
+   853→        </motion.div>
+   854→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }}>
+   855→          <Card className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><RotateCcw size={20} className="text-amber-600" /></div><div><p className="text-xs text-muted-foreground">Refund Rate</p><p className="text-xl font-bold">{(statsData?.refundRate || 0).toFixed(1)}%</p></div></div></Card>
+   856→        </motion.div>
+   857→      </div>
+   858→
+   859→      <div className="flex gap-2 flex-wrap">
+   860→        {['all', 'NEW', 'PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map(s => (
+   861→          <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-orange-500' : ''} onClick={() => { setStatusFilter(s); setPage(1); }}>
+   862→            {s === 'all' ? 'All' : s}
+   863→          </Button>
+   864→        ))}
+   865→      </div>
+   866→
+   867→      {isLoading ? <div className="space-y-3">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div> :
+   868→      <div className="space-y-4">
+   869→        {!data?.data?.length && (
+   870→          <div className="flex flex-col items-center justify-center py-16 text-center">
+   871→            <ShoppingBag size={48} className="text-muted-foreground/50 mb-4" />
+   872→            <h3 className="font-medium text-lg mb-1">No orders yet</h3>
+   873→            <p className="text-muted-foreground text-sm">Orders will appear here when customers purchase your products</p>
+   874→          </div>
+   875→        )}
+   876→        {data?.data?.map(order => (
+   877→          <Card key={order.id} className="p-4 hover:shadow-md transition-shadow">
+   878→            <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+   879→              <div>
+   880→                <p className="font-medium">Order #{order.orderNumber}</p>
+   881→                <p className="text-sm text-muted-foreground">{order.user?.name} • {new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+   882→              </div>
+   883→              <div className="flex items-center gap-2">
+   884→                <Badge className={statusColor[order.status] || ''}>{order.status}</Badge>
+   885→                <span className="font-bold text-lg">{formatCurrency(vendorTotal(order))}</span>
+   886→              </div>
+   887→            </div>
+   888→            <div className="space-y-2 mb-3">
+   889→              {vendorItems(order).map(item => (
+   890→                <div key={item.id} className="flex items-center gap-3 text-sm">
+   891→                  <div className="w-10 h-10 rounded bg-muted shrink-0 overflow-hidden">{item.productImage && <img src={item.productImage} alt="" className="w-full h-full object-cover" />}</div>
+   892→                  <div className="flex-1 min-w-0"><p className="truncate">{item.productName}</p><p className="text-muted-foreground">Qty: {item.quantity} × {formatCurrency(item.price)}</p></div>
+   893→                  <span className="font-medium">{formatCurrency(item.total)}</span>
+   894→                </div>
+   895→              ))}
+   896→            </div>
+   897→            <div className="flex gap-2 flex-wrap">
+   898→              {order.status === 'NEW' && <Button size="sm" variant="outline" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ orderId: order.id, status: 'PROCESSING' })}><Clock size={14} className="mr-1" />Accept & Process</Button>}
+   899→              {order.status === 'PROCESSING' && <Button size="sm" variant="outline" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ orderId: order.id, status: 'PACKED' })}><BoxIcon size={14} className="mr-1" />Mark Packed</Button>}
+   900→              {order.status === 'PACKED' && <Button size="sm" variant="outline" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ orderId: order.id, status: 'SHIPPED' })}><Truck size={14} className="mr-1" />Mark Shipped</Button>}
+   901→              <Button size="sm" variant="outline" onClick={() => openPrint(order, 'invoice')}><FileText size={14} className="mr-1" />Invoice</Button>
+   902→              <Button size="sm" variant="outline" onClick={() => openPrint(order, 'packing')}><Printer size={14} className="mr-1" />Packing Slip</Button>
+   903→              <Button size="sm" variant="outline" onClick={() => openPrint(order, 'shipping')}><Truck size={14} className="mr-1" />Shipping Label</Button>
+   904→            </div>
+   905→          </Card>
+   906→        ))}
+   907→      </div>}
+   908→
+   909→      {/* Print Dialog */}
+   910→      <Dialog open={printDialog.open} onOpenChange={(open) => { if (!open) window.close(); setPrintDialog({ open, order: null, mode: 'invoice' }); }}>
+   911→        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+   912→          <DialogHeader>
+   913→            <DialogTitle>{printDialog.mode === 'invoice' ? 'Invoice' : printDialog.mode === 'packing' ? 'Packing Slip' : 'Shipping Label'} - #{printDialog.order?.orderNumber}</DialogTitle>
+   914→          </DialogHeader>
+   915→          <div id="print-content" className="space-y-4 text-sm">
+   916→            {!printDialog.order ? <p className="text-center text-muted-foreground py-8">No order selected</p> : printDialog.mode === 'invoice' ? (
+   917→              <div className="space-y-4">
+   918→                <div className="flex justify-between items-start border-b pb-4">
+   919→                  <div><h3 className="text-lg font-bold text-orange-600">INVOICE</h3><p className="text-muted-foreground">Order #{printDialog.order?.orderNumber}</p><p className="text-muted-foreground">{new Date(printDialog.order?.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
+   920→                  <div className="text-right"><p className="font-medium">{printDialog.order?.user?.name}</p><p className="text-muted-foreground text-xs">{formatShippingAddress(printDialog.order?.shippingAddress as string | Record<string, string>)}</p></div>
+   921→                </div>
+   922→                <Table>
+   923→                  <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty</TableHead><TableHead>Price</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
+   924→                  <TableBody>
+   925→                    {vendorItems(printDialog.order).map(item => (
+   926→                      <TableRow key={item.id}><TableCell>{item.productName}</TableCell><TableCell>{item.quantity}</TableCell><TableCell>{formatCurrency(item.price)}</TableCell><TableCell className="text-right">{formatCurrency(item.total)}</TableCell></TableRow>
+   927→                    ))}
+   928→                  </TableBody>
+   929→                </Table>
+   930→                <div className="flex justify-end"><Card className="p-4 w-64 space-y-1"><div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(vendorTotal(printDialog.order))}</span></div><div className="flex justify-between font-bold text-lg border-t pt-2 mt-2"><span>Total</span><span className="text-orange-600">{formatCurrency(vendorTotal(printDialog.order))}</span></div></Card></div>
+   931→                <p className="text-xs text-muted-foreground text-center">Payment: {printDialog.order?.paymentMethod} • Status: {printDialog.order?.paymentStatus}</p>
+   932→              </div>
+   933→            ) : printDialog.mode === 'packing' ? (
+   934→              <div className="space-y-4">
+   935→                <div className="flex justify-between items-start border-b pb-4">
+   936→                  <div><h3 className="text-lg font-bold text-orange-600">PACKING SLIP</h3><p className="text-muted-foreground">Order #{printDialog.order?.orderNumber}</p></div>
+   937→                  <div className="text-right"><p className="font-medium">{printDialog.order?.user?.name}</p><p className="text-muted-foreground text-xs">{formatShippingAddress(printDialog.order?.shippingAddress as string | Record<string, string>)}</p></div>
+   938→                </div>
+   939→                <div className="space-y-2">
+   940→                  {vendorItems(printDialog.order).map(item => (
+   941→                    <div key={item.id} className="flex items-center justify-between py-2 border-b last:border-0">
+   942→                      <div className="flex items-center gap-3"><div className="w-8 h-8 rounded bg-muted overflow-hidden shrink-0">{item.productImage && <img src={item.productImage} alt="" className="w-full h-full object-cover" />}</div><span>{item.productName}</span></div>
+   943→                      <Badge variant="secondary">Qty: {item.quantity}</Badge>
+   944→                    </div>
+   945→                  ))}
+   946→                </div>
+   947→                <p className="text-xs text-muted-foreground text-center">Date: {new Date(printDialog.order?.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+   948→              </div>
+   949→            ) : (
+   950→              <div className="p-6 space-y-4">
+   951→                <div className="border-2 border-dashed border-black dark:border-white p-8 text-center">
+   952→                  <h2 className="text-2xl font-bold mb-4">SHIPPING LABEL</h2>
+   953→                  <div className="text-left space-y-2 text-sm">
+   954→                    <div className="flex justify-between"><span className="font-bold">From:</span><span>{user?.name} (Vendor)</span></div>
+   955→                    <div className="flex justify-between"><span className="font-bold">To:</span><span>{formatShippingAddress(printDialog.order?.shippingAddress as string | Record<string, string>)}</span></div>
+   956→                    <Separator />
+   957→                    <div className="flex justify-between"><span className="font-bold">Order:</span><span>#{printDialog.order?.orderNumber}</span></div>
+   958→                    <div className="flex justify-between"><span className="font-bold">Items:</span><span>{vendorItems(printDialog.order).length} item(s)</span></div>
+   959→                    <div className="flex justify-between"><span className="font-bold">Weight:</span><span>0.5 kg (approx)</span></div>
+   960→                    <Separator />
+   961→                    <div className="text-center mt-4">
+   962→                      <div className="border-2 border-black dark:border-white p-4 font-mono text-lg tracking-wider">
+   963→                        {printDialog.order?.orderNumber}-{printDialog.order?.id?.slice(-6).toUpperCase()}
+   964→                      </div>
+   965→                    </div>
+   966→                  </div>
+   967→                </div>
+   968→              </div>
+   969→            )}
+   970→          </div>
+   971→          <DialogFooter>
+   972→            <Button variant="outline" onClick={() => setPrintDialog({ open: false, order: null, mode: 'invoice' })}>Close</Button>
+   973→            <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => window.print()}>Print</Button>
+   974→          </DialogFooter>
+   975→        </DialogContent>
+   976→      </Dialog>
+   977→    </div>
+   978→  );
+   979→}
+   980→
+   981→// ============ VENDOR REPORTS ============
+   982→
+   983→function VendorReports() {
+   984→  const { vendorId } = useAuthStore();
+   985→  const { data } = useQuery({
+   986→    queryKey: ['vendor-dashboard', vendorId],
+   987→    queryFn: () => fetch(`/api/vendor/dashboard?vendorId=${vendorId}`).then(r => r.json()).then((r: ApiResponse<VendorDashboardStats>) => r.data),
+   988→    enabled: !!vendorId,
+   989→  });
+   990→
+   991→  const latestComparison = data?.monthlyComparison?.[data.monthlyComparison.length - 1];
+   992→  const comparisonChange = latestComparison ? ((latestComparison.thisMonth - latestComparison.lastMonth) / Math.max(latestComparison.lastMonth, 1)) * 100 : 0;
+   993→
+   994→  return (
+   995→    <div className="p-6 space-y-6">
+   996→      <div><h1 className="text-2xl font-bold">Reports</h1><p className="text-muted-foreground text-sm">Business performance and analytics</p></div>
+   997→
+   998→      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+   999→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+  1000→          <Card className="p-4"><p className="text-sm text-muted-foreground">Total Revenue</p><p className="text-2xl font-bold text-green-600">{formatCurrency(data?.totalRevenue || 0)}</p></Card>
+  1001→        </motion.div>
+  1002→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }}>
+  1003→          <Card className="p-4"><p className="text-sm text-muted-foreground">Total Orders</p><p className="text-2xl font-bold">{data?.totalOrders || 0}</p></Card>
+  1004→        </motion.div>
+  1005→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+  1006→          <Card className="p-4"><p className="text-sm text-muted-foreground">Average Rating</p><p className="text-2xl font-bold flex items-center gap-1"><StarRating rating={data?.avgRating || 0} size={20} />{data?.avgRating?.toFixed(1)}</p></Card>
+  1007→        </motion.div>
+  1008→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+  1009→          <Card className="p-4"><div className="flex items-center gap-2"><Ban size={16} className="text-red-500" /><p className="text-sm text-muted-foreground">Cancelled</p></div><p className="text-2xl font-bold text-red-600">{data?.cancelledOrders || 0}</p></Card>
+  1010→        </motion.div>
+  1011→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
+  1012→          <Card className="p-4"><div className="flex items-center gap-2"><RotateCcw size={16} className="text-amber-500" /><p className="text-sm text-muted-foreground">Refund Rate</p></div><p className="text-2xl font-bold text-amber-600">{(data?.refundRate || 0).toFixed(1)}%</p></Card>
+  1013→        </motion.div>
+  1014→      </div>
+  1015→
+  1016→      {/* Monthly Comparison */}
+  1017→      {latestComparison && (
+  1018→        <Card className="p-6">
+  1019→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg flex items-center gap-2"><ArrowDownUp size={18} />Monthly Comparison</CardTitle></CardHeader>
+  1020→          <div className="grid sm:grid-cols-2 gap-6">
+  1021→            <div className="space-y-3">
+  1022→              <div className="flex items-center justify-between">
+  1023→                <div><p className="text-sm text-muted-foreground">This Month</p><p className="text-2xl font-bold text-green-600">{formatCurrency(latestComparison.thisMonth)}</p></div>
+  1024→                <div className={`text-sm font-medium px-2 py-1 rounded ${comparisonChange >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+  1025→                  {comparisonChange >= 0 ? '+' : ''}{comparisonChange.toFixed(1)}%
+  1026→                </div>
+  1027→              </div>
+  1028→              <div className="w-full bg-muted rounded-full h-3"><div className="h-3 rounded-full bg-orange-500 transition-all" style={{ width: `${Math.min((latestComparison.thisMonth / Math.max(latestComparison.lastMonth, 1)) * 100, 100)}%` }} /></div>
+  1029→            </div>
+  1030→            <div>
+  1031→              <p className="text-sm text-muted-foreground">Last Month</p>
+  1032→              <p className="text-2xl font-bold">{formatCurrency(latestComparison.lastMonth)}</p>
+  1033→              <p className="text-xs text-muted-foreground mt-1">{latestComparison.month}</p>
+  1034→            </div>
+  1035→          </div>
+  1036→        </Card>
+  1037→      )}
+  1038→
+  1039→      {data?.monthlySales && (
+  1040→        <Card className="p-6">
+  1041→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Revenue Trend</CardTitle></CardHeader>
+  1042→          <div className="h-64 flex items-end gap-3">
+  1043→            {data.monthlySales.map((ms, i) => {
+  1044→              const maxSale = Math.max(...data.monthlySales.map(m => m.sales), 1);
+  1045→              return (
+  1046→                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+  1047→                  <span className="text-xs font-medium">{formatCurrency(ms.sales)}</span>
+  1048→                  <div className="w-full rounded-t-md bg-gradient-to-t from-orange-600 to-orange-400 transition-all duration-500" style={{ height: `${Math.max((ms.sales / maxSale) * 100, 2)}%` }} />
+  1049→                  <span className="text-xs text-muted-foreground">{ms.month}</span>
+  1050→                </div>
+  1051→              );
+  1052→            })}
+  1053→          </div>
+  1054→        </Card>
+  1055→      )}
+  1056→
+  1057→      {/* Top Categories */}
+  1058→      {data?.topCategories && data.topCategories.length > 0 && (
+  1059→        <Card className="p-6">
+  1060→          <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Top Categories</CardTitle></CardHeader>
+  1061→          <Table>
+  1062→            <TableHeader><TableRow><TableHead>Category</TableHead><TableHead>Orders</TableHead><TableHead>Revenue</TableHead></TableRow></TableHeader>
+  1063→            <TableBody>
+  1064→              {data.topCategories.map((cat, i) => (
+  1065→                <TableRow key={i}>
+  1066→                  <TableCell><div className="flex items-center gap-2"><span className="text-lg font-bold text-muted-foreground w-6">#{i + 1}</span><span className="text-sm font-medium">{cat.name}</span></div></TableCell>
+  1067→                  <TableCell className="font-medium">{cat.count}</TableCell>
+  1068→                  <TableCell className="font-medium text-green-600">{formatCurrency(cat.revenue)}</TableCell>
+  1069→                </TableRow>
+  1070→              ))}
+  1071→            </TableBody>
+  1072→          </Table>
+  1073→        </Card>
+  1074→      )}
+  1075→
+  1076→      <Card className="p-6">
+  1077→        <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Top Selling Products</CardTitle></CardHeader>
+  1078→        <Table>
+  1079→          <TableHeader><TableRow><TableHead>Product</TableHead><TableHead>Sold</TableHead><TableHead>Revenue</TableHead><TableHead>Rating</TableHead></TableRow></TableHeader>
+  1080→          <TableBody>
+  1081→            {data?.topProducts?.map(p => (
+  1082→              <TableRow key={p.id}>
+  1083→                <TableCell><div className="flex items-center gap-2"><div className="w-8 h-8 rounded bg-muted shrink-0 overflow-hidden">{p.images?.[0]?.url && <img src={p.images[0].url} alt="" className="w-full h-full object-cover" />}</div><span className="text-sm truncate max-w-48">{p.name}</span></div></TableCell>
+  1084→                <TableCell className="font-medium">{p.totalSold}</TableCell>
+  1085→                <TableCell className="font-medium">{formatCurrency(p.price * p.totalSold)}</TableCell>
+  1086→                <TableCell><StarRating rating={p.rating} size={12} /></TableCell>
+  1087→              </TableRow>
+  1088→            ))}
+  1089→            {(!data?.topProducts?.length) && (
+  1090→              <TableRow><TableCell colSpan={4} className="p-0"><div className="flex flex-col items-center justify-center py-16 text-center">
+  1091→                <BarChart3 size={48} className="text-muted-foreground/50 mb-4" />
+  1092→                <h3 className="font-medium text-lg mb-1">Not enough data to generate reports</h3>
+  1093→                <p className="text-muted-foreground text-sm">Reports will populate as you make sales</p>
+  1094→              </div></TableCell></TableRow>
+  1095→            )}
+  1096→          </TableBody>
+  1097→        </Table>
+  1098→      </Card>
+  1099→    </div>
+  1100→  );
+  1101→}
+  1102→
+  1103→// ============ VENDOR PROFILE ============
+  1104→
+  1105→function VendorProfile() {
+  1106→  const { user, vendorId } = useAuthStore();
+  1107→  const { data: vendor, isLoading } = useQuery({
+  1108→    queryKey: ['vendor', vendorId],
+  1109→    queryFn: () => fetch(`/api/vendors/${vendorId}`).then(r => r.json()).then((r: any) => r.data),
+  1110→    enabled: !!vendorId,
+  1111→  });
+  1112→
+  1113→  if (isLoading) return (
+  1114→    <div className="p-6 space-y-6">
+  1115→      <div><Skeleton className="h-8 w-48" /><Skeleton className="h-4 w-64 mt-1" /></div>
+  1116→      <Card className="p-6">
+  1117→        <div className="flex items-start gap-6 mb-6">
+  1118→          <Skeleton className="w-20 h-20 rounded-xl shrink-0" />
+  1119→          <div className="space-y-2 flex-1">
+  1120→            <Skeleton className="h-6 w-48" />
+  1121→            <Skeleton className="h-5 w-24" />
+  1122→            <Skeleton className="h-4 w-72" />
+  1123→          </div>
+  1124→        </div>
+  1125→        <Skeleton className="h-px w-full my-4" />
+  1126→        <div className="grid sm:grid-cols-2 gap-4">
+  1127→          {Array.from({ length: 6 }).map((_, i) => (
+  1128→            <div key={i} className="flex gap-2"><Skeleton className="h-4 w-28" /><Skeleton className="h-4 w-36" /></div>
+  1129→          ))}
+  1130→        </div>
+  1131→      </Card>
+  1132→    </div>
+  1133→  );
+  1134→
+  1135→  return (
+  1136→    <div className="p-6 space-y-6">
+  1137→      <div><h1 className="text-2xl font-bold">Business Profile</h1><p className="text-muted-foreground text-sm">Your vendor account information</p></div>
+  1138→
+  1139→      <Card className="p-6">
+  1140→        <div className="flex items-start gap-6 mb-6">
+  1141→          <div className="w-20 h-20 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-500 text-3xl font-bold shrink-0">{vendor?.businessName?.[0]}</div>
+  1142→          <div>
+  1143→            <h2 className="text-xl font-bold">{vendor?.businessName}</h2>
+  1144→            <div className="flex items-center gap-2 mt-1"><Badge variant={vendor?.status === 'APPROVED' ? 'default' : 'secondary'}>{vendor?.status}</Badge><StarRating rating={vendor?.rating || 0} size={14} /></div>
+  1145→            <p className="text-sm text-muted-foreground mt-1">{vendor?.description}</p>
+  1146→          </div>
+  1147→        </div>
+  1148→        <Separator className="my-4" />
+  1149→        <div className="grid sm:grid-cols-2 gap-4 text-sm">
+  1150→          <div><span className="text-muted-foreground">Business Email:</span> <span className="ml-2">{vendor?.businessEmail || user?.email}</span></div>
+  1151→          <div><span className="text-muted-foreground">Phone:</span> <span className="ml-2">{vendor?.businessPhone || 'Not set'}</span></div>
+  1152→          <div><span className="text-muted-foreground">GST Number:</span> <span className="ml-2">{vendor?.gstNumber || 'Not set'}</span></div>
+  1153→          <div><span className="text-muted-foreground">Commission Rate:</span> <span className="ml-2 font-medium">{vendor?.commissionRate}%</span></div>
+  1154→          <div><span className="text-muted-foreground">Total Sales:</span> <span className="ml-2 font-medium text-green-600">{formatCurrency(vendor?.totalSales || 0)}</span></div>
+  1155→          <div><span className="text-muted-foreground">Total Revenue:</span> <span className="ml-2 font-medium">{formatCurrency(vendor?.totalRevenue || 0)}</span></div>
+  1156→        </div>
+  1157→      </Card>
+  1158→    </div>
+  1159→  );
+  1160→}
+  1161→
+  1162→// ============ VENDOR SETTINGS ============
+  1163→
+  1164→function VendorSettings() {
+  1165→  const [saving, setSaving] = useState(false);
+  1166→
+  1167→  const handleSave = async () => {
+  1168→    setSaving(true);
+  1169→    await new Promise(resolve => setTimeout(resolve, 800));
+  1170→    toast.success('Settings saved');
+  1171→    setSaving(false);
+  1172→  };
+  1173→
+  1174→  return (
+  1175→    <div className="p-6 space-y-6">
+  1176→      <div><h1 className="text-2xl font-bold">Settings</h1><p className="text-muted-foreground text-sm">Manage your vendor account settings</p></div>
+  1177→      <Card className="p-6">
+  1178→        <h3 className="font-semibold mb-4">Store Settings</h3>
+  1179→        <div className="space-y-4">
+  1180→          <div><Label>Business Name</Label><Input className="mt-1" defaultValue={useAuthStore.getState().user?.name || ''} /></div>
+  1181→          <div><Label>Business Email</Label><Input className="mt-1" type="email" defaultValue={useAuthStore.getState().user?.email || ''} /></div>
+  1182→          <div><Label>Business Phone</Label><Input className="mt-1" /></div>
+  1183→          <Button className="bg-orange-500 hover:bg-orange-600" disabled={saving} onClick={handleSave}>{saving ? 'Saving...' : 'Save Changes'}</Button>
+  1184→        </div>
+  1185→      </Card>
+  1186→    </div>
+  1187→  );
+  1188→}
+  1189→
+  1190→// ============ VENDOR PENDING / REJECTED PAGE ============
+  1191→
+  1192→function VendorPendingPage() {
+  1193→  const { user, logout, vendorId, vendorStatus } = useAuthStore();
+  1194→  const { setAppView } = useNavigationStore();
+  1195→  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+  1196→  const { data: vendor, isLoading } = useQuery({
+  1197→    queryKey: ['vendor-status', vendorId],
+  1198→    queryFn: () => fetch(`/api/vendors/${vendorId}`).then(r => r.json()).then((r: any) => r.data),
+  1199→    enabled: !!vendorId,
+  1200→  });
+  1201→
+  1202→  // Show vendor status toast on mount
+  1203→  React.useEffect(() => {
+  1204→    if (vendorStatus && vendorStatus !== 'APPROVED') {
+  1205→      const timer = setTimeout(() => vendorStatusToast(vendorStatus, rejectionReason || undefined), 500);
+  1206→      return () => clearTimeout(timer);
+  1207→    }
+  1208→  }, [vendorStatus]);
+  1209→
+  1210→  // Sync vendor status from server
+  1211→  React.useEffect(() => {
+  1212→    if (vendor?.status) {
+  1213→      useAuthStore.getState().login(
+  1214→        useAuthStore.getState().user!,
+  1215→        useAuthStore.getState().token!,
+  1216→        vendorId,
+  1217→        vendor.status
+  1218→      );
+  1219→      if (vendor.rejectionReason) {
+  1220→        setRejectionReason(vendor.rejectionReason);
+  1221→      }
+  1222→      // If approved, navigate to dashboard
+  1223→      if (vendor.status === 'APPROVED') {
+  1224→        const timer = setTimeout(() => useNavigationStore.getState().setVendorView('vendor-dashboard'), 100);
+  1225→        return () => clearTimeout(timer);
+  1226→      }
+  1227→    }
+  1228→  }, [vendor?.status, vendorId]);
+  1229→
+  1230→  const isRejected = vendorStatus === 'REJECTED' || vendor?.status === 'REJECTED';
+  1231→  const isPending = vendorStatus === 'PENDING' || vendor?.status === 'PENDING';
+  1232→
+  1233→  if (isLoading) {
+  1234→    return (
+  1235→      <div className="min-h-screen flex items-center justify-center">
+  1236→        <Skeleton className="h-64 w-full max-w-md rounded-xl" />
+  1237→      </div>
+  1238→    );
+  1239→  }
+  1240→
+  1241→  return (
+  1242→    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+  1243→      <motion.div
+  1244→        initial={{ opacity: 0, scale: 0.9 }}
+  1245→        animate={{ opacity: 1, scale: 1 }}
+  1246→        className="w-full max-w-lg text-center space-y-6"
+  1247→      >
+  1248→        <div className={`mx-auto w-24 h-24 rounded-full flex items-center justify-center ${isRejected ? 'bg-red-100 dark:bg-red-900/20' : 'bg-amber-100 dark:bg-amber-900/20'}`}>
+  1249→          {isRejected ? (
+  1250→            <XCircle size={48} className="text-red-500" />
+  1251→          ) : (
+  1252→            <Clock size={48} className="text-amber-500" />
+  1253→          )}
+  1254→        </div>
+  1255→
+  1256→        <div>
+  1257→          <h1 className="text-2xl font-bold">
+  1258→            {isRejected ? 'Application Rejected' : 'Application Pending'}
+  1259→          </h1>
+  1260→          <p className="text-muted-foreground mt-2">
+  1261→            {isRejected
+  1262→              ? 'Your vendor application has been rejected by the admin.'
+  1263→              : 'Your vendor account is currently under review by our admin team.'}
+  1264→          </p>
+  1265→        </div>
+  1266→
+  1267→        <Card className="p-6 text-left">
+  1268→          <div className="space-y-3 text-sm">
+  1269→            <div className="flex justify-between">
+  1270→              <span className="text-muted-foreground">Business Name</span>
+  1271→              <span className="font-medium">{user?.name}</span>
+  1272→            </div>
+  1273→            <div className="flex justify-between">
+  1274→              <span className="text-muted-foreground">Email</span>
+  1275→              <span className="font-medium">{user?.email}</span>
+  1276→            </div>
+  1277→            <div className="flex justify-between">
+  1278→              <span className="text-muted-foreground">Status</span>
+  1279→              <Badge variant={isRejected ? 'destructive' : 'secondary'} className={isPending ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30' : ''}>
+  1280→                {vendorStatus || vendor?.status || 'PENDING'}
+  1281→              </Badge>
+  1282→            </div>
+  1283→          </div>
+  1284→        </Card>
+  1285→
+  1286→        {rejectionReason && (
+  1287→          <Card className="p-4 border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/10">
+  1288→            <p className="text-sm font-medium text-red-700 dark:text-red-400 mb-1">Rejection Reason:</p>
+  1289→            <p className="text-sm text-red-600 dark:text-red-300">{rejectionReason}</p>
+  1290→          </Card>
+  1291→        )}
+  1292→
+  1293→        {isPending && (
+  1294→          <Card className="p-4 border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10">
+  1295→            <div className="flex items-start gap-3">
+  1296→              <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={20} />
+  1297→              <div className="text-sm">
+  1298→                <p className="font-medium text-amber-700 dark:text-amber-400">What happens next?</p>
+  1299→                <ul className="mt-1 space-y-1 text-amber-600 dark:text-amber-300">
+  1300→                  <li>• Our team will review your business details</li>
+  1301→                  <li>• You&apos;ll receive a notification once approved</li>
+  1302→                  <li>• This usually takes 24-48 hours</li>
+  1303→                </ul>
+  1304→              </div>
+  1305→            </div>
+  1306→          </Card>
+  1307→        )}
+  1308→
+  1309→        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+  1310→          <Button
+  1311→            variant="outline"
+  1312→            onClick={() => {
+  1313→              logout();
+  1314→              setAppView('customer');
+  1315→              authToast.logoutSuccess();
+  1316→            }}
+  1317→          >
+  1318→            Back to Store
+  1319→          </Button>
+  1320→          {isRejected && (
+  1321→            <Button
+  1322→              className="bg-orange-500 hover:bg-orange-600"
+  1323→              onClick={() => {
+  1324→                authToast.logoutSuccess();
+  1325→                logout();
+  1326→                setAppView('customer');
+  1327→                toast.info('Please contact support to re-apply');
+  1328→              }}
+  1329→            >
+  1330→              Contact Support
+  1331→            </Button>
+  1332→          )}
+  1333→        </div>
+  1334→
+  1335→        <p className="text-xs text-muted-foreground">
+  1336→          Need help? Contact us at support@markethub.com
+  1337→        </p>
+  1338→      </motion.div>
+  1339→    </div>
+  1340→  );
+  1341→}
+  1342→
+  1343→// ============ VENDOR WALLET ============
+  1344→
+  1345→function VendorWalletPage() {
+  1346→  const { vendorId } = useAuthStore();
+  1347→  const qc = useQueryClient();
+  1348→  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  1349→  const [withdrawAmount, setWithdrawAmount] = useState('');
+  1350→  const [page, setPage] = useState(1);
+  1351→
+  1352→  const { data: wallet, isLoading: walletLoading } = useQuery({
+  1353→    queryKey: ['vendor-wallet', vendorId],
+  1354→    queryFn: () => fetch(`/api/vendor/wallet?vendorId=${vendorId}`).then(r => r.json()).then((r: ApiResponse<VendorWallet>) => r.data),
+  1355→    enabled: !!vendorId,
+  1356→  });
+  1357→
+  1358→  const { data: txData, isLoading: txLoading } = useQuery({
+  1359→    queryKey: ['vendor-wallet-tx', vendorId, page],
+  1360→    queryFn: () => fetch(`/api/vendor/wallet?vendorId=${vendorId}&page=${page}&limit=20`).then(r => r.json()).then((r: ApiResponse<{ wallet: VendorWallet; transactions: WalletTransaction[] }>) => r.data),
+  1361→    enabled: !!vendorId,
+  1362→  });
+  1363→
+  1364→  const vendorData = txData || (wallet ? { wallet, transactions: [] as WalletTransaction[] } : null);
+  1365→
+  1366→  const { data: vendorInfo } = useQuery({
+  1367→    queryKey: ['vendor', vendorId],
+  1368→    queryFn: () => fetch(`/api/vendors/${vendorId}`).then(r => r.json()).then((r: any) => r.data),
+  1369→    enabled: !!vendorId,
+  1370→  });
+  1371→
+  1372→  const maskBankAccount = (acc?: string | null) => {
+  1373→    if (!acc) return 'Not set';
+  1374→    return 'XXXX XXXX ' + acc.slice(-4);
+  1375→  };
+  1376→  const maskIfsc = (ifsc?: string | null) => {
+  1377→    if (!ifsc) return 'N/A';
+  1378→    return 'XXXX0' + ifsc.slice(-3);
+  1379→  };
+  1380→
+  1381→  const withdrawMutation = useMutation({
+  1382→    mutationFn: () => fetch('/api/vendor/wallet/withdraw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vendorId, amount: parseFloat(withdrawAmount) }) }).then(r => r.json()),
+  1383→    onSuccess: (data) => {
+  1384→      if (data.success) { toast.success('Withdrawal request submitted!'); setWithdrawOpen(false); setWithdrawAmount(''); qc.invalidateQueries({ queryKey: ['vendor-wallet'] }); qc.invalidateQueries({ queryKey: ['vendor-wallet-tx'] }); }
+  1385→      else toast.error(data.error || 'Withdrawal failed');
+  1386→    },
+  1387→    onError: () => toast.error('Failed to request withdrawal'),
+  1388→  });
+  1389→
+  1390→  const txTypeColor: Record<string, string> = {
+  1391→    EARNING: 'text-green-600',
+  1392→    WITHDRAWAL: 'text-red-600',
+  1393→    ADJUSTMENT: 'text-amber-600',
+  1394→    COMMISSION_DEDUCTION: 'text-orange-600',
+  1395→  };
+  1396→
+  1397→  if (walletLoading) return <div className="p-6 space-y-4">{Array.from({length: 3}).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>;
+  1398→
+  1399→  return (
+  1400→    <div className="p-6 space-y-6">
+  1401→      <div className="flex flex-wrap items-center justify-between gap-4">
+  1402→        <div><h1 className="text-2xl font-bold">Wallet</h1><p className="text-muted-foreground text-sm">Manage your earnings and withdrawals</p></div>
+  1403→        <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => setWithdrawOpen(true)}><DollarSign size={16} className="mr-1.5" />Request Withdrawal</Button>
+  1404→      </div>
+  1405→
+  1406→      {/* Balance Cards */}
+  1407→      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+  1408→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+  1409→          <Card className="p-6 border-green-200 dark:border-green-900/50 bg-gradient-to-br from-green-50 to-white dark:from-green-900/10 dark:to-background">
+  1410→            <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center"><DollarSign size={20} className="text-green-600" /></div><p className="text-sm text-muted-foreground">Available Balance</p></div>
+  1411→            <p className="text-3xl font-bold text-green-600">{formatCurrency(vendorData?.wallet?.availableBalance || 0)}</p>
+  1412→          </Card>
+  1413→        </motion.div>
+  1414→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+  1415→          <Card className="p-6 border-amber-200 dark:border-amber-900/50 bg-gradient-to-br from-amber-50 to-white dark:from-amber-900/10 dark:to-background">
+  1416→            <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><Clock size={20} className="text-amber-600" /></div><p className="text-sm text-muted-foreground">Pending Balance</p></div>
+  1417→            <p className="text-3xl font-bold text-amber-600">{formatCurrency(vendorData?.wallet?.pendingBalance || 0)}</p>
+  1418→          </Card>
+  1419→        </motion.div>
+  1420→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
+  1421→          <Card className="p-6 border-orange-200 dark:border-orange-900/50 bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/10 dark:to-background">
+  1422→            <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center"><TrendingUp size={20} className="text-orange-600" /></div><p className="text-sm text-muted-foreground">Total Earned</p></div>
+  1423→            <p className="text-3xl font-bold text-orange-600">{formatCurrency(vendorData?.wallet?.totalEarned || 0)}</p>
+  1424→          </Card>
+  1425→        </motion.div>
+  1426→      </div>
+  1427→
+  1428→      {/* Transaction History */}
+  1429→      <Card className="p-6">
+  1430→        <CardHeader className="p-0 mb-4"><CardTitle className="text-lg">Transaction History</CardTitle></CardHeader>
+  1431→        {txLoading ? <div className="space-y-3">{Array.from({length: 5}).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div> : (
+  1432→          <>
+  1433→            <div className="max-h-96 overflow-y-auto">
+  1434→              <Table>
+  1435→                <TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right hidden sm:table-cell">Balance After</TableHead><TableHead className="hidden md:table-cell">Date</TableHead></TableRow></TableHeader>
+  1436→                <TableBody>
+  1437→                  {(!vendorData?.transactions?.length) && (
+  1438→                    <TableRow><TableCell colSpan={5} className="p-0"><div className="flex flex-col items-center justify-center py-16 text-center">
+  1439→                      <Wallet size={48} className="text-muted-foreground/50 mb-4" />
+  1440→                      <h3 className="font-medium text-lg mb-1">No transactions yet</h3>
+  1441→                      <p className="text-muted-foreground text-sm">Transactions will appear here once you start earning</p>
+  1442→                    </div></TableCell></TableRow>
+  1443→                  )}
+  1444→                  {vendorData?.transactions?.map(tx => (
+  1445→                    <TableRow key={tx.id}>
+  1446→                      <TableCell><Badge variant="secondary" className={txTypeColor[tx.type] || ''}>{tx.type.replace(/_/g, ' ')}</Badge></TableCell>
+  1447→                      <TableCell className="text-sm max-w-48 truncate">{tx.description || '-'}</TableCell>
+  1448→                      <TableCell className={`text-right font-medium ${tx.type === 'EARNING' ? 'text-green-600' : 'text-red-600'}`}>{tx.type === 'EARNING' ? '+' : '-'}{formatCurrency(tx.amount)}</TableCell>
+  1449→                      <TableCell className="text-right hidden sm:table-cell">{formatCurrency(tx.balance)}</TableCell>
+  1450→                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{new Date(tx.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</TableCell>
+  1451→                    </TableRow>
+  1452→                  ))}
+  1453→                </TableBody>
+  1454→              </Table>
+  1455→            </div>
+  1456→          </>
+  1457→        )}
+  1458→      </Card>
+  1459→
+  1460→      {/* Withdrawal Dialog */}
+  1461→      <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
+  1462→        <DialogContent>
+  1463→          <DialogHeader>
+  1464→            <DialogTitle>Request Withdrawal</DialogTitle>
+  1465→            <DialogDescription>Enter the amount you want to withdraw to your bank account.</DialogDescription>
+  1466→          </DialogHeader>
+  1467→          <div className="space-y-4">
+  1468→            <div>
+  1469→              <Label>Available Balance</Label>
+  1470→              <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(vendorData?.wallet?.availableBalance || 0)}</p>
+  1471→            </div>
+  1472→            <div>
+  1473→              <Label>Amount (₹)</Label>
+  1474→              <Input type="number" min={1} max={vendorData?.wallet?.availableBalance || 0} value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="mt-1" placeholder="Enter withdrawal amount" />
+  1475→              <p className="text-xs text-muted-foreground mt-1">Minimum withdrawal: ₹500</p>
+  1476→            </div>
+  1477→            <Separator />
+  1478→            <div className="text-sm space-y-2">
+  1479→              <p className="font-medium">Bank Account Details</p>
+  1480→              <div className="grid grid-cols-2 gap-2 text-muted-foreground">
+  1481→                <span>Bank:</span><span className="text-foreground">{vendorInfo?.bankName || 'Not set'}</span>
+  1482→                <span>Account:</span><span className="text-foreground font-mono">{maskBankAccount(vendorInfo?.bankAccount)}</span>
+  1483→                <span>IFSC:</span><span className="text-foreground font-mono">{maskIfsc(vendorInfo?.bankIfsc)}</span>
+  1484→              </div>
+  1485→            </div>
+  1486→          </div>
+  1487→          <DialogFooter>
+  1488→            <Button variant="outline" onClick={() => { setWithdrawOpen(false); setWithdrawAmount(''); }}>Cancel</Button>
+  1489→            <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => withdrawMutation.mutate()} disabled={withdrawMutation.isPending || !withdrawAmount || parseFloat(withdrawAmount) < 500 || parseFloat(withdrawAmount) > (vendorData?.wallet?.availableBalance || 0)}>
+  1490→              {withdrawMutation.isPending ? 'Submitting...' : 'Confirm Withdrawal'}
+  1491→            </Button>
+  1492→          </DialogFooter>
+  1493→        </DialogContent>
+  1494→      </Dialog>
+  1495→    </div>
+  1496→  );
+  1497→}
+  1498→
+  1499→// ============ VENDOR INVENTORY ============
+  1500→
+  1501→function VendorInventoryPage() {
+  1502→  const { vendorId } = useAuthStore();
+  1503→  const { data: history = [], isLoading } = useQuery({
+  1504→    queryKey: ['inventory-history'],
+  1505→    queryFn: () => fetch(`/api/vendor/products/inventory-history`).then(r => r.json()).then((r: any) => r.data || []),
+  1506→  });
+  1507→  return (
+  1508→    <div className="p-6 space-y-6">
+  1509→      <h2 className="text-2xl font-bold">Inventory History</h2>
+  1510→      {isLoading ? <div className="space-y-3">{Array.from({length:5}).map((_,i)=><Skeleton key={i} className="h-12 rounded-lg" />)}</div> :
+  1511→      history.length === 0 ? (
+  1512→        <div className="flex flex-col items-center justify-center py-16 text-center">
+  1513→          <BoxIcon size={48} className="text-muted-foreground/50 mb-4" />
+  1514→          <h3 className="font-medium text-lg mb-1">No inventory history</h3>
+  1515→          <p className="text-muted-foreground text-sm">Inventory changes will be recorded when stock is updated</p>
+  1516→        </div>
+  1517→      ) : (
+  1518→        <Card>
+  1519→          <Table><TableHeader><TableRow>
+  1520→            <TableHead>Date</TableHead><TableHead>Product</TableHead><TableHead>Type</TableHead><TableHead>Quantity</TableHead><TableHead>Note</TableHead>
+  1521→          </TableRow></TableHeader>
+  1522→          <TableBody>
+  1523→            {history.map((h: any) => (
+  1524→              <TableRow key={h.id}>
+  1525→                <TableCell className="text-sm">{new Date(h.createdAt).toLocaleDateString()}</TableCell>
+  1526→                <TableCell className="text-sm font-medium">{h.product?.name || h.productId}</TableCell>
+  1527→                <TableCell><Badge variant={h.type === 'SOLD' ? 'secondary' : h.type === 'ADDED' ? 'default' : 'outline'} className="text-xs">{h.type}</Badge></TableCell>
+  1528→                <TableCell className={h.type === 'SOLD' || h.type === 'REMOVED' ? 'text-red-500' : 'text-green-600'}>{h.type === 'SOLD' || h.type === 'REMOVED' ? '-' : '+'}{h.quantity}</TableCell>
+  1529→                <TableCell className="text-sm text-muted-foreground">{h.note || '-'}</TableCell>
+  1530→              </TableRow>
+  1531→            ))}
+  1532→          </TableBody></Table>
+  1533→        </Card>
+  1534→      )}
+  1535→    </div>
+  1536→  );
+  1537→}
+  1538→
+  1539→// ============ MAIN VENDOR APP ============
+  1540→
+  1541→export default function VendorApp() {
+  1542→  const { vendorView, setVendorView } = useNavigationStore();
+  1543→  const { user, vendorStatus, isAuthenticated } = useAuthStore();
+  1544→
+  1545→  // Gate: If vendor is not APPROVED, show pending/rejected page
+  1546→  if (!isAuthenticated || !user) {
+  1547→    return (
+  1548→      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+  1549→        <Card className="p-8 max-w-md w-full text-center space-y-4">
+  1550→          <Store size={48} className="mx-auto text-muted-foreground" />
+  1551→          <h2 className="text-xl font-bold">Vendor Access Required</h2>
+  1552→          <p className="text-sm text-muted-foreground">Please log in to access the vendor panel.</p>
+  1553→          <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => useNavigationStore.getState().setAppView('customer')}>
+  1554→            Go to Login
+  1555→          </Button>
+  1556→        </Card>
+  1557→      </div>
+  1558→    );
+  1559→  }
+  1560→
+  1561→  // Auth guard: ensure user has VENDOR role
+  1562→  if (user?.role !== 'VENDOR') {
+  1563→    toast.warning('Unauthorized access', { description: 'Please log in as a vendor to access this panel.' });
+  1564→    useNavigationStore.getState().setAppView('customer');
+  1565→    return null;
+  1566→  }
+  1567→
+  1568→  if (vendorStatus === 'PENDING' || vendorStatus === 'REJECTED') {
+  1569→    return <VendorPendingPage />;
+  1570→  }
+  1571→
+  1572→  if (vendorStatus === 'SUSPENDED') {
+  1573→    return (
+  1574→      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+  1575→        <Card className="p-8 max-w-md w-full text-center space-y-4">
+  1576→          <XCircle size={48} className="mx-auto text-red-500" />
+  1577→          <h2 className="text-xl font-bold">Account Suspended</h2>
+  1578→          <p className="text-sm text-muted-foreground">Your vendor account has been suspended. Please contact the admin for more information.</p>
+  1579→          <Button variant="outline" onClick={() => { authToast.logoutSuccess(); useAuthStore.getState().logout(); useNavigationStore.getState().setAppView('customer'); }}>
+  1580→            Back to Store
+  1581→          </Button>
+  1582→        </Card>
+  1583→      </div>
+  1584→    );
+  1585→  }
+  1586→
+  1587→// ============ VENDOR NOTIFICATIONS ============
+  1588→
+  1589→function VendorNotifications() {
+  1590→  const { notifications, unreadCount, isLoading, refetch } = useNotifications();
+  1591→  const { markAllRead: storeMarkAllRead } = useNotificationStore();
+  1592→  const qc = useQueryClient();
+  1593→  const [deletingId, setDeletingId] = useState<string | null>(null);
+  1594→
+  1595→  const deleteMutation = useMutation({
+  1596→    mutationFn: (id: string) => fetch(`/api/notifications/${id}`, { method: 'DELETE' }).then(r => r.json()),
+  1597→    onSuccess: () => { refetch(); qc.invalidateQueries({ queryKey: ['notifications'] }); setDeletingId(null); toast.success('Notification deleted'); },
+  1598→    onError: () => { setDeletingId(null); toast.error('Failed to delete notification'); },
+  1599→  });
+  1600→
+  1601→  const handleMarkAllRead = async () => {
+  1602→    await fetch('/api/notifications/mark-all-read', { method: 'PUT' });
+  1603→    storeMarkAllRead();
+  1604→    qc.invalidateQueries({ queryKey: ['notifications'] });
+  1605→    toast.success('All notifications marked as read');
+  1606→  };
+  1607→
+  1608→  const getNotificationIcon = (type: string) => {
+  1609→    switch (type) {
+  1610→      case 'order': case 'ORDER': return <Package size={18} className="text-blue-500" />;
+  1611→      case 'alert': case 'ALERT': case 'low_stock': return <AlertTriangle size={18} className="text-amber-500" />;
+  1612→      case 'wallet': case 'WALLET': case 'payout': return <DollarSign size={18} className="text-green-500" />;
+  1613→      case 'approval': case 'APPROVAL': case 'status': return <CheckCircle size={18} className="text-emerald-500" />;
+  1614→      default: return <Bell size={18} className="text-muted-foreground" />;
+  1615→    }
+  1616→  };
+  1617→
+  1618→  if (isLoading) {
+  1619→    return (
+  1620→      <div className="p-6 space-y-4">
+  1621→        <div className="flex items-center justify-between">
+  1622→          <Skeleton className="h-8 w-40" />
+  1623→          <Skeleton className="h-9 w-32" />
+  1624→        </div>
+  1625→        {Array.from({ length: 5 }).map((_, i) => (
+  1626→          <div key={i} className="flex items-start gap-3 p-4 border rounded-lg">
+  1627→            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+  1628→            <div className="flex-1 space-y-2">
+  1629→              <Skeleton className="h-4 w-3/4" />
+  1630→              <Skeleton className="h-3 w-full" />
+  1631→              <Skeleton className="h-3 w-20" />
+  1632→            </div>
+  1633→          </div>
+  1634→        ))}
+  1635→      </div>
+  1636→    );
+  1637→  }
+  1638→
+  1639→  return (
+  1640→    <div className="p-6 space-y-4">
+  1641→      <div className="flex items-center justify-between">
+  1642→        <div>
+  1643→          <h1 className="text-2xl font-bold">Notifications</h1>
+  1644→          <p className="text-sm text-muted-foreground">{unreadCount > 0 ? `${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}` : 'All caught up!'}</p>
+  1645→        </div>
+  1646→        {unreadCount > 0 && (
+  1647→          <Button variant="outline" size="sm" onClick={handleMarkAllRead}>
+  1648→            <CheckCircle size={14} className="mr-2" />Mark all read
+  1649→          </Button>
+  1650→        )}
+  1651→      </div>
+  1652→
+  1653→      {notifications.length === 0 ? (
+  1654→        <div className="flex flex-col items-center justify-center py-20 text-center">
+  1655→          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+  1656→            <Bell size={32} className="text-muted-foreground" />
+  1657→          </div>
+  1658→          <h3 className="text-lg font-medium mb-1">No notifications</h3>
+  1659→          <p className="text-sm text-muted-foreground">You&apos;re all caught up!</p>
+  1660→        </div>
+  1661→      ) : (
+  1662→        <div className="space-y-2">
+  1663→          <AnimatePresence>
+  1664→            {(notifications as Array<{ id: string; title: string; message: string; isRead: boolean; createdAt: string; type?: string }>).map((n) => (
+  1665→              <motion.div
+  1666→                key={n.id}
+  1667→                initial={{ opacity: 0, y: 10 }}
+  1668→                animate={{ opacity: 1, y: 0 }}
+  1669→                exit={{ opacity: 0, x: -20 }}
+  1670→                transition={{ duration: 0.2 }}
+  1671→                className={`flex items-start gap-3 p-4 rounded-lg border transition-colors ${!n.isRead ? 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/50' : 'hover:bg-muted/50'}`}
+  1672→              >
+  1673→                <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5">
+  1674→                  {getNotificationIcon(n.type || '')}
+  1675→                </div>
+  1676→                <div className="flex-1 min-w-0">
+  1677→                  <p className={`text-sm ${!n.isRead ? 'font-medium' : 'text-muted-foreground'}`}>{n.title}</p>
+  1678→                  <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+  1679→                  <p className="text-xs text-muted-foreground/60 mt-1">{timeAgo(n.createdAt)}</p>
+  1680→                </div>
+  1681→                <Button
+  1682→                  variant="ghost"
+  1683→                  size="icon"
+  1684→                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+  1685→                  aria-label="Delete notification"
+  1686→                  disabled={deletingId === n.id}
+  1687→                  onClick={() => { setDeletingId(n.id); deleteMutation.mutate(n.id); }}
+  1688→                >
+  1689→                  {deletingId === n.id ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+  1690→                </Button>
+  1691→              </motion.div>
+  1692→            ))}
+  1693→          </AnimatePresence>
+  1694→        </div>
+  1695→      )}
+  1696→    </div>
+  1697→  );
+  1698→}
+  1699→
+  1700→  const renderView = () => {
+  1701→    switch (vendorView) {
+  1702→      case 'vendor-dashboard': return <VendorDashboard />;
+  1703→      case 'vendor-products': return <VendorProducts />;
+  1704→      case 'vendor-add-product': return <VendorAddProduct />;
+  1705→      case 'vendor-orders': return <VendorOrders />;
+  1706→      case 'vendor-reports': return <VendorReports />;
+  1707→      case 'vendor-inventory': return <VendorInventoryPage />;
+  1708→      case 'vendor-wallet': return <VendorWalletPage />;
+  1709→      case 'vendor-profile': return <VendorProfile />;
+  1710→      case 'vendor-settings': return <VendorSettings />;
+  1711→      case 'vendor-notifications': return <VendorNotifications />;
+  1712→      default: return <VendorDashboard />;
+  1713→    }
+  1714→  };
+  1715→
+  1716→  return (
+  1717→    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="min-h-screen flex flex-col bg-background">
+  1718→      <a href="#main-content" className="skip-link">Skip to main content</a>
+  1719→      <VendorMobileHeader />
+  1720→      <div className="flex flex-1">
+  1721→        <VendorSidebar />
+  1722→        <main id="main-content" className="flex-1 overflow-auto" role="main"><AnimatePresence mode="wait"><motion.div key={vendorView} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}} transition={{duration:0.15}}>{renderView()}</motion.div></AnimatePresence></main>
+  1723→      </div>
+  1724→    </motion.div>
+  1725→  );
+  1726→}
