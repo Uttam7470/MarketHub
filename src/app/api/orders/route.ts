@@ -113,8 +113,14 @@ export async function POST(req: NextRequest) {
 
     for (const item of items) {
       const product = await db.product.findUnique({ where: { id: item.productId }, include: { vendor: true } });
-      if (!product || product.stock < item.quantity) {
-        return NextResponse.json({ success: false, error: `Product ${item.productId} not available` }, { status: 400 });
+      if (!product) {
+        return NextResponse.json({ success: false, error: `"${item.name || item.productId}" not found. Please remove it from cart and add again.` }, { status: 400 });
+      }
+      if (product.stock < item.quantity) {
+        return NextResponse.json({ success: false, error: `"${product.name}" has only ${product.stock} left in stock. Please reduce quantity or remove it.` }, { status: 400 });
+      }
+      if (!product.isActive) {
+        return NextResponse.json({ success: false, error: `"${product.name}" is no longer available.` }, { status: 400 });
       }
       subtotal += product.price * item.quantity;
       orderItems.push({
