@@ -869,3 +869,32 @@ Stage Summary:
 - Backend validation with proper scope checking (platform vs vendor coupons)
 - Cart, Checkout, and Order flow fully integrated with coupon discount
 - No compile errors, no runtime errors in dev log
+
+---
+Task ID: cleanup-dead-code
+Agent: Main Agent
+Task: Remove all unused/dead code from the project
+
+Work Log:
+- Ran comprehensive audit of all files in the project
+- Identified 32 unused files and 10 unused type exports
+- Deleted unused files:
+  - Lib: validation.ts (zero imports)
+  - Component: structured-data.tsx (zero imports)
+  - API Routes: delivery/check, collections, collections/[id] (no frontend consumer)
+  - 25 UI components never imported outside src/components/ui/ (alert, aspect-ratio, calendar, carousel, chart, collapsible, command, context-menu, drawer, form, hover-card, input-otp, menubar, navigation-menu, optimized-image, pagination, popover, progress, resizable, sidebar, sonner, toast, toaster, toggle-group, toggle)
+  - Hooks: use-toast.ts, use-mobile.ts (only consumed by deleted UI components)
+- Removed 10 unused types from src/types/index.ts:
+  - LoginPayload, RegisterPayload, AuthResponse (auth routes don't import from @/types)
+  - FlashSale, FlashSaleItem (MarketingPage handles types inline)
+  - SupportTicket, TicketMessage (support routes handle types inline)
+  - RecentlyViewed, PlatformSettings, ActivityLog (never imported anywhere)
+- Verified vendor-wallets routes are both actively used (different data shapes for different pages)
+- Restarted dev server: all routes return 200, no compilation errors
+- Lint: only 1 pre-existing error (CheckoutPage.tsx line 77)
+
+Stage Summary:
+- 32 files deleted, 10 type exports removed
+- No new errors introduced
+- Dev server compiles and serves all routes successfully (all 200s)
+- Project is cleaner with ~5000+ lines of dead code removed

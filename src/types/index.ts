@@ -14,25 +14,6 @@ export interface AuthUser {
   isVerified: boolean;
 }
 
-export interface LoginPayload {
-  email: string;
-  password: string;
-}
-
-export interface RegisterPayload {
-  name: string;
-  email: string;
-  password: string;
-  phone?: string;
-}
-
-export interface AuthResponse {
-  user: AuthUser;
-  token: string;
-  vendorId?: string;
-  vendorStatus?: string | null;
-}
-
 // ============ PRODUCTS ============
 
 export type ProductStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
@@ -365,29 +346,6 @@ export interface Banner {
 
 // ============ MARKETING ============
 
-export interface FlashSale {
-  id: string;
-  title: string;
-  description?: string | null;
-  banner?: string | null;
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-  items?: FlashSaleItem[];
-}
-
-export interface FlashSaleItem {
-  id: string;
-  flashSaleId: string;
-  productId: string;
-  salePrice: number;
-  originalPrice: number;
-  discountPercent: number;
-  totalStock: number;
-  soldCount: number;
-  sortOrder: number;
-}
-
 export interface Deal {
   id: string;
   title: string;
@@ -415,30 +373,6 @@ export interface Notification {
 }
 
 // ============ SUPPORT ============
-
-export interface SupportTicket {
-  id: string;
-  userId?: string | null;
-  subject: string;
-  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
-  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
-  category: 'GENERAL' | 'ORDER' | 'PAYMENT' | 'PRODUCT' | 'REFUND' | 'OTHER';
-  assignedTo?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  user?: AuthUser;
-  messages?: TicketMessage[];
-  _count?: { messages: number };
-}
-
-export interface TicketMessage {
-  id: string;
-  ticketId: string;
-  userId?: string | null;
-  message: string;
-  isStaff: boolean;
-  createdAt: string;
-}
 
 export interface FAQ {
   id: string;
@@ -469,33 +403,6 @@ export interface SearchAnalytics {
   lastSearched: string;
 }
 
-export interface RecentlyViewed {
-  id: string;
-  userId?: string | null;
-  sessionId?: string | null;
-  productId: string;
-  createdAt: string;
-  product?: Product;
-}
-
-// ============ SETTINGS ============
-
-export interface PlatformSettings {
-  id: string;
-  siteName: string;
-  siteDescription?: string | null;
-  logo?: string | null;
-  favicon?: string | null;
-  currency: string;
-  currencySymbol: string;
-  taxRate: number;
-  freeShippingMin: number;
-  contactEmail?: string | null;
-  contactPhone?: string | null;
-  address?: string | null;
-  socialLinks?: string | null;
-}
-
 // ============ CUSTOMER ADDRESS ============
 
 export interface CustomerAddress {
@@ -511,23 +418,6 @@ export interface CustomerAddress {
   country: string;
   pincode: string;
   isDefault: boolean;
-}
-
-// ============ ACTIVITY LOG ============
-
-export interface ActivityLog {
-  id: string;
-  userId?: string | null;
-  action: string;
-  entityType?: string | null;
-  entityId?: string | null;
-  details?: string | null;
-  oldValues?: string | null;
-  newValues?: string | null;
-  ipAddress?: string | null;
-  userAgent?: string | null;
-  createdAt: string;
-  user?: AuthUser;
 }
 
 // ============ API RESPONSE ============
