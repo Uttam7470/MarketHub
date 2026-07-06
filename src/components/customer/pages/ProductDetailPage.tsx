@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/sonner';
 import {
   ShoppingCart, Heart, Star, Minus, Plus, MapPin, Package, Truck, RefreshCw,
-  Shield, MessageCircle, Facebook, Twitter, Link as LinkIcon, HelpCircle, Send,
+  Shield, MessageCircle, Facebook, Twitter, Link as LinkIcon, HelpCircle, Send, Ticket, Percent, Banknote, Store,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useAuthStore, useNavigationStore, useCartStore, useWishlistStore } from '@/stores';
-import type { Product, ApiResponse } from '@/types';
+import type { Product, ApiResponse, Coupon } from '@/types';
 
 import { StarRating, formatCurrency, discountPercent, useRequireAuth } from '../helpers';
 import { ProductCard, ProductGrid } from '../shared/ProductCard';
@@ -202,6 +202,9 @@ function ProductDetailPage() {
               <Heart size={20} className={isWishlisted ? 'fill-red-500 text-red-500' : ''} />
             </Button>
           </div>
+
+          {/* Vendor Coupons Banner */}
+          <VendorCouponBanner vendorId={product.vendorId} vendorName={product.vendor?.businessName || ''} />
 
           {/* Wishlist Remove Confirmation */}
           <AlertDialog open={showWishlistConfirm} onOpenChange={setShowWishlistConfirm}>
@@ -488,6 +491,69 @@ function ProductQASection({ productId, qaList }: { productId: string; qaList: an
               </div>
             </div>
           </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============ VENDOR COUPON BANNER (shown on product detail) ============
+
+function VendorCouponBanner({ vendorId, vendorName }: { vendorId: string; vendorName: string }) {
+  const { data: coupons = [] } = useQuery({
+    queryKey: ['vendor-coupons-product', vendorId],
+    queryFn: () => fetch(`/api/coupons?active=true&scope=VENDOR&vendorId=${vendorId}&includeVendor=true`).then(r => r.json()).then((r: ApiResponse<Coupon[]>) => r.data || []),
+    enabled: !!vendorId,
+  });
+
+  // Also fetch platform coupons
+  const { data: platformCoupons = [] } = useQuery({
+    queryKey: ['platform-coupons-product'],
+    queryFn: () => fetch(`/api/coupons?active=true&scope=PLATFORM&includeVendor=true`).then(r => r.json()).then((r: ApiResponse<Coupon[]>) => r.data || []),
+  });
+
+  const allCoupons = [...coupons, ...platformCoupons.filter(pc => pc.autoSuggest)];
+  if (allCoupons.length === 0) return null;
+
+  const handleCopy = (code: string) => {
+    navigator.clipboard.writeText(code);
+    toast.success('Coupon code copied!', { description: `Use ${code} at checkout` });
+  };
+
+  return (
+    <div className="space-y-2 pt-1">
+      <p className="text-sm font-medium flex items-center gap-1.5">
+        <Ticket size={16} className="text-orange-500" />
+        Available Offers
+      </p>
+      <div className="space-y-2 max-h-40 overflow-y-auto">
+        {allCoupons.slice(0, 3).map((c: Coupon) => (
+          <div
+            key={c.id}
+            className="flex items-center gap-3 border border-dashed rounded-lg p-2.5 bg-orange-50/50 dark:bg-orange-900/10 cursor-pointer hover:border-orange-300 transition-colors"
+            onClick={() => handleCopy(c.code)}
+          >
+            <div className={`w-10 h-10 rounded-md flex flex-col items-center justify-center shrink-0 ${c.scope === 'VENDOR' ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-orange-100 dark:bg-orange-900/30'}`}>
+              {c.discountType === 'PERCENTAGE' ? (
+                <><Percent size={12} className="text-orange-600" /><span className="text-[10px] font-bold text-orange-600">{c.discountValue}%</span></>
+              ) : (
+                <><Banknote size={12} className="text-orange-600" /><span className="text-[10px] font-bold text-orange-600">₹{c.discountValue}</span></>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-sm">{c.code}</span>
+                <Badge variant="outline" className={`text-[9px] px-1 py-0 ${c.scope === 'VENDOR' ? 'border-amber-300 text-amber-600' : 'border-orange-300 text-orange-600'}`}>
+                  {c.scope === 'VENDOR' ? <Store size={8} className="mr-0.5" /> : '🌐'} {c.scope === 'VENDOR' ? 'Store' : 'Platform'}
+                </Badge>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Min {formatCurrency(c.minOrder || 0)}
+                {c.maxDiscount && c.discountType === 'PERCENTAGE' ? ` • Up to ${formatCurrency(c.maxDiscount)}` : ''}
+                {' '}• Tap to copy
+              </p>
+            </div>
+          </div>
         ))}
       </div>
     </div>

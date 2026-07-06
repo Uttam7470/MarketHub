@@ -444,12 +444,23 @@ async function seed() {
     });
   }
 
-  // 9. Create coupons (with autoSuggest)
+  // 9. Create coupons (Platform + Vendor)
   await db.coupon.createMany({
     data: [
-      { code: 'WELCOME10', discountType: 'PERCENTAGE', discountValue: 10, minOrder: 500, maxDiscount: 200, usageLimit: 1000, usedCount: 150, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: true },
-      { code: 'FLAT500', discountType: 'FIXED', discountValue: 500, minOrder: 2000, usageLimit: 500, usedCount: 45, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: false },
-      { code: 'SAVE20', discountType: 'PERCENTAGE', discountValue: 20, minOrder: 1000, maxDiscount: 1000, usageLimit: 200, usedCount: 80, startDate: new Date('2024-06-01'), endDate: new Date('2025-06-30'), isActive: true, autoSuggest: true },
+      // Platform coupons
+      { code: 'WELCOME10', scope: 'PLATFORM', discountType: 'PERCENTAGE', discountValue: 10, minOrder: 500, maxDiscount: 200, usageLimit: 1000, usedCount: 150, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: true, applicableType: 'ALL' },
+      { code: 'FLAT500', scope: 'PLATFORM', discountType: 'FIXED', discountValue: 500, minOrder: 2000, usageLimit: 500, usedCount: 45, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: false, applicableType: 'ALL' },
+      { code: 'SAVE20', scope: 'PLATFORM', discountType: 'PERCENTAGE', discountValue: 20, minOrder: 1000, maxDiscount: 1000, usageLimit: 200, usedCount: 80, startDate: new Date('2024-06-01'), endDate: new Date('2025-06-30'), isActive: true, autoSuggest: true, applicableType: 'ALL' },
+      // Vendor coupons (TechStore India - vendors[0])
+      { code: 'TECH15', scope: 'VENDOR', vendorId: vendors[0].id, discountType: 'PERCENTAGE', discountValue: 15, minOrder: 300, maxDiscount: 500, usageLimit: 500, usedCount: 89, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: true, applicableType: 'ALL' },
+      { code: 'TECHFLAT200', scope: 'VENDOR', vendorId: vendors[0].id, discountType: 'FIXED', discountValue: 200, minOrder: 1000, usageLimit: 300, usedCount: 34, startDate: new Date('2024-03-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: true, applicableType: 'ALL' },
+      // Vendor coupons (FashionHub - vendors[1])
+      { code: 'FASHION25', scope: 'VENDOR', vendorId: vendors[1].id, discountType: 'PERCENTAGE', discountValue: 25, minOrder: 200, maxDiscount: 400, usageLimit: 400, usedCount: 120, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: true, applicableType: 'ALL' },
+      { code: 'STYLE300', scope: 'VENDOR', vendorId: vendors[1].id, discountType: 'FIXED', discountValue: 300, minOrder: 800, usageLimit: 200, usedCount: 56, startDate: new Date('2024-06-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: false, applicableType: 'ALL' },
+      // Vendor coupons (HomePlus - vendors[2])
+      { code: 'HOME10', scope: 'VENDOR', vendorId: vendors[2].id, discountType: 'PERCENTAGE', discountValue: 10, minOrder: 400, usageLimit: 300, usedCount: 67, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: true, applicableType: 'ALL' },
+      // Vendor coupons (SportsZone - vendors[3])
+      { code: 'SPORTS20', scope: 'VENDOR', vendorId: vendors[3].id, discountType: 'PERCENTAGE', discountValue: 20, minOrder: 250, maxDiscount: 600, usageLimit: 250, usedCount: 43, startDate: new Date('2024-01-01'), endDate: new Date('2025-12-31'), isActive: true, autoSuggest: true, applicableType: 'ALL' },
     ],
   });
 
